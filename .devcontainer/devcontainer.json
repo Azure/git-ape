@@ -1,0 +1,39 @@
+{
+  "name": "AutoCloud Dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3-3.12-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true,
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+    "ghcr.io/devcontainers/features/powershell:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/copilot-cli:1": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-azure-mcp-server",
+        "bewhite.psrule-vscode",
+        "vstirbu.vscode-mermaid-preview"
+      ],
+      "settings": {
+        "azureMcp.serverMode": "namespace",
+        "azureMcp.readOnly": false
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}
