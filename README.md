@@ -32,6 +32,15 @@ Common tasks it supports:
 - Bootstrapping repository onboarding for OIDC, RBAC, GitHub environments, and secrets.
 - Saving deployment artifacts under `.azure/deployments/` for audit and reuse.
 - Detecting configuration drift between Azure and stored deployment state (agentic workflow — coming soon).
+- 
+## Git-Ape in action
+
+A short demo video of the onboarding and deploy experience using Git-Ape.
+
+
+https://github.com/user-attachments/assets/671775be-abfe-4264-991f-67d38cf4babc
+
+
 
 ## Get Started
 
