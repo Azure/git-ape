@@ -37,9 +37,7 @@ Common tasks it supports:
 
 A short demo video of the onboarding and deploy experience using Git-Ape.
 
-
-https://www.youtube.com/watch?v=EkKcCfKHFS8
-
+[![Watch the video](https://img.youtube.com/vi/Td6rv_RGArQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=Td6rv_RGArQ)
 
 
 ## Get Started
