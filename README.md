@@ -1,6 +1,6 @@
 ![Git-Ape APE logo](docs/APE.png)
 
-# Git-Ape
+# Git-Ape 🐒
 
 > [!WARNING]
 > EXPERIMENTAL PROJECT: Git-Ape is in active development and is not production-ready.
