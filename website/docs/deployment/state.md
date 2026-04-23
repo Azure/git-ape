@@ -11,14 +11,11 @@ description: "How deployment artifacts are stored and reused"
 EXPERIMENTAL ONLY: State formats, file schemas, and lifecycle behavior may change at any time.
 Do **not** rely on this project for production deployment tracking, audit, or recovery.
 :::
-This document explains how Git-Ape persists deployment artifacts, manages state, and enables deployment reuse across both Azure and AWS.
+This document explains how Git-Ape persists deployment artifacts, manages state, and enables deployment reuse.
 
 ## Overview
 
-Every deployment creates a subdirectory under the cloud-specific deployments directory:
-
-- **Azure:** `.azure/deployments/{deployment-id}/`
-- **AWS:** `.aws/deployments/{deployment-id}/`
+Every deployment creates a subdirectory under `.azure/deployments/{deployment-id}/`.
 
 Each deployment directory contains:
 
@@ -59,42 +56,15 @@ Each deployment directory contains:
     └── rollback.log                   # Rollback actions
 ```
 
-### AWS
 
-```
-.aws/deployments/
-├── helloworld-dev/                   # Successful deployment
-│   ├── metadata.json                  # Deployment metadata (includes "cloud": "aws")
-│   ├── requirements.json              # User requirements
-│   ├── template.yaml                  # CloudFormation template (YAML or JSON)
-│   ├── architecture.md                # Mermaid architecture diagram
-│   ├── deployment.log                 # Deployment progress
-│   └── tests.json                     # Test results
-│
-├── deploy-20260319-120000/           # Failed deployment
-│   ├── metadata.json
-│   ├── requirements.json
-│   ├── template.yaml
-│   ├── architecture.md
-│   ├── deployment.log
-│   └── error.log                      # Error details
-│
-└── deploy-20260319-140000/           # Rolled back deployment
-    ├── metadata.json
-    ├── requirements.json
-    ├── template.yaml
-    ├── architecture.md
-    ├── deployment.log
-    └── rollback.log                   # Rollback actions
-```
 
 ## File Formats
 
 ### metadata.json
 
-Contains deployment tracking information. The format differs slightly between clouds.
+Contains deployment tracking information.
 
-**Azure:**
+**Example:**
 
 ```json
 {
@@ -120,40 +90,10 @@ Contains deployment tracking information. The format differs slightly between cl
 }
 ```
 
-**AWS:**
-
-```json
-{
-  "deploymentId": "helloworld-dev",
-  "cloud": "aws",
-  "timestamp": "2026-04-15T04:51:00Z",
-  "user": "arn:aws:iam::123456789012:user/dev",
-  "status": "succeeded",
-  "region": "us-east-1",
-  "project": "helloworld",
-  "environment": "dev",
-  "stackName": "helloworld-dev",
-  "resources": [
-    "AWS::IAM::Role",
-    "AWS::Lambda::Function",
-    "AWS::ApiGatewayV2::Api"
-  ],
-  "estimatedMonthlyCost": "$0.00",
-  "createdBy": "git-ape-agent"
-}
-```
-
-**Key differences:**
-
-- AWS metadata includes `"cloud": "aws"` (Azure metadata omits this or defaults to `"azure"`)
-- AWS uses `stackName` instead of `resourceGroup`
-- AWS resources use CloudFormation types (e.g., `AWS::Lambda::Function`)
-- Azure resources use ARM types (e.g., `Microsoft.Web/sites`)
-
-**Status values (both clouds):**
+**Status values:**
 - `initialized` - Deployment directory created
 - `gathering-requirements` - Collecting user input
-- `generating-template` - Creating ARM/CloudFormation template
+- `generating-template` - Creating ARM template
 - `awaiting-confirmation` - Waiting for user approval
 - `deploying` - Deployment in progress
 - `testing` - Running integration tests
@@ -278,47 +218,6 @@ User requirements collected by the Requirements Gatherer agent:
     }
   }
 }
-```
-
-**AWS** uses `template.yaml` (preferred) or `template.json` — a CloudFormation template:
-
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Lambda function with API Gateway
-
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-
-Resources:
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'lambda-role-${Environment}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-
-  HelloFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub 'hello-${Environment}'
-      Runtime: python3.12
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          def handler(event, context):
-              return {'statusCode': 200, 'body': 'Hello!'}
-
-Outputs:
-  FunctionArn:
-    Value: !GetAtt HelloFunction.Arn
 ```
 
 ### deployment.log
@@ -472,14 +371,12 @@ Related Documentation:
 
 ## Using the Deployment Manager
 
-The `.github/scripts/deployment-manager.sh` utility helps manage deployment state across both Azure and AWS:
+The `.github/scripts/deployment-manager.sh` utility helps manage deployment state:
 
 ### List All Deployments
 
 ```bash
-.github/scripts/deployment-manager.sh list          # Both clouds
-.github/scripts/deployment-manager.sh list azure     # Azure only
-.github/scripts/deployment-manager.sh list aws       # AWS only
+.github/scripts/deployment-manager.sh list
 ```
 
 Output:
@@ -496,19 +393,12 @@ Recent Deployments
 ↶ deploy-20260218-151030
   Status: rolled-back | Project: webapp | Region: westus2
   Resources: 1 | Cost: N/A | Time: 2026-02-18T15:10:30Z
-
-☁ AWS (.aws/deployments/)
------------------------------------------------------------
-✓ helloworld-dev
-  Status: succeeded | Project: helloworld | Region: us-east-1
-  Resources: 10 | Cost: $0.00 | Time: 2026-04-15T04:51:00Z
 ```
 
 ### Initialize a Deployment
 
 ```bash
-.github/scripts/deployment-manager.sh init my-app-dev azure    # Azure (default)
-.github/scripts/deployment-manager.sh init my-lambda-dev aws   # AWS
+.github/scripts/deployment-manager.sh init my-app-dev
 ```
 
 ### Show Deployment Details

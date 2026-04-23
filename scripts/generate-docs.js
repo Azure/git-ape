@@ -185,7 +185,7 @@ function generateSkillDocs() {
   ensureDir(outDir);
 
   const skillDirs = fs.readdirSync(SKILLS_DIR).filter((d) => {
-    return fs.statSync(path.join(SKILLS_DIR, d)).isDirectory();
+    return fs.statSync(path.join(SKILLS_DIR, d)).isDirectory() && !d.startsWith('aws-');
   });
 
   const skills = [];

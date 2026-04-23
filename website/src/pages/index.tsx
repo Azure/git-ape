@@ -25,8 +25,8 @@ function HeroSection() {
         </Heading>
         <p className={styles.heroSubtitle}>
           The intelligent multi-agent system for GitHub Copilot that handles
-          cloud deployments end-to-end — Azure, AWS, and beyond — from
-          requirements to production, with security gates at every step.
+          cloud deployments end-to-end — from requirements to production,
+          with security gates at every step.
         </p>
         <div className={styles.buttons}>
           <Link className={styles.btnPrimary} to="/docs/intro">
@@ -219,7 +219,7 @@ const capabilities = [
   { title: 'Drift Detection', desc: 'Detect and reconcile manual changes vs. desired state.', icon: 'fas fa-exchange-alt', color: '#f39c12' },
   { title: 'Two Modes', desc: 'Interactive in VS Code or headless via Copilot Coding Agent.', icon: 'fas fa-sync-alt', color: '#1abc9c' },
   { title: '8 AI Agents', desc: 'Specialized agents from requirements to deployment validation.', icon: 'fas fa-robot', color: '#667eea' },
-  { title: '34 Skills', desc: '13 Azure + 19 AWS + 2 utility skills invoked automatically.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
+  { title: '15+ Skills', desc: 'Azure and utility skills invoked automatically by agents.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
 ];
 
 function CapabilitiesSection() {
@@ -403,7 +403,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title="Intelligent Cloud Deployment Agents"
-      description="Git-Ape — The intelligent multi-agent system for GitHub Copilot that handles cloud deployments end-to-end — Azure, AWS, and beyond — with security gates at every step.">
+      description="Git-Ape — The intelligent multi-agent system for GitHub Copilot that handles cloud deployments end-to-end — with security gates at every step.">
       <HeroSection />
       <MetricsSection />
       <PersonasSection />
