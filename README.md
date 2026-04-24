@@ -52,7 +52,13 @@ Recommended:
 
 ```bash
 copilot plugin marketplace add Azure/git-ape
-copilot plugin install Azure/git-ape
+copilot plugin install git-ape@git-ape
+```
+
+Verify the installation:
+
+```bash
+copilot plugin list   # Should show: git-ape@git-ape
 ```
 
 Manual option:
