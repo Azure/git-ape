@@ -57,8 +57,8 @@ Prerequisites: VS Code with GitHub Copilot enabled and the `chat.plugins.enabled
    ]
    ```
 
-2. Open the Extensions view (`⇧⌘X`), search for `@agentPlugins`, find **git-ape**, and select **Install**.
-3. Alternatively, run **Chat: Install Plugin From Source** from the Command Palette and enter `https://github.com/Azure/git-ape`.
+2. Open the Extensions view (`⇧⌘X` on macOS, `Ctrl+Shift+X` on Windows/Linux), search for `@agentPlugins`, find **git-ape**, and select **Install**.
+3. Alternatively, open the Command Palette (`⇧⌘P` on macOS, `Ctrl+Shift+P` on Windows/Linux), run **Chat: Install Plugin From Source**, and enter `https://github.com/Azure/git-ape`.
 4. Verify the agents and skills appear in Copilot Chat (for example, type `@git-ape` or `/prereq-check`).
 
 #### Option B: Copilot CLI plugin
