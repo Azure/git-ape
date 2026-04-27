@@ -219,7 +219,7 @@ The skill auto-detects this by calling:
 ```bash
 gh api "orgs/{org}/actions/oidc/customization/sub" --jq ".use_default"
 ```
-- Returns `true` → standard format: `repo:Azure/git-ape-private:pull_request`
+- Returns `true` → standard format: `repo:Azure/git-ape:pull_request`
 - Returns `false` → ID format: `repository_owner_id:6844498:repository_id:1184905165:pull_request`
 
 If OIDC login fails with `AADSTS700213: No matching federated identity record`, the
@@ -228,7 +228,7 @@ onboarding (the skill will auto-detect and use the correct format), or manually 
 existing credentials:
 ```bash
 # Get repo/owner IDs
-gh api repos/Azure/git-ape-private --jq '{repo_id: .id, owner_id: .owner.id}'
+gh api repos/Azure/git-ape --jq '{repo_id: .id, owner_id: .owner.id}'
 
 # Update each federated credential with correct subject
 az ad app federated-credential update \
