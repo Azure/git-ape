@@ -15,7 +15,7 @@
     "ghcr.io/devcontainers/features/copilot-cli:1": {}
   },
 
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "onCreateCommand": "bash .devcontainer/post-create.sh",
 
   "customizations": {
     "vscode": {
