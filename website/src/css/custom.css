@@ -1,0 +1,699 @@
+/**
+ * Git-Ape Docusaurus Theme — Premium Design System
+ * Inspired by portfolio: animated gradients, gold accents, glass morphism
+ */
+
+/* ==========================================================================
+   CSS VARIABLES
+   ========================================================================== */
+
+:root {
+  /* Primary palette */
+  --ifm-color-primary: #667eea;
+  --ifm-color-primary-dark: #4f6ae6;
+  --ifm-color-primary-darker: #4260e4;
+  --ifm-color-primary-darkest: #2644c9;
+  --ifm-color-primary-light: #7e92ee;
+  --ifm-color-primary-lighter: #8b9df0;
+  --ifm-color-primary-lightest: #b0bdf6;
+
+  /* Brand accents */
+  --ga-gold: #ffd700;
+  --ga-gold-soft: #ffe14d;
+  --ga-purple: #764ba2;
+  --ga-pink: #f093fb;
+  --ga-dark: #1a252f;
+  --ga-dark-card: #2c3e50;
+  --ga-light-bg: #f8f9fa;
+
+  /* Gradients */
+  --ga-gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  --ga-gradient-gold: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+  --ga-gradient-dark: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%);
+  --ga-gradient-card: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --ga-gradient-subtle: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+
+  /* Shadows */
+  --ga-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --ga-shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
+  --ga-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --ga-shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+
+  /* Layout */
+  --ga-radius: 15px;
+  --ga-radius-sm: 8px;
+  --ga-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Docusaurus overrides */
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-heading-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-heading-font-weight: 700;
+  --ifm-border-radius: var(--ga-radius-sm);
+  --ifm-navbar-height: 64px;
+  --ifm-footer-padding-vertical: 3rem;
+  --docusaurus-highlighted-code-line-bg: rgba(102, 126, 234, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #8b9df0;
+  --ifm-color-primary-dark: #6e84eb;
+  --ifm-color-primary-darker: #6079e9;
+  --ifm-color-primary-darkest: #3755e0;
+  --ifm-color-primary-light: #a8b6f5;
+  --ifm-color-primary-lighter: #b6c1f7;
+  --ifm-color-primary-lightest: #dce2fc;
+  --ifm-background-color: #0f1419;
+  --ifm-background-surface-color: #1a2332;
+  --docusaurus-highlighted-code-line-bg: rgba(139, 157, 240, 0.15);
+
+  --ga-light-bg: #141c26;
+  --ga-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --ga-shadow-md: 0 5px 15px rgba(0, 0, 0, 0.4);
+  --ga-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --ga-shadow-glow: 0 0 25px rgba(139, 157, 240, 0.25);
+}
+
+/* ==========================================================================
+   KEYFRAME ANIMATIONS
+   ========================================================================== */
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 215, 0, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.6); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ==========================================================================
+   NAVBAR
+   ========================================================================== */
+
+.navbar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  transition: var(--ga-transition);
+}
+
+[data-theme='dark'] .navbar {
+  background: rgba(15, 20, 25, 0.88) !important;
+  border-bottom: 1px solid rgba(139, 157, 240, 0.1);
+}
+
+.navbar__title {
+  font-weight: 800;
+  background: var(--ga-gradient-hero);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.navbar__logo img {
+  border-radius: 10px;
+  transition: var(--ga-transition);
+}
+
+.navbar__logo img:hover {
+  transform: scale(1.05);
+  box-shadow: var(--ga-shadow-glow);
+}
+
+.navbar__link {
+  font-weight: 600;
+  transition: var(--ga-transition);
+  position: relative;
+}
+
+.navbar__link:hover {
+  color: var(--ga-gold) !important;
+}
+
+.navbar__link--active {
+  color: var(--ifm-color-primary) !important;
+}
+
+.navbar__link--active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 3px;
+  background: var(--ga-gradient-gold);
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   SIDEBAR
+   ========================================================================== */
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid rgba(102, 126, 234, 0.08) !important;
+}
+
+[data-theme='dark'] .theme-doc-sidebar-container {
+  border-right: 1px solid rgba(139, 157, 240, 0.08) !important;
+}
+
+.menu__link {
+  border-radius: var(--ga-radius-sm);
+  transition: var(--ga-transition);
+  font-weight: 500;
+}
+
+.menu__link:hover {
+  background: var(--ga-gradient-subtle);
+  color: var(--ifm-color-primary);
+}
+
+.menu__link--active {
+  background: rgba(102, 126, 234, 0.1) !important;
+  color: var(--ifm-color-primary) !important;
+  font-weight: 600;
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+.menu__list-item-collapsible .menu__link {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-primary);
+}
+
+/* ==========================================================================
+   FOOTER
+   ========================================================================== */
+
+.footer {
+  background: var(--ga-gradient-dark) !important;
+  border-top: 2px solid var(--ga-gold);
+  position: relative;
+}
+
+.footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--ga-gradient-hero);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease infinite;
+}
+
+.footer__title {
+  color: var(--ga-gold) !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.footer__link-item {
+  transition: var(--ga-transition);
+  opacity: 0.8;
+}
+
+.footer__link-item:hover {
+  color: var(--ga-gold) !important;
+  opacity: 1;
+  text-decoration: none;
+}
+
+.footer__copyright {
+  opacity: 0.6;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* ==========================================================================
+   DOC PAGES — MARKDOWN CONTENT
+   ========================================================================== */
+
+.markdown {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.markdown h1 {
+  background: var(--ga-gradient-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+}
+
+.markdown h2 {
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.15);
+  margin-top: 2.5rem;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .markdown h2 {
+  border-bottom-color: rgba(139, 157, 240, 0.15);
+}
+
+.markdown h3 {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.markdown a {
+  background: linear-gradient(to bottom, transparent 60%, rgba(102, 126, 234, 0.15) 60%);
+  text-decoration: none;
+  transition: var(--ga-transition);
+}
+
+.markdown a:hover {
+  background: linear-gradient(to bottom, transparent 60%, rgba(102, 126, 234, 0.3) 60%);
+}
+
+/* ==========================================================================
+   ADMONITIONS (tip, note, warning, caution, danger)
+   ========================================================================== */
+
+.alert {
+  border-radius: var(--ga-radius) !important;
+  border-left-width: 4px !important;
+  box-shadow: var(--ga-shadow-sm);
+  transition: var(--ga-transition);
+}
+
+.alert:hover {
+  box-shadow: var(--ga-shadow-md);
+  transform: translateY(-1px);
+}
+
+.alert--info {
+  border-left-color: var(--ifm-color-primary) !important;
+  background: rgba(102, 126, 234, 0.05);
+}
+
+[data-theme='dark'] .alert--info {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.alert--success {
+  border-left-color: #2ecc71 !important;
+}
+
+.alert--warning {
+  border-left-color: var(--ga-gold) !important;
+}
+
+/* ==========================================================================
+   CODE BLOCKS
+   ========================================================================== */
+
+.prism-code {
+  border-radius: var(--ga-radius) !important;
+  box-shadow: var(--ga-shadow-sm);
+  position: relative;
+}
+
+div[class*='codeBlockContainer'] {
+  border-radius: var(--ga-radius) !important;
+  overflow: hidden;
+  box-shadow: var(--ga-shadow-md);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+div[class*='codeBlockContainer']::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: var(--ga-gradient-hero);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease infinite;
+}
+
+[data-theme='dark'] div[class*='codeBlockContainer'] {
+  border-color: rgba(139, 157, 240, 0.1);
+}
+
+div[class*='codeBlockTitle'] {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+/* ==========================================================================
+   TABLES
+   ========================================================================== */
+
+table {
+  border-radius: var(--ga-radius) !important;
+  overflow: hidden;
+  box-shadow: var(--ga-shadow-sm);
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+table thead tr {
+  background: var(--ga-gradient-card) !important;
+}
+
+table thead th {
+  color: #fff !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1rem;
+  border: none !important;
+}
+
+table tbody tr {
+  transition: var(--ga-transition);
+}
+
+table tbody tr:nth-child(even) {
+  background: rgba(102, 126, 234, 0.03);
+}
+
+[data-theme='dark'] table tbody tr:nth-child(even) {
+  background: rgba(139, 157, 240, 0.04);
+}
+
+table tbody tr:hover {
+  background: rgba(102, 126, 234, 0.08) !important;
+}
+
+table td {
+  padding: 0.75rem 1rem;
+  border-color: rgba(102, 126, 234, 0.08) !important;
+}
+
+/* ==========================================================================
+   BLOCKQUOTES
+   ========================================================================== */
+
+blockquote {
+  border-left: 4px solid transparent !important;
+  border-image: var(--ga-gradient-hero) 1;
+  background: var(--ga-gradient-subtle);
+  border-radius: 0 var(--ga-radius-sm) var(--ga-radius-sm) 0;
+  padding: 1rem 1.5rem;
+  font-style: italic;
+  position: relative;
+}
+
+blockquote::before {
+  content: '\201C';
+  font-size: 3rem;
+  color: var(--ifm-color-primary);
+  opacity: 0.2;
+  position: absolute;
+  top: -0.5rem;
+  left: 0.5rem;
+  font-family: Georgia, serif;
+}
+
+/* ==========================================================================
+   PAGINATION (Prev/Next navigation)
+   ========================================================================== */
+
+.pagination-nav__link {
+  border-radius: var(--ga-radius) !important;
+  border: 1px solid rgba(102, 126, 234, 0.15) !important;
+  padding: 1.2rem !important;
+  transition: var(--ga-transition);
+  box-shadow: var(--ga-shadow-sm);
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary) !important;
+  box-shadow: var(--ga-shadow-md);
+  transform: translateY(-2px);
+}
+
+.pagination-nav__sublabel {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--ifm-color-primary);
+}
+
+/* ==========================================================================
+   TABLE OF CONTENTS
+   ========================================================================== */
+
+.table-of-contents__link {
+  transition: var(--ga-transition);
+}
+
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary) !important;
+  font-weight: 600;
+  position: relative;
+}
+
+.table-of-contents__link--active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  background: var(--ga-gradient-gold);
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   SEARCH BAR
+   ========================================================================== */
+
+.navbar .DocSearch-Button {
+  border-radius: 20px !important;
+  background: rgba(102, 126, 234, 0.08) !important;
+  border: 1px solid rgba(102, 126, 234, 0.15) !important;
+  transition: var(--ga-transition);
+}
+
+.navbar .DocSearch-Button:hover {
+  box-shadow: var(--ga-shadow-glow);
+  border-color: var(--ifm-color-primary) !important;
+}
+
+/* ==========================================================================
+   CARDS & INTERACTIVE ELEMENTS
+   ========================================================================== */
+
+.card {
+  border-radius: var(--ga-radius);
+  box-shadow: var(--ga-shadow-md);
+  transition: var(--ga-transition);
+  border: 1px solid rgba(102, 126, 234, 0.08);
+  overflow: hidden;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--ga-shadow-lg);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+/* ==========================================================================
+   TABS
+   ========================================================================== */
+
+.tabs__item {
+  border-radius: var(--ga-radius-sm) var(--ga-radius-sm) 0 0;
+  font-weight: 600;
+  transition: var(--ga-transition);
+}
+
+.tabs__item--active {
+  border-bottom: 3px solid var(--ifm-color-primary);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+/* ==========================================================================
+   MERMAID DIAGRAMS
+   ========================================================================== */
+
+.docusaurus-mermaid-container {
+  border-radius: var(--ga-radius);
+  padding: 1.5rem;
+  background: rgba(102, 126, 234, 0.03);
+  border: 1px solid rgba(102, 126, 234, 0.08);
+  box-shadow: var(--ga-shadow-sm);
+  margin: 1.5rem 0;
+}
+
+[data-theme='dark'] .docusaurus-mermaid-container {
+  background: rgba(139, 157, 240, 0.04);
+  border-color: rgba(139, 157, 240, 0.08);
+}
+
+/* ==========================================================================
+   BREADCRUMBS
+   ========================================================================== */
+
+.breadcrumbs__link {
+  transition: var(--ga-transition);
+  border-radius: var(--ga-radius-sm);
+  padding: 0.3rem 0.6rem;
+}
+
+.breadcrumbs__link:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+/* ==========================================================================
+   SCROLLBAR (dark mode)
+   ========================================================================== */
+
+[data-theme='dark'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: var(--ga-dark);
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(139, 157, 240, 0.3);
+  border-radius: 4px;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 157, 240, 0.5);
+}
+
+/* ==========================================================================
+   ANNOUNCEMENT BAR
+   ========================================================================== */
+
+div[class*='announcementBar'] {
+  background: var(--ga-gradient-hero) !important;
+  background-size: 200% 200% !important;
+  animation: gradientShift 8s ease infinite;
+  color: #fff !important;
+  font-weight: 600;
+  border: none !important;
+}
+
+div[class*='announcementBar'] a {
+  color: var(--ga-gold) !important;
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media screen and (max-width: 996px) {
+  .markdown h1 {
+    font-size: 1.8rem;
+  }
+
+  table {
+    font-size: 0.85rem;
+  }
+
+  .pagination-nav__link {
+    padding: 0.8rem !important;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  .markdown h1 {
+    font-size: 1.5rem;
+  }
+
+  .markdown h2 {
+    font-size: 1.3rem;
+  }
+
+  blockquote::before {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   UTILITY CLASSES (for use in MDX components and pages)
+   ========================================================================== */
+
+.ga-gradient-text {
+  background: var(--ga-gradient-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ga-gold-text {
+  color: var(--ga-gold);
+}
+
+.ga-card-hover {
+  transition: var(--ga-transition);
+}
+
+.ga-card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--ga-shadow-lg);
+}
+
+.ga-glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--ga-radius);
+}
+
+[data-theme='dark'] .ga-glass {
+  background: rgba(15, 20, 25, 0.6);
+  border-color: rgba(139, 157, 240, 0.1);
+}
+
+.ga-section-dark {
+  background: var(--ga-dark-card);
+  color: #fff;
+}
+
+.ga-section-light {
+  background: var(--ga-light-bg);
+}
+
+.ga-fade-in {
+  animation: fadeInUp 0.6s ease-out both;
+}
