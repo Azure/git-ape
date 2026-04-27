@@ -25,23 +25,48 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
 ## Workflow
 
 1. Confirm target repository URL.
+1.5. Select CI/CD platform (see "CI/CD Platform Selection" below).
 2. Ask whether onboarding is single-environment or multi-environment.
 3. Confirm subscription target(s) and RBAC role model.
 4. Validate prerequisites:
    - `az`, `gh`, `jq` installed
    - Azure authenticated (`az account show`)
    - GitHub authenticated (`gh auth status`)
+   - When ADO or Both selected: `az extension show -n azure-devops` returns a version, and `az devops configure -l` resolves a default org (or `$ADO_ORG_URL` is supplied via `--org` on every command).
 5. Echo intended changes and ask for explicit confirmation.
-6. Execute onboarding by running the required `az` and `gh` commands directly.
-7. For OIDC setup, detect whether the GitHub org uses default or ID-based subject claims before creating federated credentials.
+6. Execute onboarding by running the required `az` and `gh` commands directly. When ADO or Both is selected, also run the ADO branch commands documented in the `/git-ape-onboarding` skill playbook.
+7. For OIDC setup, detect whether the GitHub org uses default or ID-based subject claims before creating federated credentials. ADO service connections always use the deterministic subject `sc://<org>/<project>/<connection>`; no claim-template detection is required for the ADO branch.
 8. Ask compliance framework and enforcement mode preferences (Step 9 in `/git-ape-onboarding` skill playbook).
 9. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices.
 10. Display experimental warning and ask for three explicit acknowledgments:
     - "I understand Git-Ape is experimental and not production-ready"
     - "I will review all deployment plans in PRs before merging to main"
     - "I acknowledge this setup must not deploy to production yet"
-11. Execute workflow activation (Step 11 in `/git-ape-onboarding` skill playbook) to rename `.exampleyml` files to `.yml` only if all acknowledgments are confirmed.
+11. Execute workflow activation (Step 11 in `/git-ape-onboarding` skill playbook) to rename example pipeline files to active ones, only if all acknowledgments are confirmed:
+    - GitHub branch: `.github/workflows/*.exampleyml` → `*.yml`.
+    - ADO branch: `.azure-pipelines/*.examplepipeline.yml` → `*.yml`, plus `az pipelines create` per file and the Step 11c build-identity Contribute grant.
+    - Both: run both branches sequentially.
 12. Summarize created/updated artifacts and next checks.
+
+## CI/CD Platform Selection
+
+Use a single `vscode_askQuestions` call to select the CI/CD platform before any other branching choice. Do not use inline `read` prompts.
+
+1. **Question — `cicd-platform`:**
+   - Question: "Which CI/CD platform should Git-Ape configure for this repository?"
+   - Options:
+     - GitHub Actions (recommended)
+     - Azure DevOps Pipelines
+     - Both — GitHub Actions and Azure DevOps Pipelines
+
+When **Azure DevOps Pipelines** or **Both** is selected, follow up with a single `vscode_askQuestions` call collecting:
+
+- `ado-org-url` — Azure DevOps organization URL (e.g. `https://dev.azure.com/contoso`).
+- `ado-project` — Azure DevOps project name (e.g. `infra`).
+- `ado-source-repo` — Source repo backend: `Azure Repos` or `GitHub`. Skip this question when **Both** is selected (Both implies the GitHub repo confirmed in Step 1 is also the source for ADO pipelines).
+- `ado-connection-prefix` — Service connection name prefix (default `git-ape-azure`).
+
+Echo all collected values back in Step 5 alongside the existing repo/subscription summary so the user confirms them before execution.
 
 ## Acknowledgment Phase
 
@@ -62,8 +87,10 @@ Before activating workflows, you MUST collect explicit acknowledgments using `vs
    - Question: "Do you acknowledge that this setup must not be used to deploy to production environments yet?"
    - Options: Yes / No
 
-If ANY answer is "No", report: "Workflow activation cancelled. You can enable workflows later by renaming `.exampleyml` files to `.yml` in `.github/workflows/` when ready."  
+If ANY answer is "No", report: "Workflow activation cancelled. You can enable workflows later by renaming `.exampleyml` files to `.yml` in `.github/workflows/` (and/or `.examplepipeline.yml` files to `.yml` in `.azure-pipelines/`) when ready."  
 If ALL answers are "Yes", proceed to Step 11 (workflow activation via skill).
+
+The acknowledgment gate is identical for both providers — the same three questions, the same blocking behavior, and the same wording. Selecting Azure DevOps or Both does not relax or change any acknowledgment.
 
 ## Output Requirements
 

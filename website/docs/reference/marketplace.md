@@ -31,7 +31,7 @@ The marketplace manifest configures how Git-Ape appears in the Copilot CLI plugi
   "name": "git-ape",
   "owner": {
     "name": "Microsoft",
-    "url": "https://github.com/Azure/git-ape"
+    "url": "https://github.com/Azure/git-ape-private"
   },
   "metadata": {
     "description": "Git-Ape — Intelligent Azure deployment agent and skill suite for GitHub Copilot. Onboard any repository with guided ARM template generation, security analysis, cost estimation, drift detection, and automated CI/CD pipelines.",

@@ -71,20 +71,21 @@ Git-Ape can run in two modes. Detect which mode is active and adapt behavior acc
 - `az login` session is available (user already authenticated)
 - MCP tools may be available for Azure queries
 
-### Headless Mode (Copilot Coding Agent / GitHub Actions)
+### Headless Mode (Copilot Coding Agent / GitHub Actions / Azure DevOps Pipelines)
 - User is NOT present — the agent is running asynchronously (typically triggered by an issue or PR)
 - **DO NOT prompt for confirmation** — all parameters must come from the issue body, PR description, or a requirements file
 - Authentication is via **OIDC federated identity** (see Azure Authentication section)
 - MCP tools are NOT available — use Azure CLI commands exclusively
 - The agent generates deployment artifacts and commits them to the branch
-- **GitHub Actions workflows handle the rest automatically:**
-  - `git-ape-plan.yml` — runs on PR open/update, validates template + runs what-if, posts plan as PR comment
-  - `git-ape-deploy.yml` — runs on PR merge to main OR on `/deploy` comment (requires PR approval)
-  - `git-ape-destroy.yml` — runs on PR merge when `metadata.json` status is `destroy-requested`
-- The agent should **NOT execute `az deployment` commands directly** in headless mode — commit the files and let the workflows handle it
+- **The configured CI/CD provider's pipeline workflows handle the rest automatically:**
+  - `git-ape-plan.yml` — runs on PR open/update, validates template + runs what-if, posts plan as a PR comment (GitHub) or PR thread comment (Azure DevOps)
+  - `git-ape-deploy.yml` — runs on PR merge to the default branch (both providers); GitHub mode also accepts a `/deploy` comment, while Azure DevOps mode uses an Environment pre-deployment approval
+  - `git-ape-destroy.yml` — runs when a merged PR sets `metadata.json` status to `destroy-requested`
+- The agent should **NOT execute `az deployment` commands directly** in headless mode — commit the files and let the configured pipeline (GitHub Actions or Azure DevOps Pipelines) handle it
 
 **How to detect mode:**
-- If the environment variable `GITHUB_ACTIONS` is set → Headless Mode
+- If the environment variable `GITHUB_ACTIONS` is set → Headless Mode (GitHub)
+- If `TF_BUILD` is set → Headless Mode (Azure DevOps)
 - If `CI` env var is set → Headless Mode
 - Otherwise → Interactive Mode
 
@@ -94,9 +95,9 @@ Git-Ape can run in two modes. Detect which mode is active and adapt behavior acc
 |-------|------------|-------------------------|
 | Requirements | Interview user | Parse from issue body or requirements file |
 | Template | Generate + show preview | Generate + commit to branch |
-| Validation | Run locally | `git-ape-plan.yml` runs on PR, posts what-if as comment |
-| Confirmation | Ask user interactively | PR approval = confirmation |
-| Deployment | Execute immediately | `git-ape-deploy.yml` runs on merge or `/deploy` comment |
+| Validation | Run locally | `git-ape-plan.yml` runs on PR, posts what-if as PR/thread comment |
+| Confirmation | Ask user interactively | PR approval or ADO Environment approval = confirmation |
+| Deployment | Execute immediately | `git-ape-deploy.yml` runs on merge (GitHub `/deploy` comment or ADO approval gate) |
 | Destroy | Execute after confirmation | PR sets `metadata.json` status to `destroy-requested` → merge triggers `git-ape-destroy.yml` |
 | Results | Display in chat | Posted as PR/issue comment + state committed to repo |
 
@@ -429,7 +430,7 @@ When deploying resources with managed identities or when user asks about permiss
 - **DO NOT** create resources outside the workflow - always start with requirements gathering
 - **DO NOT** bypass the security gate — if Critical or High checks fail, deployment MUST be blocked until fixed or explicitly overridden with `I accept the security risk`
 - **DO NOT** proceed from Stage 2 to Stage 3 without a `🟢 PASSED` or `⚠️ OVERRIDDEN` security gate
-- **In headless mode:** DO NOT run `az deployment` commands — commit artifacts and let GitHub Actions workflows deploy
+- **In headless mode:** DO NOT run `az deployment` commands — commit artifacts and let the configured CI/CD pipeline (GitHub Actions or Azure DevOps Pipelines) deploy
 
 ## Security Analysis Integrity (CRITICAL)
 

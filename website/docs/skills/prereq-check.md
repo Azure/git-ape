@@ -179,6 +179,57 @@ if [[ $? -ne 0 ]]; then
 fi
 ```
 
+### Step 5.5: If ADO selected — validate Azure DevOps toolchain
+
+Run only when invoked from `/git-ape-onboarding` with `cicd ado` or `cicd both`. Skip otherwise.
+
+```bash
+# --- azure-devops extension — required for `az devops`, `az pipelines`, `az repos` ---
+ADO_EXT_VER=$(az extension show --name azure-devops --query version -o tsv 2>/dev/null)
+if [[ -z "$ADO_EXT_VER" ]]; then
+  echo "azure-devops: NOT INSTALLED"
+else
+  echo "azure-devops: $ADO_EXT_VER"
+fi
+
+# --- Default org configured (or $ADO_ORG_URL provided) ---
+ADO_DEFAULT_ORG=$(az devops configure --list 2>/dev/null | awk -F'= *' '/^organization/ {print $2}')
+if [[ -z "$ADO_DEFAULT_ORG" && -z "$ADO_ORG_URL" ]]; then
+  echo "az devops default organization: NOT CONFIGURED (warning — every command must use --org)"
+else
+  echo "az devops default organization: ${ADO_DEFAULT_ORG:-$ADO_ORG_URL}"
+fi
+
+# --- Optional: confirm credentials reach the org ---
+if [[ -n "${ADO_ORG_URL:-$ADO_DEFAULT_ORG}" ]]; then
+  az devops user show --org "${ADO_ORG_URL:-$ADO_DEFAULT_ORG}" --query "user.descriptor" -o tsv 2>/dev/null \
+    && echo "az devops auth: OK" \
+    || echo "az devops auth: FAILED — credentials cannot reach the org"
+fi
+```
+
+Add an ADO row to the Step 3 results table when ADO mode is active:
+
+| Tool | Status | Found Version | Minimum Required |
+|------|--------|---------------|------------------|
+| azure-devops extension | ✅ / ❌ | x.y.z | any |
+| az devops org auth | ✅ / ❌ | reachable | reachable |
+
+**Install commands when missing (all platforms — extension is delivered via `az`):**
+
+```bash
+az extension add --name azure-devops
+az extension update --name azure-devops   # if installed but stale
+```
+
+**Configure default org (optional — can also pass `--org` on every command):**
+
+```bash
+az devops configure --defaults organization=https://dev.azure.com/<your-org> project=<your-project>
+```
+
+**Auth notes:** the `azure-devops` extension reuses the `az` login session for ADO. No PAT is required for Git-Ape onboarding. If `az devops user show` fails with `TF400813` or `403`, sign in again with `az login --allow-no-subscriptions` and ensure the signed-in identity is a member of the ADO organization.
+
 ### Step 6: Summary
 
 Present a final verdict:
@@ -186,6 +237,64 @@ Present a final verdict:
 - **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any Git-Ape skill.
 - **⚠️ TOOLS MISSING** — List what to install. Do not proceed until resolved.
 - **⚠️ AUTH MISSING** — Tools OK but user needs to run `az login` and/or `gh auth login`.
+
+When ADO mode is active (provider `ado` or `both`), `✅ READY` also requires the ADO toolchain checks in Step 5.5 above to pass.
+
+## Agent Behavior
+
+1. Run Steps 1–5 by executing the commands in the terminal. Run Step 5.5 as well when ADO mode is active.
+2. Present the results table and install commands (if needed).
+3. Do NOT install anything automatically — show the commands and let the user run them.
+4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/git-ape-onboarding`).
+
+Run only when invoked from `/git-ape-onboarding` with `cicd ado` or `cicd both`. Skip otherwise.
+
+```bash
+# --- azure-devops extension — required for `az devops`, `az pipelines`, `az repos` ---
+ADO_EXT_VER=$(az extension show --name azure-devops --query version -o tsv 2>/dev/null)
+if [[ -z "$ADO_EXT_VER" ]]; then
+  echo "azure-devops: NOT INSTALLED"
+else
+  echo "azure-devops: $ADO_EXT_VER"
+fi
+
+# --- Default org configured (or $ADO_ORG_URL provided) ---
+ADO_DEFAULT_ORG=$(az devops configure --list 2>/dev/null | awk -F'= *' '/^organization/ {print $2}')
+if [[ -z "$ADO_DEFAULT_ORG" && -z "$ADO_ORG_URL" ]]; then
+  echo "az devops default organization: NOT CONFIGURED (warning — every command must use --org)"
+else
+  echo "az devops default organization: ${ADO_DEFAULT_ORG:-$ADO_ORG_URL}"
+fi
+
+# --- Optional: confirm credentials reach the org ---
+if [[ -n "${ADO_ORG_URL:-$ADO_DEFAULT_ORG}" ]]; then
+  az devops user show --org "${ADO_ORG_URL:-$ADO_DEFAULT_ORG}" --query "user.descriptor" -o tsv 2>/dev/null \
+    && echo "az devops auth: OK" \
+    || echo "az devops auth: FAILED — credentials cannot reach the org"
+fi
+```
+
+Add an ADO row to the Step 3 results table when ADO mode is active:
+
+| Tool | Status | Found Version | Minimum Required |
+|------|--------|---------------|------------------|
+| azure-devops extension | ✅ / ❌ | x.y.z | any |
+| az devops org auth | ✅ / ❌ | reachable | reachable |
+
+**Install commands when missing (all platforms — extension is delivered via `az`):**
+
+```bash
+az extension add --name azure-devops
+az extension update --name azure-devops   # if installed but stale
+```
+
+**Configure default org (optional — can also pass `--org` on every command):**
+
+```bash
+az devops configure --defaults organization=https://dev.azure.com/<your-org> project=<your-project>
+```
+
+**Auth notes:** the `azure-devops` extension reuses the `az` login session for ADO. No PAT is required for Git-Ape onboarding. If `az devops user show` fails with `TF400813` or `403`, sign in again with `az login --allow-no-subscriptions` and ensure the signed-in identity is a member of the ADO organization.
 
 ## Agent Behavior
 
