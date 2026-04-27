@@ -20,7 +20,7 @@ Every deployment creates a timestamped directory under `.azure/deployments/` con
 A deployment moves through a defined set of states tracked in `metadata.json`. Terminal states (`succeeded`, `failed`, `rolled-back`, `destroyed`) are persisted in git for audit.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 stateDiagram-v2
     [*] --> initialized: deployment dir created
     initialized --> gathering_requirements: Requirements Gatherer

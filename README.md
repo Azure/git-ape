@@ -115,7 +115,7 @@ When you're done, clean up with:
 ### Agent & Skill Orchestration
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph TD
     GA["<b>@git-ape</b><br/>Main Orchestrator<br/><i>Coordinates stages, enforces gates,<br/>delegates to subagents, invokes skills</i>"]
 
@@ -177,7 +177,7 @@ Skills are invoked by agents at specific stages. Each skill handles one focused 
 ### Deployment Flow
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph TD
     U["User prompt:<br/><i>deploy a Python function app</i>"]
 
@@ -233,7 +233,7 @@ graph TD
 Git-Ape runs the same agents and skills in two different contexts.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph LR
     subgraph Interactive ["🧑‍💻 Interactive Mode — VS Code / Chat"]
         direction TB

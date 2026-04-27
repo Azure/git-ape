@@ -19,7 +19,7 @@ Git-Ape supports two onboarding modes:
 Git-Ape uses OpenID Connect (OIDC) federation between GitHub Actions and Microsoft Entra ID. No client secrets are stored — GitHub mints a short-lived token at workflow runtime, and Entra exchanges it for an Azure access token based on a trust relationship you configure once.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 sequenceDiagram
     autonumber
     participant GH as GitHub Actions<br/>(workflow run)
@@ -38,7 +38,7 @@ sequenceDiagram
 **Trust components you configure during onboarding:**
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph LR
     GH["<b>GitHub Repo</b><br/>org/repo"]
     FC["<b>Federated Credential</b><br/>subject: repo:org/repo:..."]
@@ -669,7 +669,7 @@ Environment creation requires admin access to the repository. Ask a repo admin t
 ### Single Environment Mode
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph TD
     subgraph GH["GitHub Repository"]
         direction TB
@@ -713,7 +713,7 @@ graph TD
 ### Multi-Environment Mode
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph TD
     subgraph GH["GitHub Repository"]
         direction TB
