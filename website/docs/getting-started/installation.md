@@ -9,27 +9,49 @@ description: "Install Git-Ape and verify prerequisites"
 
 ## Prerequisites
 
-- **Bash shell** (Git Bash on Windows)
-- **Azure CLI** (`az`) — signed in with `az login`
-- **GitHub CLI** (`gh`) — authenticated
-- **jq** and **git**
-
-Run `/prereq-check` in Copilot Chat to verify all tools and auth sessions automatically.
+- A Bash-compatible shell (use `git-bash` on Windows). Other shells are untested.
+- Azure CLI (`az`), GitHub CLI (`gh`), `jq`, and `git` installed and authenticated.
+- Run `/prereq-check` in Copilot Chat to verify everything is in place.
 
 ## Install the Plugin
 
-### Option 1: Marketplace (Recommended)
+Git-Ape ships as a [VS Code agent plugin](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) and as a GitHub Copilot CLI plugin. Pick the path that matches how you use Copilot.
+
+### Option A: VS Code agent plugin (recommended for VS Code users)
+
+Prerequisites: VS Code with GitHub Copilot enabled and the `chat.plugins.enabled` setting set to `true` (managed at the organization level).
+
+1. Add the marketplace in your VS Code `settings.json`:
+
+   ```jsonc
+   "chat.plugins.marketplaces": [
+       "Azure/git-ape"
+   ]
+   ```
+
+2. Open the Extensions view (`⇧⌘X` on macOS, `Ctrl+Shift+X` on Windows/Linux), search for `@agentPlugins`, find **git-ape**, and select **Install**.
+3. Alternatively, open the Command Palette (`⇧⌘P` on macOS, `Ctrl+Shift+P` on Windows/Linux), run **Chat: Install Plugin From Source**, and enter `https://github.com/Azure/git-ape`.
+4. Verify the agents and skills appear in Copilot Chat (for example, type `@git-ape` or `/prereq-check`).
+
+### Option B: Copilot CLI plugin
 
 ```bash
 copilot plugin marketplace add Azure/git-ape
-copilot plugin install Azure/git-ape
+copilot plugin install git-ape@git-ape
+copilot plugin list   # Should show: git-ape@git-ape
 ```
 
-### Option 2: Manual
+### Option C: Local development install
 
-1. Clone this repository
-2. Open it in VS Code with GitHub Copilot enabled
-3. Confirm the agents appear in Copilot Chat
+Clone this repository and register the local checkout as a VS Code plugin in `settings.json`:
+
+```jsonc
+"chat.pluginLocations": {
+    "/absolute/path/to/git-ape": true
+}
+```
+
+Reload VS Code; the `@git-ape` agent and Git-Ape skills will appear in Copilot Chat.
 
 ## Verify Installation
 
