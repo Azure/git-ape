@@ -110,7 +110,7 @@ winget install GitHub.cli
 winget install jqlang.jq
 ```
 
-> **Note:** AutoCloud skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
+> **Note:** Git-Ape skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
 </details>
 
 You must be logged in to both:
