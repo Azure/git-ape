@@ -1,0 +1,91 @@
+---
+title: "Git-Ape for Engineering Leads"
+sidebar_label: "For Engineering Leads"
+sidebar_position: 2
+description: "How Git-Ape accelerates developer productivity, ensures architecture quality, and enables team self-service"
+keywords: [engineering lead, developer productivity, architecture, team enablement]
+---
+
+# Git-Ape for Engineering Leads
+
+> **TL;DR** — Git-Ape automates Azure infrastructure quality so your team ships faster with fewer production incidents. No Azure expertise required from every developer.
+
+<FeatureGrid columns={3}>
+  <MetricCard value="8" label="AI Agents" icon="fas fa-robot" />
+  <MetricCard value="34" label="Built-in Skills" icon="fas fa-puzzle-piece" />
+  <MetricCard value="100%" label="Auto-documented" icon="fas fa-file-alt" />
+</FeatureGrid>
+
+## The Problem You Face
+
+Your team needs to deploy Azure resources, but not everyone is an Azure expert. The current options are:
+
+- **Developers write their own ARM templates** — inconsistent quality, security gaps
+- **Platform team becomes a bottleneck** — ticket-based provisioning slows everyone down
+- **Copy-paste from old deployments** — works until it doesn't, no security guarantees
+
+## How Git-Ape Solves It
+
+### Self-Service with Guardrails
+
+Developers describe what they need in natural language. Git-Ape handles the rest:
+
+```
+@git-ape deploy a Python Function App with Cosmos DB
+         for the order-processing service in dev
+```
+
+The system automatically:
+1. Validates naming against CAF conventions
+2. Generates ARM templates with security best practices
+3. Runs blocking security gate (no shortcuts)
+4. Estimates costs before deploying
+5. Runs integration tests after deployment
+6. Commits deployment state to the repo
+
+### Architecture Quality Automation
+
+The **Principal Architect** agent evaluates every deployment against the Well-Architected Framework:
+
+| Pillar | What It Checks |
+|--------|----------------|
+| Security | Managed identities, encryption, RBAC, network isolation |
+| Reliability | Redundancy, health probes, backup configuration |
+| Performance | SKU sizing, scaling rules, caching strategies |
+| Cost | Right-sizing, reserved instances, dev/test pricing |
+| Operations | Monitoring, logging, alerting, diagnostics |
+
+### Team Enablement Patterns
+
+- **Living documentation** — auto-generated from agent and skill source files
+- **Two execution modes** — interactive for learning, headless for CI/CD automation
+- **Consistent deployments** — same security baseline whether deployed by a junior dev or a principal engineer
+
+## Integration with Your Workflow
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant GA as @git-ape
+    participant PR as Pull Request
+    participant CI as GitHub Actions
+
+    Dev->>GA: "Deploy function app for orders"
+    GA->>GA: Gather requirements
+    GA->>GA: Generate ARM + security + cost
+    GA->>Dev: Show plan, request approval
+    Dev->>GA: Approved
+    GA->>PR: Create PR with template
+    PR->>CI: git-ape-plan.yml (validate + what-if)
+    CI->>PR: Post plan as PR comment
+    Dev->>PR: Review & merge
+    PR->>CI: git-ape-deploy.yml (deploy + test)
+    CI->>PR: Post deployment result
+```
+
+## Next Steps
+
+- [Quick Start for Engineers](/docs/personas/for-engineers)
+- [Deploy a Function App](/docs/use-cases/deploy-function-app)
+- [CI/CD Pipeline Setup](/docs/use-cases/cicd-pipeline)
+- [Agents Overview](/docs/agents/overview)

@@ -1,0 +1,8 @@
+{
+  "label": "CI/CD Workflows",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "CI/CD Workflows documentation for Git-Ape."
+  }
+}

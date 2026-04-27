@@ -1,0 +1,9 @@
+{
+  "label": "Skills",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Skills documentation for Git-Ape."
+  },
+  "collapsed": false
+}

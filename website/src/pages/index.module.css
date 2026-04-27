@@ -1,0 +1,404 @@
+/**
+ * Git-Ape Homepage Styles — Premium Design
+ */
+
+/* ==========================================================================
+   HERO SECTION
+   ========================================================================== */
+
+.heroBanner {
+  padding: 6rem 0 4rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 200%;
+  animation: heroGradient 15s ease infinite;
+  color: #fff;
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+}
+
+@keyframes heroGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.heroBanner::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to top, var(--ifm-background-color, #fff), transparent);
+  pointer-events: none;
+}
+
+.heroTitle {
+  font-size: 4rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  line-height: 1.1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.heroGold {
+  color: #ffd700;
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+}
+
+.heroSubtitle {
+  font-size: 1.35rem;
+  max-width: 700px;
+  margin: 1.5rem auto;
+  opacity: 0.92;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.btnPrimary {
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  color: #1a252f !important;
+  padding: 0.85rem 2.2rem;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+}
+
+.btnPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 215, 0, 0.5);
+  color: #1a252f !important;
+  text-decoration: none;
+}
+
+.btnSecondary {
+  background: transparent;
+  color: #fff !important;
+  padding: 0.85rem 2.2rem;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btnSecondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #fff !important;
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   METRICS SECTION
+   ========================================================================== */
+
+.metricsSection {
+  background: linear-gradient(135deg, #1a252f, #2c3e50);
+  padding: 4rem 0;
+  color: #fff;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   PERSONAS SECTION
+   ========================================================================== */
+
+.personasSection {
+  padding: 5rem 0;
+  background: var(--ga-light-bg);
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+}
+
+.sectionSubtitle {
+  text-align: center;
+  font-size: 1.1rem;
+  opacity: 0.7;
+  max-width: 600px;
+  margin: 0 auto 3rem;
+  line-height: 1.5;
+}
+
+.personasGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1.5rem;
+}
+
+/* ==========================================================================
+   TIMELINE SECTION
+   ========================================================================== */
+
+.timelineSection {
+  padding: 5rem 0;
+}
+
+.timelineWrapper {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   CAPABILITIES SECTION
+   ========================================================================== */
+
+.capabilitiesSection {
+  padding: 5rem 0;
+  background: var(--ga-light-bg);
+}
+
+.capGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.capCard {
+  padding: 2rem 1.5rem;
+  border-radius: 15px;
+  background: var(--ifm-background-surface-color, #fff);
+  border: 1px solid rgba(102, 126, 234, 0.08);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.capCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+.capIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  font-size: 1.4rem;
+  color: #fff;
+}
+
+.capTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.capDesc {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ==========================================================================
+   USE CASES SECTION
+   ========================================================================== */
+
+.useCasesSection {
+  padding: 5rem 0;
+}
+
+.useCasesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.useCaseCard {
+  border-radius: 15px;
+  overflow: hidden;
+  background: var(--ifm-background-surface-color, #fff);
+  border: 1px solid rgba(102, 126, 234, 0.08);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.useCaseCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  text-decoration: none;
+  color: inherit;
+}
+
+.useCaseHeader {
+  padding: 1.5rem;
+  color: #fff;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.useCaseBody {
+  padding: 1.25rem 1.5rem;
+}
+
+.useCaseBody p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ==========================================================================
+   COMPARISON SECTION
+   ========================================================================== */
+
+.comparisonSection {
+  padding: 5rem 0;
+  background: var(--ga-light-bg);
+}
+
+.comparisonWrapper {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   CTA SECTION
+   ========================================================================== */
+
+.ctaSection {
+  padding: 5rem 0;
+  background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%);
+  color: #fff;
+  text-align: center;
+  position: relative;
+}
+
+.ctaSection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea, #764ba2, #ffd700);
+  background-size: 200% 200%;
+  animation: heroGradient 8s ease infinite;
+}
+
+.ctaGlass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 3rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.ctaSteps {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.ctaStep {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ctaStepNum {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  color: #1a252f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media screen and (max-width: 996px) {
+  .heroTitle { font-size: 3rem; }
+  .heroSubtitle { font-size: 1.15rem; }
+  .heroBanner { min-height: 60vh; padding: 4rem 0 3rem; }
+  .metricsGrid { grid-template-columns: repeat(3, 1fr); }
+  .personasGrid { grid-template-columns: repeat(3, 1fr); }
+  .capGrid { grid-template-columns: repeat(2, 1fr); }
+  .useCasesGrid { grid-template-columns: repeat(2, 1fr); }
+  .sectionTitle { font-size: 2rem; }
+}
+
+@media screen and (max-width: 576px) {
+  .heroTitle { font-size: 2.2rem; }
+  .heroSubtitle { font-size: 1rem; }
+  .heroBanner { min-height: auto; padding: 3rem 1rem 2rem; }
+  .metricsGrid { grid-template-columns: repeat(2, 1fr); }
+  .personasGrid { grid-template-columns: 1fr; }
+  .capGrid { grid-template-columns: 1fr; }
+  .useCasesGrid { grid-template-columns: 1fr; }
+  .ctaSteps { flex-direction: column; align-items: center; }
+  .buttons { flex-direction: column; }
+}
