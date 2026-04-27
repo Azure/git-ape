@@ -6,33 +6,26 @@
 > EXPERIMENTAL PROJECT: Git-Ape is in active development and is not production-ready.
 > Use it for local development, demos, sandbox subscriptions, and learning only.
 
-Git-Ape is a **platform engineering framework** built on GitHub Copilot. It provides a structured, multi-agent system for planning, validating, and deploying Azure infrastructure — with security gates, cost analysis, and CI/CD pipeline integration built in.
+Git-Ape is a **platform engineering framework** built on GitHub Copilot. It is a multi-agent system that plans, validates, and deploys Azure infrastructure — with security gates, cost analysis, and CI/CD pipeline integration built in.
 
-## What It Is
+Nothing is deployed without your explicit confirmation.
 
-Git-Ape packages a set of Copilot agents and skills focused on Azure infrastructure work.
+## What Git-Ape Does
 
-- It helps you gather deployment requirements.
-- It generates ARM templates and supporting deployment artifacts.
-- It runs security, preflight, and cost checks before deployment.
-- It supports onboarding and post-deployment validation.
+Git-Ape walks every deployment through the same four steps:
 
-## What It Does
+1. **Gather** requirements through a guided interview.
+2. **Generate** an ARM template, architecture diagram, cost estimate, and security report.
+3. **Confirm** with you (interactive) or via PR review (headless) before anything is created.
+4. **Deploy** to Azure and run post-deployment validation.
 
-Git-Ape is designed around a simple deployment flow:
+It is built for:
 
-1. Collect the inputs for the resources you want.
-2. Generate and review the template, naming, cost, and security results.
-3. Ask for confirmation before anything changes in Azure.
-4. Deploy and run follow-up validation.
+- Azure application stacks: Function Apps, Web Apps, Storage, SQL, Cosmos DB, Container Apps.
+- Repository onboarding: OIDC, RBAC, GitHub environments, and secrets.
+- Auditable deployments: every run is saved under `.azure/deployments/`.
+- Drift detection between live Azure state and stored deployment artifacts *(agentic workflow — coming soon)*.
 
-Common tasks it supports:
-
-- Deploying Azure application stacks such as Function Apps, Web Apps, Storage, SQL, Cosmos DB, and Container Apps.
-- Bootstrapping repository onboarding for OIDC, RBAC, GitHub environments, and secrets.
-- Saving deployment artifacts under `.azure/deployments/` for audit and reuse.
-- Detecting configuration drift between Azure and stored deployment state (agentic workflow — coming soon).
-- 
 ## Git-Ape in action
 
 A short demo video of the onboarding and deploy experience using Git-Ape.
@@ -42,49 +35,39 @@ A short demo video of the onboarding and deploy experience using Git-Ape.
 
 ## Get Started
 
-### Prerequisite
-- Only tested with BASH shells (git-bash for windows)
-- Run `/prereq-check` in Copilot Chat to verify all required tools (`az`, `gh`, `jq`, `git`) and auth sessions
+### Prerequisites
+
+- A Bash-compatible shell (use `git-bash` on Windows). Other shells are untested.
+- Azure CLI (`az`), GitHub CLI (`gh`), `jq`, and `git` installed and authenticated.
+- Run `/prereq-check` in Copilot Chat to verify everything is in place.
 
 ### 1. Install the plugin
-
-Recommended:
 
 ```bash
 copilot plugin marketplace add Azure/git-ape
 copilot plugin install git-ape@git-ape
-```
-
-Verify the installation:
-
-```bash
 copilot plugin list   # Should show: git-ape@git-ape
 ```
 
-Manual option:
-
-1. Clone this repository.
-2. Open it in VS Code with GitHub Copilot enabled.
-3. Confirm the agents appear in chat.
+Or install manually: clone this repo, open it in VS Code with GitHub Copilot enabled, and confirm the agents appear in chat.
 
 ### 2. Configure Azure access
 
-1. Install Azure CLI and sign in with `az login`.
-2. Configure the Azure MCP server in VS Code.
-3. Verify the required Azure services are enabled.
-
-Setup details are in [docs/AZURE_MCP_SETUP.md](docs/AZURE_MCP_SETUP.md).
+1. Sign in with `az login`.
+2. Configure the Azure MCP server in VS Code — see [docs/AZURE_MCP_SETUP.md](docs/AZURE_MCP_SETUP.md).
 
 ### 3. Use the agents
 
-Start with one of these prompts in Copilot Chat:
+In Copilot Chat, try one of:
 
 - `@git-ape deploy a Python function app`
 - `@git-ape deploy a web app with SQL database`
 - `@Git-Ape Onboarding set up this repo for Azure deployments`
 
-### 4. Tear Down
-Use @git-ape to clean up afterwards by using:
+### 4. Tear down
+
+When you're done, clean up with:
+
 - `@git-ape destroy Python function app`
 
 ## Where To Go Next
@@ -97,13 +80,14 @@ Use @git-ape to clean up afterwards by using:
 
 ## Architecture
 
-`@git-ape` is the central orchestrator. It coordinates a deployment pipeline of specialized subagents, enforces security gates, invokes skills, and manages deployment state. It does not deploy anything without explicit user confirmation.
+`@git-ape` is the central orchestrator. It coordinates a pipeline of specialized subagents, enforces security gates, invokes skills, and manages deployment state. It never deploys anything without explicit user confirmation.
 
 ### Agent & Skill Orchestration
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
 graph TD
-    GA["<b>@git-ape</b><br/>Main Orchestrator Agent<br/><i>Coordinates deployment stages, enforces security gates,<br/>delegates to subagents, invokes skills</i>"]
+    GA["<b>@git-ape</b><br/>Main Orchestrator<br/><i>Coordinates stages, enforces gates,<br/>delegates to subagents, invokes skills</i>"]
 
     GA --> DP
     GA --> AD
@@ -128,6 +112,18 @@ graph TD
         IE["<b>IaC Exporter</b><br/>Import live resources"]
         OB["<b>Git-Ape Onboarding</b><br/>OIDC + RBAC<br/>GitHub envs & secrets"]
     end
+
+    classDef orchestrator fill:#1f6feb,stroke:#0b3d91,stroke-width:2px,color:#ffffff
+    classDef pipeline fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef advisory fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef utility fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+
+    class GA orchestrator
+    class RG,TG,RD pipeline
+    class SG,UC gate
+    class WR,PA advisory
+    class IE,OB utility
 ```
 
 ### Skills
@@ -151,6 +147,7 @@ Skills are invoked by agents at specific stages. Each skill handles one focused 
 ### Deployment Flow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
 graph TD
     U["User prompt:<br/><i>deploy a Python function app</i>"]
 
@@ -185,15 +182,30 @@ graph TD
     SK4["/azure-integration-tester<br/>/azure-resource-visualizer"]
 
     S4 -. skills .-> SK4
+
+    classDef user fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef stage fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef skill fill:#f1f5f9,stroke:#64748b,stroke-width:1px,color:#0f172a,stroke-dasharray: 4 2
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef fix fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+
+    class U user
+    class S1,S2,WAF stage
+    class SK1,SK2,SK4 skill
+    class GATE,CONFIRM gate
+    class FIX fix
+    class S3,S4 deploy
 ```
 
 ### Execution Modes
 
-Git-Ape works in two modes — same agents and skills, different execution context.
+Git-Ape runs the same agents and skills in two different contexts.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
 graph LR
-    subgraph Interactive ["Interactive Mode (VS Code / Chat)"]
+    subgraph Interactive ["🧑‍💻 Interactive Mode — VS Code / Chat"]
         direction TB
         I1["User ↔ @git-ape"]
         I2["Real-time Q&A"]
@@ -203,7 +215,7 @@ graph LR
         I6["@git-ape destroy {id}"]
     end
 
-    subgraph Headless ["Headless Mode (Coding Agent / Actions)"]
+    subgraph Headless ["🤖 Headless Mode — Coding Agent / Actions"]
         direction TB
         H1["Issue → Agent on branch"]
         H2["Parse requirements from body"]
@@ -213,6 +225,12 @@ graph LR
         H6["git-ape-deploy.yml (merge)"]
         H7["git-ape-destroy.yml (merge)"]
     end
+
+    classDef interactive fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef headless fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+
+    class I1,I2,I3,I4,I5,I6 interactive
+    class H1,H2,H3,H4,H5,H6,H7 headless
 ```
 
 **Interactive** — you talk to `@git-ape` in VS Code Copilot Chat, authenticate via `az login`, and approve each step in real time.
