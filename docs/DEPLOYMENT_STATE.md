@@ -15,6 +15,37 @@ Every deployment creates a timestamped directory under `.azure/deployments/` con
 - Test results and logs for debugging
 - Error information for failure analysis
 
+## Deployment Lifecycle
+
+A deployment moves through a defined set of states tracked in `metadata.json`. Terminal states (`succeeded`, `failed`, `rolled-back`, `destroyed`) are persisted in git for audit.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+stateDiagram-v2
+    [*] --> initialized: deployment dir created
+    initialized --> gathering_requirements: Requirements Gatherer
+    gathering_requirements --> generating_template: Template Generator
+    generating_template --> awaiting_confirmation: security gate passed
+    generating_template --> generating_template: security gate blocked<br/>(fix loop)
+    awaiting_confirmation --> deploying: user / PR approval
+    awaiting_confirmation --> [*]: declined
+    deploying --> testing: az deployment ok
+    deploying --> failed: deployment error
+    testing --> succeeded: tests pass
+    testing --> failed: tests fail
+    failed --> rolled_back: rollback initiated
+    succeeded --> destroy_requested: PR sets metadata
+    destroy_requested --> destroyed: git-ape-destroy.yml
+    succeeded --> [*]
+    rolled_back --> [*]
+    destroyed --> [*]
+
+    classDef terminal fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef error fill:#fecaca,stroke:#b91c1c,color:#7f1d1d
+    class succeeded,destroyed terminal
+    class failed,rolled_back error
+```
+
 ## Directory Structure
 
 ```

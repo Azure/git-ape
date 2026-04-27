@@ -14,6 +14,56 @@ Git-Ape supports two onboarding modes:
 | **Single environment** | One Azure subscription for all deployments | `azure-deploy`, `azure-destroy` | Repository-level |
 | **Multi-environment** | Separate subscriptions per stage (dev/staging/prod) | `azure-deploy-dev`, `azure-deploy-staging`, `azure-deploy-prod`, `azure-destroy` | Environment-level |
 
+## How OIDC Authentication Works
+
+Git-Ape uses OpenID Connect (OIDC) federation between GitHub Actions and Microsoft Entra ID. No client secrets are stored — GitHub mints a short-lived token at workflow runtime, and Entra exchanges it for an Azure access token based on a trust relationship you configure once.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+sequenceDiagram
+    autonumber
+    participant GH as GitHub Actions<br/>(workflow run)
+    participant Entra as Microsoft Entra ID<br/>(App Registration)
+    participant ARM as Azure Resource Manager
+
+    GH->>GH: Mint OIDC token<br/>subject: repo:org/repo:ref:refs/heads/main
+    GH->>Entra: Exchange token<br/>(client_id + federated credential)
+    Entra->>Entra: Verify subject matches<br/>federated credential
+    Entra-->>GH: Azure access token<br/>(short-lived, ~1h)
+    GH->>ARM: az deployment sub create<br/>Authorization: Bearer <token>
+    ARM->>ARM: Check RBAC role assignment<br/>on subscription
+    ARM-->>GH: Deployment result
+```
+
+**Trust components you configure during onboarding:**
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px'}}}%%
+graph LR
+    GH["<b>GitHub Repo</b><br/>org/repo"]
+    FC["<b>Federated Credential</b><br/>subject: repo:org/repo:..."]
+    APP["<b>Entra App Registration</b><br/>client_id + tenant_id"]
+    SP["<b>Service Principal</b><br/>object_id"]
+    SUB["<b>Azure Subscription</b><br/>subscription_id"]
+    ROLE["<b>RBAC Role</b><br/>Contributor / UAA"]
+
+    GH -->|trusts| FC
+    FC -->|attached to| APP
+    APP -->|backed by| SP
+    SP -->|assigned| ROLE
+    ROLE -->|scoped to| SUB
+
+    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+
+    class GH,FC gh
+    class APP,SP entra
+    class SUB,ROLE azure
+```
+
+The **Quick Start** below automates all of this. The **Manual Setup** section walks through each component individually.
+
 ## Quick Start (Automated)
 
 You can run onboarding from Copilot Chat with:
