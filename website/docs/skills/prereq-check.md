@@ -24,12 +24,12 @@ description: "Check that all required CLI tools are installed, meet minimum vers
 
 # Prerequisites Check
 
-Validates the local environment has the CLI tools and auth sessions needed to run AutoCloud skills.
+Validates the local environment has the CLI tools and auth sessions needed to run Git-Ape skills.
 
 ## When to Use
 
-- Before first-time onboarding (`/autocloud-onboarding`)
-- When any AutoCloud skill fails with a "command not found" error
+- Before first-time onboarding (`/git-ape-onboarding`)
+- When any Git-Ape skill fails with a "command not found" error
 - When switching machines or dev containers
 - When a user asks "what do I need to install?"
 
@@ -158,7 +158,7 @@ winget install GitHub.cli
 winget install jqlang.jq
 ```
 
-> **Windows note:** AutoCloud skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
+> **Windows note:** Git-Ape skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
 
 ### Step 5: Check Auth Sessions
 
@@ -182,7 +182,7 @@ fi
 
 Present a final verdict:
 
-- **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any AutoCloud skill.
+- **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any Git-Ape skill.
 - **⚠️ TOOLS MISSING** — List what to install. Do not proceed until resolved.
 - **⚠️ AUTH MISSING** — Tools OK but user needs to run `az login` and/or `gh auth login`.
 
@@ -191,4 +191,4 @@ Present a final verdict:
 1. Run Steps 1–5 by executing the commands in the terminal.
 2. Present the results table and install commands (if needed).
 3. Do NOT install anything automatically — show the commands and let the user run them.
-4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/autocloud-onboarding`).
+4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/git-ape-onboarding`).
