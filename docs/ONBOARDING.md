@@ -675,7 +675,7 @@ graph TD
         direction TB
         SEC["<b>Repo Secrets</b><br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID<br/>SLACK_WEBHOOK_URL (optional)"]
         ENVD["<b>azure-deploy</b><br/>main branch only"]
-        ENVX["<b>azure-destroy</b><br/>any branch"]
+        ENVX["<b>azure-destroy</b><br/>main branch only"]
         WF["<b>Workflows</b><br/>git-ape-plan.yml (PR)<br/>git-ape-deploy.yml (main / azure-deploy)<br/>git-ape-destroy.yml (azure-destroy)<br/>git-ape-verify.yml (dispatch)"]
         SEC --- WF
         ENVD --- WF
