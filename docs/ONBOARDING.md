@@ -30,7 +30,7 @@ sequenceDiagram
     GH->>Entra: Exchange token<br/>(client_id + federated credential)
     Entra->>Entra: Verify subject matches<br/>federated credential
     Entra-->>GH: Azure access token<br/>(short-lived, ~1h)
-    GH->>ARM: az deployment sub create<br/>Authorization: Bearer <token>
+    GH->>ARM: az deployment sub create<br/>Authorization: Bearer [token]
     ARM->>ARM: Check RBAC role assignment<br/>on subscription
     ARM-->>GH: Deployment result
 ```
