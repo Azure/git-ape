@@ -62,13 +62,41 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
 7. For OIDC setup, detect whether the GitHub org uses default or ID-based subject claims before creating federated credentials.
 8. Ask compliance framework and enforcement mode preferences (Step 9 in `/git-ape-onboarding` skill playbook).
 9. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices.
-10. Summarize created/updated artifacts and next checks.
+10. Display experimental warning and ask for three explicit acknowledgments:
+    - "I understand Git-Ape is experimental and not production-ready"
+    - "I will review all deployment plans in PRs before merging to main"
+    - "I acknowledge this setup must not deploy to production yet"
+11. Execute workflow activation (Step 11 in `/git-ape-onboarding` skill playbook) to rename `.exampleyml` files to `.yml` only if all acknowledgments are confirmed.
+12. Summarize created/updated artifacts and next checks.
+
+## Acknowledgment Phase
+
+Before activating workflows, you MUST collect explicit acknowledgments using `vscode_askQuestions`. Present three questions:
+
+1. **Question 1:**
+   - Header: `experimental-status`
+   - Question: "Do you understand that Git-Ape is currently experimental and not production-ready?"
+   - Options: Yes / No
+
+2. **Question 2:**
+   - Header: `review-plans`
+   - Question: "Will you review all deployment plans in PRs before merging to main?"
+   - Options: Yes / No
+
+3. **Question 3:**
+   - Header: `no-production`
+   - Question: "Do you acknowledge that this setup must not be used to deploy to production environments yet?"
+   - Options: Yes / No
+
+If ANY answer is "No", report: "Workflow activation cancelled. You can enable workflows later by renaming `.exampleyml` files to `.yml` in `.github/workflows/` when ready."  
+If ALL answers are "Yes", proceed to Step 11 (workflow activation via skill).
 
 ## Output Requirements
 
 - Keep output concise and stage-based: prerequisites, confirmation, execution, summary.
 - Never print secret values.
 - If onboarding fails, report the failing stage and recommended fix.
+- Display workflow activation status (activated or deferred) in final summary.
 
 ## Validation After Onboarding
 

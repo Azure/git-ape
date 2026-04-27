@@ -300,8 +300,8 @@ The agent will use whichever subscription is currently active in Azure CLI.
 After configuration:
 
 1. Test the agent with a simple deployment: `@git-ape deploy a resource group`
-2. Review the [README.md](../../README.md) for example workflows
-3. Customize workspace instructions in [copilot-instructions.md](../copilot-instructions.md)
+2. Review the [project README](https://github.com/Azure/git-ape/blob/main/README.md) for example workflows
+3. Customize workspace instructions in [`.github/copilot-instructions.md`](https://github.com/Azure/git-ape/blob/main/.github/copilot-instructions.md)
 4. Add your organization's naming conventions and policies
 
 ## Resources

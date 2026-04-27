@@ -53,7 +53,7 @@ Find the section matching the resource provider namespace from step 1. Extract: 
 
 ### 3. Derive field values
 
-See [references/regex-patterns.md](references/regex-patterns.md) for the regex conversion tables.
+See [references/regex-patterns.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-naming-research/references/regex-patterns.md) for the regex conversion tables.
 
 - **scope** mapping: "globally unique"→`"global"`, "resource group"→`"resourceGroup"`, "within parent"→`"parent"`, "subscription"→`"subscription"`
 - **dashes**: `true` if hyphens allowed
