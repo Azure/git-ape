@@ -97,49 +97,136 @@ stateDiagram-v2
 
 ## File Formats
 
+Each deployment dir contains two state-tracking files: `metadata.json` (the user-editable deployment intent) and `state.json` (the pipeline-managed runtime state). They serve different purposes — see the table below.
+
+| File | Written by | Read by | Purpose |
+|---|---|---|---|
+| `metadata.json` | Agent (initial) + user (status changes for destroy) | All pipelines | Deployment intent: what should exist, in what RG, in what region. Status field drives lifecycle transitions (`pending-confirmation` → `deploying` → ... → `destroy-requested` → `destroyed`). |
+| `state.json` | Deploy pipeline (initial write) + destroy pipeline (status update + soft-delete metadata) | Destroy pipeline (path A vs B routing), drift detector | Runtime state: stack ID, managed resource IDs, when deployed, when destroyed, what was purged, what was retained. |
+
 ### metadata.json
 
-Contains deployment tracking information.
+Contains deployment intent and lifecycle status. Edit `status` (and only `status`) to drive lifecycle transitions.
 
 **Example:**
 
 ```json
 {
-  "deploymentId": "deploy-20260218-143022",
-  "timestamp": "2026-02-18T14:30:22Z",
-  "user": "arnaud@example.com",
-  "status": "succeeded",
+  "deploymentId": "deploy-20260218-143022-myapp",
+  "createdAt": "2026-02-18T14:30:22Z",
+  "createdBy": "dev@contoso.com",
+  "type": "deploy",
+  "status": "destroyed",
   "scope": "subscription",
-  "region": "eastus",
-  "project": "api",
-  "environment": "dev",
-  "resourceGroup": "rg-api-dev-eastus",
-  "resources": [
-    {
-      "type": "Microsoft.Web/sites",
-      "name": "func-api-dev-eastus",
-      "id": "/subscriptions/.../resourceGroups/rg-api-dev-eastus/providers/Microsoft.Web/sites/func-api-dev-eastus",
-      "status": "succeeded"
-    }
-  ],
-  "estimatedMonthlyCost": "$12.50",
-  "createdBy": "git-ape-agent"
+  "subscriptionId": "00000000-0000-0000-0000-000000000000",
+  "location": "eastus",
+  "resourceGroupName": "rg-myapp-dev-eus",
+  "deployMethod": "stack",
+  "description": "Key Vault behind a private endpoint in a new VNet",
+  "destroyRequestedAt": "2026-02-18T20:10:00Z",
+  "destroyRequestedBy": "dev@contoso.com"
 }
 ```
 
 **Status values:**
-- `initialized` - Deployment directory created
-- `gathering-requirements` - Collecting user input
-- `generating-template` - Creating ARM template
-- `awaiting-confirmation` - Waiting for user approval
-- `deploying` - Deployment in progress
-- `testing` - Running integration tests
-- `succeeded` - Completed successfully
-- `failed` - Deployment failed
-- `rolled-back` - Resources removed after failure
-- `destroyed` - Resources torn down
-- `already-destroyed` - Resources were already deleted
-- `destroy-requested` - Teardown has been requested
+
+| Status | Set by | Meaning |
+|---|---|---|
+| `pending-confirmation` | Agent (initial) | Deployment dir created, awaiting user approval to deploy |
+| `deploying` | Deploy pipeline | `az stack sub create` in progress |
+| `succeeded` | Deploy pipeline | Stack created, all resources provisioned |
+| `failed` | Deploy pipeline | Stack create failed; see `state.json` for details |
+| `destroy-requested` | User (in PR) | User has requested teardown; PR review pending |
+| `destroyed` | Destroy pipeline | Stack deleted, no soft-delete retentions |
+| `retained-soft-deleted` | Destroy pipeline | Stack deleted, but at least one purge-protected resource is in soft-delete retention; see `state.retainedSoftDeleted[]` |
+| `already-destroyed` | Destroy pipeline | Stack/RG was already gone when destroy ran (re-run safety) |
+| `destroy-failed` | Destroy pipeline | `az stack sub delete` returned non-zero |
+
+### state.json
+
+The pipeline-managed runtime state. Written by the deploy pipeline after a successful (or failed) `az stack sub create`, and updated by the destroy pipeline after `az stack sub delete` + soft-delete sweep.
+
+**Example after deploy:**
+
+```json
+{
+  "deploymentId": "deploy-20260218-143022-myapp",
+  "timestamp": "2026-02-18T14:55:12Z",
+  "status": "succeeded",
+  "duration": "81s",
+  "subscription": "00000000-0000-0000-0000-000000000000",
+  "location": "eastus",
+  "deployMethod": "stack",
+  "stackId": "/subscriptions/.../providers/Microsoft.Resources/deploymentStacks/deploy-20260218-143022-myapp",
+  "resourceGroup": "rg-myapp-dev-eus",
+  "resourceGroups": ["rg-myapp-dev-eus"],
+  "managedResources": [
+    {
+      "id": "/subscriptions/.../resourceGroups/rg-myapp-dev-eus",
+      "status": "managed",
+      "denyStatus": "none"
+    },
+    {
+      "id": "/subscriptions/.../resourceGroups/rg-myapp-dev-eus/providers/Microsoft.KeyVault/vaults/kv-myapp-dev-abc123",
+      "status": "managed",
+      "denyStatus": "none"
+    }
+  ],
+  "triggeredBy": "Jane Doe",
+  "runId": "42",
+  "runUrl": "https://dev.azure.com/contoso/myapp-infra/_build/results?buildId=42"
+}
+```
+
+**Example after destroy with purge protection retention:**
+
+```json
+{
+  "deploymentId": "deploy-20260218-143022-myapp",
+  "status": "retained-soft-deleted",
+  "deployMethod": "stack",
+  "stackId": "/subscriptions/.../deploymentStacks/deploy-20260218-143022-myapp",
+  "resourceGroup": "rg-myapp-dev-eus",
+  "resourceGroups": ["rg-myapp-dev-eus"],
+  "managedResources": [...],
+  "destroyedAt": "2026-02-18T23:02:09Z",
+  "destroyedBy": "Jane Doe",
+  "purgedResources": [],
+  "retainedSoftDeleted": [
+    {
+      "resourceId": "/subscriptions/.../Microsoft.KeyVault/vaults/kv-myapp-dev-abc123",
+      "reason": "purge-protected",
+      "scheduledPurgeDate": "2026-05-19T12:33:06+00:00"
+    }
+  ]
+}
+```
+
+**Field reference:**
+
+| Field | Type | Set by | Meaning |
+|---|---|---|---|
+| `deploymentId` | string | deploy | Mirrors `metadata.deploymentId`; equals the Deployment Stack name |
+| `timestamp` | ISO 8601 | deploy | When the deploy run completed |
+| `status` | string | deploy + destroy | Same vocabulary as `metadata.status`, but always set by the pipeline |
+| `duration` | string | deploy | How long `az stack sub create` took (e.g. `"81s"`) |
+| `subscription` | UUID | deploy | Azure subscription the stack was created in |
+| `location` | string | deploy | Stack location (where the stack metadata lives, not necessarily where resources live) |
+| `deployMethod` | `"stack"` \| `"legacy"` | deploy | Routes destroy to Path A (`az stack sub delete`) or Path B (`az group delete`) |
+| `stackId` | ARM ID | deploy | Full ID of the Deployment Stack |
+| `resourceGroup` | string | deploy | First/primary RG (singular, kept for backwards compat with pre-stack deployments) |
+| `resourceGroups` | `string[]` | deploy | All RGs the stack created/manages (for multi-RG deployments) |
+| `managedResources` | `object[]` | deploy | Every resource the stack tracks. Each has `id`, `status` (`managed` \| `deleted` \| `denyAssignmentRemovalFailed` \| ...), `denyStatus` |
+| `triggeredBy` | string | deploy | User who merged the PR / triggered the run |
+| `runId` | string | deploy | CI/CD run ID for traceability |
+| `runUrl` | URL | deploy | Direct link to the run logs |
+| `destroyedAt` | ISO 8601 | destroy | When `az stack sub delete` completed |
+| `destroyedBy` | string | destroy | User who triggered destroy |
+| `purgedResources` | `string[]` | destroy | Resource IDs that were force-purged from soft-delete (no purge protection) |
+| `retainedSoftDeleted` | `object[]` | destroy | Resources in soft-delete retention. Each has `resourceId`, `reason` (`purge-protected` \| `purge-failed`), `scheduledPurgeDate` (ISO 8601, present only when `reason: purge-protected`) |
+
+**Important:** The destroy pipeline uses `jq '. + {...}'` MERGE to update state.json, NOT full overwrite. This preserves `managedResources[]` and other deploy-time fields so a future re-run of destroy on the same deployment can still find the original resource list.
+
 
 ### requirements.json
 
@@ -149,7 +236,7 @@ User requirements collected by the Requirements Gatherer agent:
 {
   "deploymentId": "deploy-20260218-143022",
   "timestamp": "2026-02-18T14:30:22Z",
-  "user": "arnaud@example.com",
+  "user": "dev@contoso.com",
   "type": "multi-resource",
   "resources": [
     {
@@ -263,7 +350,7 @@ Human-readable deployment progress log:
 
 ```
 [2026-02-18T14:30:22Z] Deployment initialized: deploy-20260218-143022
-[2026-02-18T14:30:22Z] User: arnaud@example.com
+[2026-02-18T14:30:22Z] User: dev@contoso.com
 [2026-02-18T14:30:22Z] Target: Resource Group 'rg-api-dev-eastus' (East US)
 
 [2026-02-18T14:31:45Z] Stage 1: Requirements Gathering

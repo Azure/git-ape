@@ -292,7 +292,7 @@ cat >> "$DEPLOYMENT_PATH/drift-analysis/known-drift.json" <<EOF
     "httpsOnly": {
       "expected": true,
       "actual": false,
-      "markedBy": "arnaud@example.com",
+      "markedBy": "dev@contoso.com",
       "markedAt": "2026-02-18T19:30:00Z",
       "reason": "Investigating runtime issue, temporarily allowing HTTP",
       "reviewBy": "2026-02-19T09:00:00Z"

@@ -355,12 +355,14 @@ The deployment plan MUST start with a clear "Target Environment" table:
 **Delegate to:** `azure-resource-deployer`
 
 The deployer will:
-- Execute the ARM template as a **subscription-level deployment** (`az deployment sub create`)
-- The ARM template includes resource group creation — everything deploys atomically
+- Execute the ARM template as a **subscription-level Deployment Stack** (`az stack sub create --action-on-unmanage deleteAll --deny-settings-mode none --yes`) for idempotent multi-RG / multi-scope deploy and destroy
+- The ARM template includes resource group creation — everything deploys atomically inside the stack
 - Monitor deployment progress in real-time
 - Handle any deployment failures
 - Verify resource creation via Azure Resource Graph
-- Capture deployment outputs (resource IDs, endpoints, etc.)
+- Capture deployment outputs (resource IDs, endpoints, etc.) AND stack metadata (`stackId`, `managedResources[]`, `resourceGroups[]`) into `state.json` for later destroy
+
+For the destroy lifecycle, see the Deployment Stacks reference in the Git-Ape docs site (`reference/deployment-stacks`) — `az stack sub delete --action-on-unmanage deleteAll` handles every managed resource across all scopes, plus a soft-delete sweep for Key Vault.
 
 **Deployment Monitoring:** Always poll deployment state every **30 seconds** using `sleep 30` between checks. No exponential backoff — use a fixed 30-second interval for all resources regardless of type or expected duration. Check both the top-level deployment and nested deployment statuses on every poll.
 

@@ -1,0 +1,247 @@
+# Git-Ape Setup Verification Pipeline (Azure DevOps)
+# Run manually after onboarding to verify OIDC, RBAC, and pipeline configuration.
+#
+# Triggers:
+#   - Manual run only (no CI/PR triggers).
+#
+# Gating:
+#   - Read-only Azure operations (account show, role list, validate empty template).
+#   - OIDC via Workload Identity Federation service connection '{{SERVICE_CONNECTION_NAME}}'.
+#   - Variable group '{{VARIABLE_GROUP_NAME}}' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+
+name: 'git-ape-verify-$(Date:yyyyMMdd)-$(Rev:r)'
+
+trigger: none
+pr: none
+
+variables:
+  - group: {{VARIABLE_GROUP_NAME}}
+  - name: azureServiceConnection
+    value: {{SERVICE_CONNECTION_NAME}}
+
+stages:
+  - stage: Verify
+    displayName: 'Verify Git-Ape configuration'
+    jobs:
+      - job: verify
+        displayName: 'Verify'
+        timeoutInMinutes: 15
+        pool:
+          name: Default
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              MISSING=0
+              for VAR in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+                VAL=$(eval echo "\$$VAR")
+                if [[ -z "$VAL" ]]; then
+                  echo "##vso[task.logissue type=error]Missing variable: $VAR"
+                  MISSING=$((MISSING + 1))
+                else
+                  echo "✅ $VAR is set"
+                fi
+              done
+              echo "##vso[task.setVariable variable=MISSING_COUNT;isOutput=true]$MISSING"
+            displayName: 'Check required variables'
+            name: vars
+            env:
+              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
+
+          - task: AzureCLI@2
+            displayName: 'Verify Azure access (OIDC)'
+            condition: eq(variables['vars.MISSING_COUNT'], '0')
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                echo "## Azure Connection"
+                ACCOUNT=$(az account show -o json)
+                SUB_NAME=$(echo "$ACCOUNT" | jq -r '.name')
+                SUB_ID=$(echo "$ACCOUNT" | jq -r '.id')
+                TENANT=$(echo "$ACCOUNT" | jq -r '.tenantId')
+                echo "✅ Logged in successfully"
+                echo "  Subscription: $SUB_NAME ($SUB_ID)"
+                echo "  Tenant: $TENANT"
+
+                echo ""
+                echo "## RBAC Roles"
+                SP_ID=$(az ad sp show --id "$(AZURE_CLIENT_ID)" --query id -o tsv 2>/dev/null || echo "")
+                if [[ -n "$SP_ID" ]]; then
+                  az role assignment list --assignee "$SP_ID" \
+                    --query "[].{role:roleDefinitionName, scope:scope}" -o table
+                else
+                  echo "⚠️ Could not resolve service principal"
+                fi
+
+                echo ""
+                echo "## Read Access Test"
+                RG_COUNT=$(az group list --query "length(@)" -o tsv 2>/dev/null || echo "0")
+                echo "✅ Can list resource groups ($RG_COUNT found)"
+
+                echo ""
+                echo "## Deployment Permission Test"
+                cat > /tmp/empty-template.json <<'EOF'
+                {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "resources": []
+                }
+                EOF
+                if az deployment sub validate \
+                  --location eastus \
+                  --template-file /tmp/empty-template.json \
+                  --output json >/dev/null 2>&1; then
+                  echo "✅ Subscription-level deployment validation passed"
+                else
+                  echo "##vso[task.logissue type=warning]Deployment validation failed — may lack Contributor role"
+                fi
+
+          - bash: |
+              set -euo pipefail
+              echo "## Pipeline Files"
+              PIPELINES=(
+                ".azure-pipelines/git-ape-plan.yml:Git-Ape: Plan"
+                ".azure-pipelines/git-ape-deploy.yml:Git-Ape: Deploy"
+                ".azure-pipelines/git-ape-destroy.yml:Git-Ape: Destroy"
+                ".azure-pipelines/git-ape-verify.yml:Git-Ape: Verify Setup"
+              )
+              for P in "${PIPELINES[@]}"; do
+                FILE=$(echo "$P" | cut -d: -f1)
+                NAME=$(echo "$P" | cut -d: -f2-)
+                if [[ -f "$FILE" ]]; then
+                  echo "✅ $NAME ($FILE)"
+                else
+                  echo "⚠️ $NAME ($FILE) — not found"
+                fi
+              done
+            displayName: 'Check pipeline files'
+            condition: always()
+
+          - bash: |
+              set -euo pipefail
+              echo "## Required Tools"
+              # Tools the plan/deploy/destroy pipelines depend on. Each row:
+              #   "command|severity|install hint"
+              # severity: required | recommended (recommended ones become ⚠️ instead of ❌)
+              TOOLS=(
+                "az|required|already present on Microsoft-hosted images & in our agent container"
+                "jq|required|apt-get install -y jq  (or yum/dnf)"
+                "git|required|apt-get install -y git"
+                "curl|required|apt-get install -y curl"
+                "python3|required|needed by checkov; apt-get install -y python3 python3-pip"
+                "checkov|recommended|python3 -m pip install checkov  (auto-installed by plan pipeline)"
+                "pwsh|recommended|needed for ARM-TTK and PSRule scanners"
+              )
+
+              MISSING_REQUIRED=0
+              MISSING_RECOMMENDED=0
+              for ROW in "${TOOLS[@]}"; do
+                CMD=$(echo "$ROW" | cut -d'|' -f1)
+                SEV=$(echo "$ROW" | cut -d'|' -f2)
+                HINT=$(echo "$ROW" | cut -d'|' -f3)
+                if command -v "$CMD" >/dev/null 2>&1; then
+                  VER=$("$CMD" --version 2>&1 | head -1 || echo "")
+                  echo "✅ $CMD  ${VER:0:80}"
+                else
+                  if [[ "$SEV" == "required" ]]; then
+                    echo "❌ $CMD — MISSING (required)  ➜ $HINT"
+                    MISSING_REQUIRED=$((MISSING_REQUIRED + 1))
+                  else
+                    echo "⚠️ $CMD — missing (recommended)  ➜ $HINT"
+                    MISSING_RECOMMENDED=$((MISSING_RECOMMENDED + 1))
+                  fi
+                fi
+              done
+
+              # python3 -m pip check (some images don't ship `pip` on PATH but ship the module).
+              # Recommended (not required) — the plan pipeline tolerates missing checkov/pip via `|| true`.
+              if python3 -m pip --version >/dev/null 2>&1; then
+                PIP_VER=$(python3 -m pip --version 2>&1 | head -1)
+                echo "✅ python3 -m pip  ${PIP_VER:0:80}"
+              else
+                echo "⚠️ python3 -m pip — missing (recommended)  ➜ apt-get install -y python3-pip  (without it, Checkov scan is skipped)"
+                MISSING_RECOMMENDED=$((MISSING_RECOMMENDED + 1))
+              fi
+
+              # Sub-checks for `az` extensions and PowerShell modules
+              echo ""
+              echo "## Az CLI extensions"
+              if az extension list --query "[?name=='stack']" -o tsv 2>/dev/null | grep -q stack; then
+                echo "✅ az extension: stack (Deployment Stacks)"
+              else
+                # Modern az has stacks as a built-in command — verify
+                if az stack --help >/dev/null 2>&1; then
+                  echo "✅ az stack (built-in)"
+                else
+                  echo "❌ az stack — MISSING  ➜ az extension add --name stack"
+                  MISSING_REQUIRED=$((MISSING_REQUIRED + 1))
+                fi
+              fi
+
+              echo ""
+              echo "## PowerShell modules (used by IaC scanners)"
+              if command -v pwsh >/dev/null 2>&1; then
+                for MOD in "PSRule.Rules.Azure" "Az.Accounts"; do
+                  if pwsh -NoProfile -Command "if (Get-Module -ListAvailable -Name '$MOD') { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
+                    echo "✅ pwsh module: $MOD"
+                  else
+                    echo "⚠️ pwsh module: $MOD — missing  ➜ Install-Module $MOD -Force -Scope CurrentUser"
+                    MISSING_RECOMMENDED=$((MISSING_RECOMMENDED + 1))
+                  fi
+                done
+              else
+                echo "⏭ pwsh not present — skipping module checks"
+              fi
+
+              echo ""
+              echo "Summary: $MISSING_REQUIRED required missing, $MISSING_RECOMMENDED recommended missing"
+              echo "##vso[task.setVariable variable=TOOLS_REQUIRED_MISSING;isOutput=true]$MISSING_REQUIRED"
+              echo "##vso[task.setVariable variable=TOOLS_RECOMMENDED_MISSING;isOutput=true]$MISSING_RECOMMENDED"
+
+              if [[ "$MISSING_REQUIRED" -gt 0 ]]; then
+                echo "##vso[task.logissue type=error]$MISSING_REQUIRED required tool(s) missing on agent — pipelines will fail"
+                exit 1
+              fi
+              if [[ "$MISSING_RECOMMENDED" -gt 0 ]]; then
+                echo "##vso[task.logissue type=warning]$MISSING_RECOMMENDED recommended tool(s) missing — IaC scans will be skipped"
+              fi
+            displayName: 'Check required tools on agent'
+            name: tools
+            condition: always()
+
+          - bash: |
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              VARS_MISSING="$(vars.MISSING_COUNT)"
+              REQ_MISSING="${TOOLS_REQ:-0}"
+              REC_MISSING="${TOOLS_REC:-0}"
+
+              if [[ "$VARS_MISSING" != "0" ]]; then
+                echo "❌ Setup incomplete — $VARS_MISSING variable(s) missing"
+                echo "   Run: /git-ape-onboarding"
+              elif [[ "$REQ_MISSING" != "0" ]]; then
+                echo "❌ Setup incomplete — $REQ_MISSING required tool(s) missing on agent"
+                echo "   Fix the agent image / install scripts before re-running"
+              else
+                if [[ "$REC_MISSING" != "0" ]]; then
+                  echo "✅ Git-Ape setup verified (with $REC_MISSING recommended tool(s) missing — some IaC scans will be skipped)"
+                else
+                  echo "✅ Git-Ape setup verified successfully!"
+                fi
+                echo ""
+                echo "Next steps:"
+                echo "  1. Add a deployment under .azure/deployments/"
+                echo "  2. Open a PR to trigger the plan pipeline"
+                echo "  3. Merge to main → deploy pipeline runs (gated by 'azure-deploy' environment)"
+              fi
+            displayName: 'Print summary'
+            condition: always()
+            env:
+              TOOLS_REQ: $(tools.TOOLS_REQUIRED_MISSING)
+              TOOLS_REC: $(tools.TOOLS_RECOMMENDED_MISSING)

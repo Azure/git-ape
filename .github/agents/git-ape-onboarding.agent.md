@@ -48,13 +48,11 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
     - "I understand Git-Ape is experimental and not production-ready"
     - "I will review all deployment plans in PRs before merging to main"
     - "I acknowledge this setup must not deploy to production yet"
-11. **Execute improved workflow activation** (only if all acknowledgments confirmed):
-    - **Template pipeline files** with correct service connection names BEFORE renaming
-    - GitHub branch: `.github/workflows/*.exampleyml` → `*.yml`.
-    - ADO branch: template and rename `.azure-pipelines/*.examplepipeline.yml` → `*.yml`, register with dynamic repo names
-    - Build identity permissions: Grant Contribute automatically
-    - Both: run both branches sequentially.
-12. **Comprehensive verification:** Test service connections, validate permissions, confirm pipeline registration.
+11. **Execute improved workflow activation** (only if all acknowledgments confirmed). Steps 11+ are split across the orchestrator skill (`/git-ape-onboarding`) and two provider-specific sub-skills:
+    - **GitHub branch:** dispatched to `/git-ape-onboarding-github` sub-skill — workflow rename (`.github/workflows/*.exampleyml` → `*.yml`) + GitHub-specific gotchas (org OIDC subject template, environment secrets).
+    - **ADO branch:** dispatched to `/git-ape-onboarding-azdo` sub-skill — pipeline registration (`.azure-pipelines/*.examplepipeline.yml` → `*.yml`, `az pipelines create`), build identity ACL grant (`allow=16516` for GenericContribute + PolicyExempt + PullRequestContribute), Branch Policy required check creation, parallelism quota verification.
+    - **Both:** orchestrator dispatches to BOTH sub-skills sequentially.
+12. **Comprehensive verification:** trigger the verify workflow/pipeline (`/git-ape-onboarding-github` Step B for GH; `git-ape-verify.yml` manual run for ADO), wait for completion, gate "onboarding complete" on its result.
 
 ## CI/CD Platform Selection
 
@@ -72,7 +70,8 @@ When **Azure DevOps Pipelines** or **Both** is selected, follow up with a single
 - `ado-org-url` — Azure DevOps organization URL (e.g. `https://dev.azure.com/contoso`).
 - `ado-project` — Azure DevOps project name (e.g. `infra`).
 - `ado-source-repo` — Source repo backend: `Azure Repos` or `GitHub`. Skip this question when **Both** is selected (Both implies the GitHub repo confirmed in Step 1 is also the source for ADO pipelines).
-- `ado-connection-prefix` — Service connection name prefix (default `git-ape-azure`).
+- `ado-connection-name` — Service connection name (default `git-ape-azure`). The pipeline templates substitute this for `{{SERVICE_CONNECTION_NAME}}`.
+- `ado-variable-group` — Variable group name (default `git-ape-azure-secrets`). The pipeline templates substitute this for `{{VARIABLE_GROUP_NAME}}`.
 
 Echo all collected values back in Step 5 alongside the existing repo/subscription summary so the user confirms them before execution.
 

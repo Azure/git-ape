@@ -138,7 +138,7 @@ Categorize resource changes from the what-if output:
 
 For modified resources, capture the specific property changes:
 ```
-Resource: Microsoft.Storage/storageAccounts/starnwkdhk
+Resource: Microsoft.Storage/storageAccounts/stmyappdev
   ~ properties.minimumTlsVersion: "TLS1_0" → "TLS1_2"
   ~ tags.Environment: "staging" → "dev"
 ```

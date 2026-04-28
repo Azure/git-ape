@@ -1,0 +1,315 @@
+# Git-Ape Destroy Pipeline (Azure DevOps)
+# Triggers on merge to main when metadata.json status changes to "destroy-requested",
+# OR via manual run dispatch (emergency fallback).
+# Deletes the Azure Deployment Stack (and every resource it manages) for a tracked deployment.
+#
+# Triggers:
+#   - CI on main with .azure/deployments/**/metadata.json or state.json changes
+#     (only proceeds if metadata.json status == "destroy-requested")
+#   - Manual run with confirmation parameter set to 'destroy'
+#
+# Gating:
+#   - 'azure-destroy' ADO Environment with required reviewer.
+#   - Manual run requires `confirmation` parameter == 'destroy' (only allowed value).
+#   - OIDC via Workload Identity Federation service connection '{{SERVICE_CONNECTION_NAME}}'.
+#   - Variable group '{{VARIABLE_GROUP_NAME}}' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+
+name: 'git-ape-destroy-$(Date:yyyyMMdd)-$(Rev:r)'
+
+parameters:
+  - name: deploymentId
+    displayName: 'Deployment ID (manual dispatch only)'
+    type: string
+    default: ''
+  - name: confirmation
+    displayName: 'Type "destroy" to confirm (manual dispatch only)'
+    type: string
+    default: ''
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - .azure/deployments/**/metadata.json
+      - .azure/deployments/**/state.json
+
+pr: none
+
+variables:
+  - group: {{VARIABLE_GROUP_NAME}}
+  - name: azureServiceConnection
+    value: {{SERVICE_CONNECTION_NAME}}
+
+stages:
+  - stage: Detect
+    displayName: 'Detect destroy requests'
+    jobs:
+      - job: detect_destroys
+        displayName: 'Detect destroy-requested deployments'
+        timeoutInMinutes: 10
+        pool:
+          name: Default
+        steps:
+          - checkout: self
+            fetchDepth: 0
+            persistCredentials: true
+
+          - template: templates/bootstrap-prereqs.yml
+
+          - bash: |
+              set -euo pipefail
+              REASON="$(Build.Reason)"
+              REASON_LC=$(echo "$REASON" | tr '[:upper:]' '[:lower:]')
+              MANUAL_ID="${{ parameters.deploymentId }}"
+              CONFIRMATION="${{ parameters.confirmation }}"
+
+              mkdir -p $(Build.ArtifactStagingDirectory)/detect
+
+              if [[ "$REASON_LC" == "manual" ]]; then
+                if [[ "$CONFIRMATION" != "destroy" ]]; then
+                  echo "##vso[task.logissue type=error]Manual destroy requires confirmation='destroy'"
+                  echo "false" > $(Build.ArtifactStagingDirectory)/detect/has_destroys
+                  echo "[]" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+                  exit 1
+                fi
+                if [[ -z "$MANUAL_ID" ]]; then
+                  echo "##vso[task.logissue type=error]Manual destroy requires deploymentId"
+                  exit 1
+                fi
+                IDS_JSON=$(jq -n --arg id "$MANUAL_ID" '[$id]')
+                echo "Manual destroy: $MANUAL_ID"
+                echo "true" > $(Build.ArtifactStagingDirectory)/detect/has_destroys
+                echo "$IDS_JSON" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+                # Also expose as output variable for the stage condition
+                echo "##vso[task.setvariable variable=HAS_DESTROYS;isOutput=true]true"
+                exit 0
+              fi
+
+              # CI trigger: find deployments where metadata.json status == "destroy-requested"
+              CHANGED_FILES=$(git diff --name-only HEAD~1...HEAD -- \
+                '.azure/deployments/*/metadata.json' \
+                '.azure/deployments/*/state.json' 2>/dev/null || true)
+
+              DEPLOY_DIRS=$(echo "$CHANGED_FILES" | sed 's|.azure/deployments/\([^/]*\)/.*|\1|' | sort -u)
+              DESTROY_IDS=""
+              for DIR in $DEPLOY_DIRS; do
+                METADATA=".azure/deployments/$DIR/metadata.json"
+                if [[ -f "$METADATA" ]]; then
+                  STATUS=$(jq -r '.status // ""' "$METADATA")
+                  if [[ "$STATUS" == "destroy-requested" ]]; then
+                    DESTROY_IDS="$DESTROY_IDS $DIR"
+                    echo "Found destroy request: $DIR"
+                  fi
+                fi
+              done
+
+              if [[ -z "$DESTROY_IDS" ]]; then
+                echo "No destroy-requested deployments"
+                echo "false" > $(Build.ArtifactStagingDirectory)/detect/has_destroys
+                echo "[]" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+                echo "##vso[task.setvariable variable=HAS_DESTROYS;isOutput=true]false"
+                exit 0
+              fi
+
+              IDS_JSON=$(echo "$DESTROY_IDS" | tr ' ' '\n' | grep -v '^$' \
+                | jq -R -s -c 'split("\n") | map(select(. != ""))')
+              echo "true" > $(Build.ArtifactStagingDirectory)/detect/has_destroys
+              echo "$IDS_JSON" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+              echo "##vso[task.setvariable variable=HAS_DESTROYS;isOutput=true]true"
+            displayName: 'Find destroy-requested deployments'
+            name: find
+
+          - publish: $(Build.ArtifactStagingDirectory)/detect
+            artifact: detect
+            displayName: 'Publish detect results'
+
+  - stage: Destroy
+    displayName: 'Destroy (gated)'
+    dependsOn: Detect
+    condition: and(succeeded(), eq(dependencies.Detect.outputs['detect_destroys.find.HAS_DESTROYS'], 'true'))
+    jobs:
+      - deployment: destroy
+        displayName: 'Destroy Deployment Stack'
+        timeoutInMinutes: 120
+        pool:
+          name: Default
+        environment: azure-destroy
+        # Serialize concurrent destroys (configure 'Exclusive lock' on the
+        # azure-destroy Environment for this to take effect).
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: true
+
+                - template: templates/bootstrap-prereqs.yml
+
+                - download: current
+                  artifact: detect
+                  displayName: 'Download detect results'
+
+                - task: AzureCLI@2
+                  displayName: 'Delete Deployment Stacks sequentially'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      IDS_JSON=$(cat $(Pipeline.Workspace)/detect/deployment_ids.json)
+                      LOG_DIR="$(mktemp -d)"
+
+                      destroy_one() {
+                        local DEPLOYMENT_ID="$1"
+                        local LOG="$LOG_DIR/$DEPLOYMENT_ID.log"
+                        local DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
+                        local STATE_FILE="$DEPLOY_DIR/state.json"
+                        local TIMESTAMP
+                        TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+                        local STATUS="unknown"
+                        local PURGED_JSON='[]'
+                        local SOFT_DELETED_JSON='[]'
+
+                        {
+                          # Determine deploy method (stack vs legacy sub deployment)
+                          local DEPLOY_METHOD="legacy"
+                          local STACK_ID=""
+                          if [[ -f "$STATE_FILE" ]]; then
+                            DEPLOY_METHOD=$(jq -r '.deployMethod // "legacy"' "$STATE_FILE")
+                            STACK_ID=$(jq -r '.stackId // empty' "$STATE_FILE")
+                          fi
+
+                          # ─── Path A: Deployment Stack ────────────────────────────────
+                          if [[ "$DEPLOY_METHOD" == "stack" ]]; then
+                            local STACK_NAME="$DEPLOYMENT_ID"
+                            local STACK_EXISTS
+                            STACK_EXISTS=$(az stack sub show --name "$STACK_NAME" --query name -o tsv 2>/dev/null || echo "")
+
+                            if [[ -z "$STACK_EXISTS" ]]; then
+                              echo "Stack $STACK_NAME does not exist (already deleted?)"
+                              STATUS="already-destroyed"
+                            else
+                              local SOFT_DELETABLE
+                              SOFT_DELETABLE=$(az stack sub show --name "$STACK_NAME" \
+                                --query "resources[?contains(id, '/Microsoft.KeyVault/vaults/') || contains(id, '/Microsoft.OperationalInsights/workspaces/') || contains(id, '/Microsoft.CognitiveServices/accounts/') || contains(id, '/Microsoft.AppConfiguration/configurationStores/') || contains(id, '/Microsoft.RecoveryServices/vaults/') || contains(id, '/Microsoft.ApiManagement/service/')].id" \
+                                -o json 2>/dev/null || echo "[]")
+
+                              echo "🗑️ Deleting Deployment Stack: $STACK_NAME (action-on-unmanage=deleteAll)"
+                              local START
+                              START=$(date +%s)
+                              if az stack sub delete --name "$STACK_NAME" \
+                                  --action-on-unmanage deleteAll \
+                                  --yes 2>&1; then
+                                local DURATION=$(( $(date +%s) - START ))
+                                echo "✅ Stack deleted in ${DURATION}s"
+                                STATUS="destroyed"
+                              else
+                                echo "##vso[task.logissue type=error]Failed to delete stack $STACK_NAME"
+                                STATUS="destroy-failed"
+                              fi
+
+                              # ─── Soft-delete purge sweep ─────────────────────────────
+                              if [[ "$STATUS" == "destroyed" ]]; then
+                                echo "🧹 Sweeping soft-deleted resources..."
+                                local RETAINED_COUNT=0
+                                for RES_ID in $(echo "$SOFT_DELETABLE" | jq -r '.[]'); do
+                                  if [[ "$RES_ID" == */Microsoft.KeyVault/vaults/* ]]; then
+                                    local KV_NAME KV_LOC KV_PURGE_PROT
+                                    KV_NAME=$(echo "$RES_ID" | sed 's|.*/vaults/||')
+                                    KV_LOC=$(az keyvault list-deleted --query "[?name=='$KV_NAME'].properties.location | [0]" -o tsv 2>/dev/null || echo "")
+                                    KV_PURGE_PROT=$(az keyvault list-deleted --query "[?name=='$KV_NAME'].properties.purgeProtectionEnabled | [0]" -o tsv 2>/dev/null || echo "false")
+                                    [[ -z "$KV_LOC" ]] && continue
+                                    if [[ "$KV_PURGE_PROT" == "true" ]]; then
+                                      local SCHED
+                                      SCHED=$(az keyvault list-deleted --query "[?name=='$KV_NAME'].properties.scheduledPurgeDate | [0]" -o tsv 2>/dev/null || echo "")
+                                      echo "  ⏸ $KV_NAME — purge-protected, retained until $SCHED"
+                                      SOFT_DELETED_JSON=$(echo "$SOFT_DELETED_JSON" | jq \
+                                        --arg id "$RES_ID" --arg sched "$SCHED" \
+                                        '. + [{resourceId: $id, reason: "purge-protected", scheduledPurgeDate: $sched}]')
+                                      RETAINED_COUNT=$((RETAINED_COUNT + 1))
+                                    else
+                                      echo "  🔥 Purging Key Vault: $KV_NAME ($KV_LOC)"
+                                      if az keyvault purge --name "$KV_NAME" --location "$KV_LOC" 2>&1; then
+                                        PURGED_JSON=$(echo "$PURGED_JSON" | jq --arg id "$RES_ID" '. + [$id]')
+                                      else
+                                        SOFT_DELETED_JSON=$(echo "$SOFT_DELETED_JSON" | jq \
+                                          --arg id "$RES_ID" \
+                                          '. + [{resourceId: $id, reason: "purge-failed"}]')
+                                        RETAINED_COUNT=$((RETAINED_COUNT + 1))
+                                      fi
+                                    fi
+                                  fi
+                                done
+                                if [[ "$RETAINED_COUNT" -gt 0 ]]; then
+                                  STATUS="retained-soft-deleted"
+                                fi
+                              fi
+                            fi
+
+                          # ─── Path B: Legacy sub-deployment (delete RG only) ──────────
+                          else
+                            local RG
+                            RG=$(jq -r '.resourceGroup // empty' "$STATE_FILE" 2>/dev/null || echo "")
+                            if [[ -z "$RG" ]]; then
+                              echo "##vso[task.logissue type=error]No resource group recorded for $DEPLOYMENT_ID (legacy state)"
+                              return 0
+                            fi
+                            local EXISTS
+                            EXISTS=$(az group exists --name "$RG")
+                            if [[ "$EXISTS" != "true" ]]; then
+                              echo "Legacy resource group $RG does not exist (already deleted?)"
+                              STATUS="already-destroyed"
+                            else
+                              echo "🗑️ Deleting legacy resource group: $RG"
+                              local START
+                              START=$(date +%s)
+                              if az group delete --name "$RG" --yes 2>&1; then
+                                local DURATION=$(( $(date +%s) - START ))
+                                echo "✅ Deleted $RG in ${DURATION}s"
+                                STATUS="destroyed"
+                              else
+                                echo "##vso[task.logissue type=error]Failed to delete $RG"
+                                STATUS="destroy-failed"
+                              fi
+                            fi
+                          fi
+
+                          # Update state and metadata
+                          if [[ -f "$STATE_FILE" ]]; then
+                            jq --arg s "$STATUS" --arg ts "$TIMESTAMP" --arg actor "$(Build.RequestedFor)" \
+                              --argjson purged "$PURGED_JSON" --argjson retained "$SOFT_DELETED_JSON" \
+                              '. + {status: $s, destroyedAt: $ts, destroyedBy: $actor, purgedResources: $purged, retainedSoftDeleted: $retained}' \
+                              "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+                          fi
+                          if [[ -f "$DEPLOY_DIR/metadata.json" ]]; then
+                            jq --arg s "$STATUS" '.status = $s' \
+                              "$DEPLOY_DIR/metadata.json" > "$DEPLOY_DIR/metadata.json.tmp" \
+                              && mv "$DEPLOY_DIR/metadata.json.tmp" "$DEPLOY_DIR/metadata.json"
+                          fi
+                        } > "$LOG" 2>&1
+                      }
+
+                      # Fan out: one background process per deployment
+                      PIDS=()
+                      while read -r RAW_ID; do
+                        DEPLOYMENT_ID=$(echo "$RAW_ID" | jq -r '.')
+                        [[ -z "$DEPLOYMENT_ID" ]] && continue
+                        destroy_one "$DEPLOYMENT_ID" &
+                        PIDS+=($!)
+                      done < <(echo "$IDS_JSON" | jq -c '.[]')
+
+                      for PID in "${PIDS[@]}"; do wait "$PID" || true; done
+
+                      for LOG in "$LOG_DIR"/*.log; do
+                        echo ""
+                        echo "═══ $(basename "$LOG" .log) ═══"
+                        cat "$LOG"
+                      done
+
+                - template: templates/commit-and-push-state.yml
+                  parameters:
+                    commitMessage: 'git-ape: mark deployments as destroyed [skip ci]'
+                    displayName: 'Commit state.json + metadata.json'

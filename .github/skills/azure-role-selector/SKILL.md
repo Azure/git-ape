@@ -59,7 +59,7 @@ Present the recommended role(s) in order of least privilege:
 ```markdown
 ## Role Recommendation
 
-**Desired:** Read and write blobs in storage account starnwkdhk
+**Desired:** Read and write blobs in storage account stmyappdev
 
 ### Recommended Role (Least Privilege)
 | Property | Value |

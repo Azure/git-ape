@@ -638,16 +638,75 @@ Environment creation requires admin access to the repository. Ask a repo admin t
 
 The pipeline's service connection cannot reach Azure. Diagnose in this order:
 
-1. **Verify workload identity federation is set up correctly:**
+1. **Verify workload identity federation is set up correctly.** Note: the federated subject and issuer that ADO actually presents to Entra ID are NOT the conventional `sc://<org>/<project>/<connection>` and `https://vstoken.dev.azure.com/...` documented in older guides. Read back the live values from the service connection endpoint after creation:
    ```bash
-   az ad app federated-credential list --id "$CLIENT_ID" \
-     --query "[?contains(issuer, 'vstoken.dev.azure.com')].{name:name, issuer:issuer, subject:subject}" \
-     -o table
+   ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+   curl -sS -H "Authorization: Bearer $ADO_TOKEN" \
+     "https://dev.azure.com/$ORG/$PROJECT/_apis/serviceendpoint/endpoints/$SC_ID?api-version=7.1" \
+     | jq '{issuer: .authorization.parameters.workloadIdentityFederationIssuer,
+            subject: .authorization.parameters.workloadIdentityFederationSubject}'
    ```
-   The `subject` must match `sc://<organization>/<project>/<service-connection-name>` exactly.
+   Then update the federated credential on the App Registration to match exactly.
 2. **Confirm the service connection is authorized for the pipeline.** In ADO, open **Project Settings → Service connections → \{name\} → Security** and grant access to the pipeline (or check "Grant access permission to all pipelines").
-3. **Confirm the build identity has Contribute permission** on the target repository (required for posting PR thread comments).
-4. **Check RBAC** on the Azure subscription with `az role assignment list --assignee "$CLIENT_ID" -o table` — the same role assignments power both providers.
+3. **Check RBAC** on the Azure subscription with `az role assignment list --assignee "$CLIENT_ID" -o table` — the same role assignments power both providers.
+
+### "TF402455: Pushes to this branch are not permitted" on state.json commit (Azure DevOps mode)
+
+The deploy/destroy pipelines push `state.json` back to `main` after a successful run. With the **Branch Policy → Build Validation** required check active (created during onboarding), the build identity needs the `PolicyExempt` permission to push. The onboarding skill grants three Git permissions in one ACL call: `GenericContribute (4) + PolicyExempt (128) + PullRequestContribute (16384) = allow=16516`. If state commits started failing after a branch policy was added later, re-run the ACL grant — see the `git-ape-onboarding-azdo` sub-skill, Step B.
+
+### Plan PR comment never appears (Azure DevOps mode)
+
+The pipeline succeeds but the PR thread comment is missing. Common causes:
+
+- **Build identity is missing `PullRequestContribute` (bit 16384).** The threads API silently 403s. Run the Step B ACL grant again — the orchestrator's call to `git-ape-onboarding-azdo` covers this, but if you onboarded before that step existed, re-run it.
+- **`$(System.AccessToken)` not mapped to env var.** ADO macros in inline bash scripts evaluate as shell command substitution, not macro expansion. Always declare `env: SYSTEM_ACCESSTOKEN: $(System.AccessToken)` on the task and reference `$SYSTEM_ACCESSTOKEN` in bash. Git-Ape's pipelines do this; if you've copied a step into a custom workflow, preserve the env mapping.
+
+### Plan pipeline doesn't trigger when a PR is opened (Azure DevOps mode)
+
+**Azure Repos silently ignores the YAML `pr:` trigger block.** PR builds are queued by **Branch Policy → Build Validation**, which the onboarding skill creates against the plan pipeline. Without the policy, opening a PR will not run plan. Verify with:
+
+```bash
+az repos policy list --org "$ADO_ORG_URL" --project "$ADO_PROJECT" --branch main \
+  --query "[?settings.displayName=='Git-Ape Plan']" -o table
+```
+
+If empty, re-run the `git-ape-onboarding-azdo` sub-skill Step C (or invoke the orchestrator with `cicd: ado`).
+
+### Multi-deployment PRs run sequentially even with multiple agents (Azure DevOps mode)
+
+ADO free-tier orgs have **only 1 self-hosted parallel job** org-wide. Even if you run 5 agents, only one runs a job at a time and matrix slots serialize. The verify pipeline surfaces this as a `⚠️ PERFORMANCE NOTE`. Options:
+
+- Buy `Self-hosted CI/CD` parallel jobs at $15/job/mo (Azure DevOps → Organization Settings → Billing).
+- Make the project public — public projects get unlimited self-hosted parallelism.
+
+Once unlocked, set `strategy.matrix.maxParallel: 5` in `git-ape-plan.yml` (already configured) and matrix slots run on different agents simultaneously.
+
+---
+
+## Deployment Stacks
+
+Git-Ape uses **[Azure Deployment Stacks](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks)** as the deployment primitive instead of `az deployment sub create`. Per [Azure/git-ape#30](https://github.com/Azure/git-ape/issues/30), this provides **idempotent destroy** for multi-RG and multi-scope deployments — `az group delete` alone leaves orphans.
+
+| Pipeline | Deployment Stack action |
+|---|---|
+| Plan | `az stack sub validate` for validation; `az deployment sub what-if` for preview (independent of stack lifecycle) |
+| Deploy | `az stack sub create --name <id> --action-on-unmanage deleteAll --deny-settings-mode none --yes` |
+| Destroy | `az stack sub delete --name <id> --action-on-unmanage deleteAll --yes` (handles every resource the stack manages, across resource groups and scopes) |
+
+The stack name equals the deployment ID (e.g. `deploy-20260218-143022-myapp`). After a successful deploy, `state.json` records:
+
+```json
+{
+  "deployMethod": "stack",
+  "stackId": "/subscriptions/.../providers/Microsoft.Resources/deploymentStacks/<id>",
+  "resourceGroups": ["rg-..."],
+  "managedResources": [{ "id": "...", "status": "managed" }]
+}
+```
+
+The destroy pipeline reads `state.json`, calls `az stack sub delete`, then runs a **soft-delete sweep** for resources that survive resource-group deletion (Key Vault, Log Analytics, Cognitive Services, App Configuration, Recovery Services, API Management). Vaults without `enablePurgeProtection` are auto-purged; protected vaults are recorded in `state.retainedSoftDeleted[]` with their `scheduledPurgeDate` so the user knows when the name becomes available again.
+
+If a state.json predates Deployment Stacks (`deployMethod` field absent or set to `legacy`), destroy falls back to `az group delete` for the recorded `resourceGroup`.
 
 ---
 

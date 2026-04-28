@@ -1,0 +1,588 @@
+# Git-Ape Planning Pipeline (Azure DevOps)
+# Triggers when a PR adds/modifies deployment artifacts under .azure/deployments/
+# Validates the ARM template, runs what-if analysis, and posts the plan as a PR thread.
+#
+# Triggers:
+#   - PR opened or updated against main with .azure/deployments/**/template.json or parameters.json changes
+#
+# Gating:
+#   - Read-only — no Azure mutations.
+#   - OIDC via Workload Identity Federation service connection '{{SERVICE_CONNECTION_NAME}}'.
+#   - Variable group '{{VARIABLE_GROUP_NAME}}' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+
+name: 'git-ape-plan-$(Date:yyyyMMdd)-$(Rev:r)'
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - .azure/deployments/**/template.json
+      - .azure/deployments/**/parameters.json
+      - .azure/deployments/**/metadata.json
+
+variables:
+  - group: {{VARIABLE_GROUP_NAME}}
+  - name: azureServiceConnection
+    value: {{SERVICE_CONNECTION_NAME}}
+
+stages:
+  - stage: Plan
+    displayName: 'Git-Ape Plan'
+    jobs:
+      - job: detect_deployments
+        displayName: 'Detect changed deployments'
+        timeoutInMinutes: 10
+        pool:
+          name: Default
+        steps:
+          - checkout: self
+            fetchDepth: 0
+            persistCredentials: true
+
+          - template: templates/bootstrap-prereqs.yml
+
+          - bash: |
+              set -euo pipefail
+
+              # Determine the target branch — PR context or fallback to main
+              TARGET_BRANCH="${SYSTEM_PULLREQUEST_TARGETBRANCH:-refs/heads/main}"
+              TARGET_BRANCH="${TARGET_BRANCH#refs/heads/}"
+              echo "Target branch: $TARGET_BRANCH"
+
+              git fetch origin "$TARGET_BRANCH" || true
+
+              CHANGED_FILES=$(git diff --name-only "origin/$TARGET_BRANCH"...HEAD -- \
+                '.azure/deployments/*/template.json' \
+                '.azure/deployments/*/parameters.json' \
+                '.azure/deployments/*/metadata.json' || true)
+
+              if [[ -z "$CHANGED_FILES" ]]; then
+                echo "No deployment changes detected"
+                echo "##vso[task.setVariable variable=HAS_DEPLOYMENTS;isOutput=true]false"
+                echo "##vso[task.setVariable variable=DEPLOYMENT_IDS;isOutput=true][]"
+                exit 0
+              fi
+
+              # For each changed deployment dir, decide the action:
+              #   - destroy: metadata.json status == "destroy-requested"
+              #   - deploy:  template.json or parameters.json changed
+              # Build a matrix object: {"id1": {"deployment_id": "id1", "action": "deploy"}}
+              # Soft cap warning at MAX_DEPLOYMENTS (20) per PR — informational only,
+              # surfaces unusually large changes for reviewer awareness.
+              MAX_DEPLOYMENTS=20
+              MATRIX="{}"
+              CHANGED_DIRS=$(echo "$CHANGED_FILES" \
+                | sed 's|.azure/deployments/\([^/]*\)/.*|\1|' \
+                | sort -u)
+
+              DIR_COUNT=$(echo "$CHANGED_DIRS" | grep -cv '^$' || echo 0)
+              if [[ "$DIR_COUNT" -gt "$MAX_DEPLOYMENTS" ]]; then
+                echo "##vso[task.logissue type=warning]This PR touches $DIR_COUNT deployments (soft cap: $MAX_DEPLOYMENTS). Reviewer: confirm this is intentional."
+              fi
+
+              for DIR in $CHANGED_DIRS; do
+                METADATA=".azure/deployments/$DIR/metadata.json"
+                ACTION="deploy"
+                if [[ -f "$METADATA" ]]; then
+                  STATUS=$(jq -r '.status // ""' "$METADATA" 2>/dev/null || echo "")
+                  if [[ "$STATUS" == "destroy-requested" ]]; then
+                    ACTION="destroy"
+                  fi
+                fi
+                MATRIX=$(echo "$MATRIX" | jq --arg id "$DIR" --arg act "$ACTION" \
+                  '. + {($id): {deployment_id: $id, action: $act}}')
+                echo "  $DIR → $ACTION"
+              done
+
+              DEPLOYMENT_IDS=$(echo "$MATRIX" | jq -c .)
+
+              echo "Detected deployments: $DEPLOYMENT_IDS"
+              echo "##vso[task.setVariable variable=HAS_DEPLOYMENTS;isOutput=true]true"
+              echo "##vso[task.setVariable variable=DEPLOYMENT_IDS;isOutput=true]$DEPLOYMENT_IDS"
+            displayName: 'Find deployment directories with changes'
+            name: find
+
+      - job: plan
+        displayName: 'Plan'
+        dependsOn: detect_deployments
+        condition: eq(dependencies.detect_deployments.outputs['find.HAS_DEPLOYMENTS'], 'true')
+        timeoutInMinutes: 30
+        pool:
+          name: Default
+        strategy:
+          matrix: $[ dependencies.detect_deployments.outputs['find.DEPLOYMENT_IDS'] ]
+          # Allow up to 5 deployments to plan in parallel (within agent quota)
+          maxParallel: 5
+        variables:
+          deployment_id: ''
+          action: 'deploy'
+        steps:
+          - checkout: self
+            persistCredentials: true
+
+          - bash: |
+              set -euo pipefail
+              DEPLOY_DIR=".azure/deployments/$(deployment_id)"
+              ACTION="$(action)"
+
+              if [[ ! -d "$DEPLOY_DIR" ]]; then
+                echo "##vso[task.logissue type=error]Deployment dir not found: $DEPLOY_DIR"
+                exit 1
+              fi
+
+              if [[ "$ACTION" == "deploy" && ! -f "$DEPLOY_DIR/template.json" ]]; then
+                echo "##vso[task.logissue type=error]Template not found: $DEPLOY_DIR/template.json"
+                exit 1
+              fi
+
+              if [[ -f "$DEPLOY_DIR/parameters.json" ]]; then
+                LOCATION=$(jq -r '.parameters.location.value // "eastus"' "$DEPLOY_DIR/parameters.json")
+              else
+                LOCATION="eastus"
+              fi
+
+              echo "Action: $ACTION"
+              echo "##vso[task.setVariable variable=LOCATION]$LOCATION"
+              echo "##vso[task.setVariable variable=DEPLOY_DIR]$DEPLOY_DIR"
+            displayName: 'Read deployment parameters'
+
+          - bash: |
+              set -euo pipefail
+              TEMPLATE="$(DEPLOY_DIR)/template.json"
+              REQUIRED_TAGS=("Environment" "Project" "ManagedBy" "CreatedDate")
+              MISSING_TAGS=""
+
+              HAS_TAG_VAR=$(jq 'has("variables") and (.variables | has("tags"))' "$TEMPLATE")
+              if [[ "$HAS_TAG_VAR" == "true" ]]; then
+                for TAG in "${REQUIRED_TAGS[@]}"; do
+                  TAG_EXISTS=$(jq --arg t "$TAG" '.variables.tags | has($t)' "$TEMPLATE")
+                  if [[ "$TAG_EXISTS" != "true" ]]; then
+                    MISSING_TAGS="${MISSING_TAGS}Missing required tag: $TAG\n"
+                  fi
+                done
+              fi
+
+              if [[ -n "$MISSING_TAGS" ]]; then
+                echo "##vso[task.setVariable variable=TAG_STATUS]failed"
+                echo "##vso[task.logissue type=warning]Tag enforcement: missing required tags"
+                printf "%b" "$MISSING_TAGS"
+              else
+                echo "##vso[task.setVariable variable=TAG_STATUS]passed"
+                echo "All required tags present"
+              fi
+            displayName: 'Enforce required tags'
+            condition: eq(variables['action'], 'deploy')
+
+          - task: AzureCLI@2
+            displayName: 'Azure login + validate template (OIDC)'
+            name: validate
+            continueOnError: true
+            condition: eq(variables['action'], 'deploy')
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                STAGING="$(Build.ArtifactStagingDirectory)/git-ape-plan"
+                mkdir -p "$STAGING"
+                STATUS_FILE="$STAGING/validation-$(deployment_id).txt"
+
+                RESULT=$(az stack sub validate \
+                  --name "$(deployment_id)" \
+                  --location "$(LOCATION)" \
+                  --template-file "$(DEPLOY_DIR)/template.json" \
+                  --parameters @"$(DEPLOY_DIR)/parameters.json" \
+                  --action-on-unmanage deleteAll \
+                  --deny-settings-mode none \
+                  --output json 2>&1) || true
+
+                ERROR=$(echo "$RESULT" | jq -r '.error // empty' 2>/dev/null || echo "")
+                if [[ -n "$ERROR" && "$ERROR" != "null" ]]; then
+                  echo "##vso[task.setVariable variable=VALIDATION_STATUS;isOutput=true]failed"
+                  echo "failed" > "$STATUS_FILE"
+                  echo "$RESULT"
+                elif echo "$RESULT" | jq -e . >/dev/null 2>&1; then
+                  echo "##vso[task.setVariable variable=VALIDATION_STATUS;isOutput=true]passed"
+                  echo "passed" > "$STATUS_FILE"
+                else
+                  echo "##vso[task.setVariable variable=VALIDATION_STATUS;isOutput=true]failed"
+                  echo "failed" > "$STATUS_FILE"
+                  echo "$RESULT"
+                fi
+
+          - task: AzureCLI@2
+            displayName: 'Run what-if analysis'
+            # Independent of validate result — what-if is a read-only preview that
+            # still produces useful diagnostics even when validate flags issues.
+            condition: eq(variables['action'], 'deploy')
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                # Deployment Stacks support what-if preview without committing
+                WHATIF_OUTPUT=$(az deployment sub what-if \
+                  --location "$(LOCATION)" \
+                  --template-file "$(DEPLOY_DIR)/template.json" \
+                  --parameters @"$(DEPLOY_DIR)/parameters.json" \
+                  --no-prompt 2>&1) || true
+
+                mkdir -p "$(Build.ArtifactStagingDirectory)/git-ape-plan"
+                printf "%s" "$WHATIF_OUTPUT" > "$(Build.ArtifactStagingDirectory)/git-ape-plan/whatif-$(deployment_id).txt"
+
+          # ─── Prerequisites bootstrap ──────────────────────────────────
+          # Cross-host: works on self-hosted Linux containers AND Microsoft-hosted
+          # ubuntu/macOS/windows agents. Plan needs python+pip (Checkov) and
+          # pwsh (ARM-TTK / PSRule). Missing tools degrade gracefully and are
+          # surfaced in the PR comment "Skipped scanners" section.
+          - template: templates/bootstrap-prereqs.yml
+            parameters:
+              withPython: true
+              withPwsh: true
+              displayName: 'Bootstrap prerequisites (jq, python+pip, pwsh)'
+
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            condition: eq(variables['action'], 'deploy')
+            inputs:
+              key: 'pip | "$(Agent.OS)" | checkov-3'
+              restoreKeys: |
+                pip | "$(Agent.OS)"
+              path: $(Pipeline.Workspace)/.pip-cache
+
+          - bash: |
+              set -euo pipefail
+              if ! command -v python3 >/dev/null 2>&1 || ! python3 -m pip --version >/dev/null 2>&1; then
+                echo "##vso[task.logissue type=warning]python3/pip not available — skipping Checkov install"
+                exit 0
+              fi
+              python3 -m pip install --user --cache-dir "$(Pipeline.Workspace)/.pip-cache" checkov
+              # Make user-installed scripts (like ~/.local/bin/checkov) discoverable
+              echo "##vso[task.prependpath]$HOME/.local/bin"
+            displayName: 'Install Checkov'
+            continueOnError: true
+            condition: eq(variables['action'], 'deploy')
+
+          - bash: |
+              set -euo pipefail
+              # Run open-source IaC scanners (Checkov, ARM-TTK, PSRule) in PARALLEL.
+              # Each scanner emits a status line to scans/status.tsv that the PR
+              # comment renderer surfaces. Format: scanner<TAB>status<TAB>reason
+              SCAN_DIR="$(Build.ArtifactStagingDirectory)/git-ape-plan/scans"
+              mkdir -p "$SCAN_DIR"
+              STATUS_FILE="$SCAN_DIR/status.tsv"
+              : > "$STATUS_FILE"
+              # Per-scanner status files (avoids concurrent-write races on STATUS_FILE)
+              CHECKOV_STATUS="$SCAN_DIR/.status.checkov"
+              ARMTTK_STATUS="$SCAN_DIR/.status.armttk"
+              PSRULE_STATUS="$SCAN_DIR/.status.psrule"
+
+              run_checkov() {
+                if command -v checkov >/dev/null 2>&1; then
+                  if checkov -f "$(DEPLOY_DIR)/template.json" --framework arm \
+                      --output sarif --output-file-path "$SCAN_DIR" 2>&1; then
+                    printf "Checkov\tran\t\n" > "$CHECKOV_STATUS"
+                  else
+                    # checkov exits non-zero when findings exist — that's still "ran"
+                    printf "Checkov\tran\t\n" > "$CHECKOV_STATUS"
+                  fi
+                else
+                  printf "Checkov\tskipped\tnot installed on agent (run git-ape-verify to diagnose)\n" > "$CHECKOV_STATUS"
+                  echo "##vso[task.logissue type=warning]Checkov not on PATH — skipping IaC scan"
+                fi
+              }
+
+              run_armttk() {
+                if command -v pwsh >/dev/null 2>&1; then
+                  if pwsh -NoProfile -Command "
+                    if (-not (Get-Module -ListAvailable arm-ttk)) {
+                      git clone --depth 1 https://github.com/Azure/arm-ttk.git \$env:HOME/arm-ttk 2>\$null
+                      Import-Module \$env:HOME/arm-ttk/arm-ttk/arm-ttk.psd1
+                    } else {
+                      Import-Module arm-ttk
+                    }
+                    Test-AzTemplate -TemplatePath '$(DEPLOY_DIR)' | ConvertTo-Json -Depth 5 \
+                      | Out-File '$SCAN_DIR/arm-ttk.json'
+                  "; then
+                    printf "ARM-TTK\tran\t\n" > "$ARMTTK_STATUS"
+                  else
+                    printf "ARM-TTK\tfailed\tsee pipeline log\n" > "$ARMTTK_STATUS"
+                    echo "##vso[task.logissue type=warning]ARM-TTK returned findings"
+                  fi
+                else
+                  printf "ARM-TTK\tskipped\tpwsh not available on agent\n" > "$ARMTTK_STATUS"
+                  echo "##vso[task.logissue type=warning]pwsh not available — skipping ARM-TTK"
+                fi
+              }
+
+              run_psrule() {
+                if command -v pwsh >/dev/null 2>&1; then
+                  if pwsh -NoProfile -Command "
+                    if (-not (Get-Module -ListAvailable PSRule.Rules.Azure)) {
+                      Install-Module PSRule.Rules.Azure -Force -Scope CurrentUser -AcceptLicense
+                    }
+                    Assert-PSRule -InputPath '$(DEPLOY_DIR)' -Module PSRule.Rules.Azure \
+                      -OutputFormat Json -OutputPath '$SCAN_DIR/psrule.json'
+                  "; then
+                    printf "PSRule\tran\t\n" > "$PSRULE_STATUS"
+                  else
+                    printf "PSRule\tfailed\tsee pipeline log\n" > "$PSRULE_STATUS"
+                    echo "##vso[task.logissue type=warning]PSRule returned findings"
+                  fi
+                else
+                  printf "PSRule\tskipped\tpwsh not available on agent\n" > "$PSRULE_STATUS"
+                fi
+              }
+
+              # ─── Run all three in parallel; wait for completion ───────────
+              run_checkov &
+              CHECKOV_PID=$!
+              run_armttk &
+              ARMTTK_PID=$!
+              run_psrule &
+              PSRULE_PID=$!
+              wait $CHECKOV_PID $ARMTTK_PID $PSRULE_PID || true
+
+              # Aggregate per-scanner status files into the canonical status.tsv
+              for f in "$CHECKOV_STATUS" "$ARMTTK_STATUS" "$PSRULE_STATUS"; do
+                [[ -f "$f" ]] && cat "$f" >> "$STATUS_FILE"
+              done
+              rm -f "$CHECKOV_STATUS" "$ARMTTK_STATUS" "$PSRULE_STATUS"
+
+              echo ""
+              echo "── Scanner status (parallel run) ──"
+              cat "$STATUS_FILE"
+            displayName: 'Run IaC security scans in parallel (Checkov, ARM-TTK, PSRule)'
+            continueOnError: true
+            condition: eq(variables['action'], 'deploy')
+
+          - task: AzureCLI@2
+            displayName: 'Generate destroy plan (list resources to be deleted)'
+            condition: eq(variables['action'], 'destroy')
+            name: destroyplan
+            continueOnError: true
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                bash .azure-pipelines/scripts/render-destroy-plan.sh \
+                  "$(deployment_id)" \
+                  "$(DEPLOY_DIR)" \
+                  "$(Build.ArtifactStagingDirectory)/git-ape-plan"
+
+          - bash: |
+              set -euo pipefail
+              # Capture deployment artifacts (architecture, cost, security) for the PR comment
+              for FILE in architecture.md cost-estimate.md security-analysis.md security-gate.json; do
+                SRC="$(DEPLOY_DIR)/$FILE"
+                if [[ -f "$SRC" ]]; then
+                  cp "$SRC" "$(Build.ArtifactStagingDirectory)/git-ape-plan/${FILE%.*}-$(deployment_id).${FILE##*.}"
+                fi
+              done
+            displayName: 'Capture deployment artifacts'
+
+          - bash: |
+              set -euo pipefail
+              # Render this deployment's comment body to an artifact for the
+              # aggregator job to concatenate into ONE PR thread.
+              # MUST run BEFORE PublishPipelineArtifact so the file is included.
+              DEPLOYMENT_ID="$(deployment_id)"
+              ACTION="$(action)"
+              STAGING="$(Build.ArtifactStagingDirectory)/git-ape-plan"
+
+              mkdir -p "$STAGING"
+              bash .azure-pipelines/scripts/render-pr-comment.sh \
+                "$DEPLOYMENT_ID" "$ACTION" "$STAGING" \
+                > "$STAGING/comment-body-$DEPLOYMENT_ID.md"
+
+              # Also emit structured summary for the aggregator's top-level table
+              bash .azure-pipelines/scripts/render-summary.sh \
+                "$DEPLOYMENT_ID" "$ACTION" "$STAGING" \
+                > "$STAGING/summary-$DEPLOYMENT_ID.json"
+
+              echo "Rendered comment body for $DEPLOYMENT_ID ($(wc -l < "$STAGING/comment-body-$DEPLOYMENT_ID.md") lines)"
+              echo "Summary:"
+              cat "$STAGING/summary-$DEPLOYMENT_ID.json"
+            displayName: 'Render PR comment body (artifact)'
+            condition: always()
+            continueOnError: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish plan artifacts'
+            condition: always()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/git-ape-plan'
+              artifact: 'git-ape-plan-$(deployment_id)'
+              publishLocation: pipeline
+
+      # ─── Aggregator job ─────────────────────────────────────────────────
+      # Runs ONCE after all matrix slots finish. Downloads every per-deployment
+      # comment-body-*.md (published as part of git-ape-plan-<id> artifacts) and
+      # posts ONE consolidated PR thread comment.
+      - job: post_pr_comment
+        displayName: 'Post consolidated PR comment'
+        dependsOn:
+          - detect_deployments
+          - plan
+        condition: |
+          and(
+            eq(dependencies.detect_deployments.outputs['find.HAS_DEPLOYMENTS'], 'true'),
+            in(dependencies.plan.result, 'Succeeded', 'SucceededWithIssues', 'Failed')
+          )
+        timeoutInMinutes: 10
+        pool:
+          name: Default
+        steps:
+          - checkout: none
+
+          - template: templates/bootstrap-prereqs.yml
+
+          - download: current
+            displayName: 'Download all plan artifacts'
+
+          - bash: |
+              set -euo pipefail
+              PR_ID="${SYSTEM_PULLREQUEST_PULLREQUESTID:-}"
+              if [[ -z "$PR_ID" ]]; then
+                echo "Not a PR build; skipping comment."
+                exit 0
+              fi
+
+              # Aggregate all rendered comment bodies (one per deployment) into one
+              MARKER="<!-- git-ape-plan -->"
+              BODY_FILE="$(mktemp)"
+              {
+                echo "$MARKER"
+                echo "## Git-Ape Plan"
+                echo ""
+
+                # Find all comment-body-*.md and summary-*.json across all per-deployment artifacts
+                BODIES=$(find "$(Pipeline.Workspace)" -name 'comment-body-*.md' -type f | sort)
+                SUMMARIES=$(find "$(Pipeline.Workspace)" -name 'summary-*.json' -type f | sort)
+                COUNT=$(echo "$BODIES" | grep -c . || true)
+
+                if [[ "$COUNT" -eq 0 ]]; then
+                  echo "_No deployment plans were rendered._"
+                  echo ""
+                else
+                  # ─── Top-level summary table (always visible) ────────────
+                  echo "### 📋 Summary"
+                  echo ""
+                  echo "| Deployment | Action | Status | Location | Resource groups | Resources | Resource types | Checkov |"
+                  echo "|---|---|---|---|---|---|---|---|"
+                  while IFS= read -r SUMMARY; do
+                    [[ -z "$SUMMARY" ]] && continue
+                    DEP_ID=$(jq -r '.deploymentId' "$SUMMARY")
+                    ACTION=$(jq -r '.action' "$SUMMARY")
+                    STATUS=$(jq -r '.status' "$SUMMARY")
+                    LOC=$(jq -r '.location' "$SUMMARY")
+                    RGS=$(jq -r '.resourceGroups | join(", ")' "$SUMMARY")
+                    RES_COUNT=$(jq -r '.resourceCount' "$SUMMARY")
+                    RES_TYPES=$(jq -r '.resourceTypes | join("<br>")' "$SUMMARY")
+                    CHECKOV=$(jq -r '.checkovFindings' "$SUMMARY")
+
+                    # Action emoji
+                    case "$ACTION" in
+                      deploy)  ACTION_EMOJI="🚀 deploy" ;;
+                      destroy) ACTION_EMOJI="🗑️ destroy" ;;
+                      *)       ACTION_EMOJI="$ACTION" ;;
+                    esac
+
+                    # Status emoji
+                    case "$STATUS" in
+                      passed|ready)        STATUS_EMOJI="✅ $STATUS" ;;
+                      failed|destroy-failed) STATUS_EMOJI="❌ $STATUS" ;;
+                      already-gone)        STATUS_EMOJI="ℹ️ $STATUS" ;;
+                      no-state|no-rg)      STATUS_EMOJI="⚠️ $STATUS" ;;
+                      *)                   STATUS_EMOJI="❓ $STATUS" ;;
+                    esac
+
+                    # Checkov emoji
+                    if [[ "$CHECKOV" -gt 0 ]]; then
+                      CHECKOV_CELL="⚠️ $CHECKOV"
+                    else
+                      CHECKOV_CELL="✅ 0"
+                    fi
+
+                    [[ -z "$RGS" ]] && RGS="—"
+                    [[ -z "$RES_TYPES" ]] && RES_TYPES="—"
+
+                    echo "| \`$DEP_ID\` | $ACTION_EMOJI | $STATUS_EMOJI | $LOC | \`$RGS\` | $RES_COUNT | $RES_TYPES | $CHECKOV_CELL |"
+                  done <<< "$SUMMARIES"
+                  echo ""
+
+                  # ─── Per-deployment detail (collapsible only when N > 1) ────
+                  if [[ "$COUNT" -eq 1 ]]; then
+                    while IFS= read -r BODY; do
+                      sed '1{/^<!-- git-ape-plan:/d;}' "$BODY"
+                      echo ""
+                    done <<< "$BODIES"
+                  else
+                    echo "### 📂 Per-deployment detail"
+                    echo ""
+                    while IFS= read -r BODY; do
+                      DEP_ID=$(basename "$BODY" .md | sed 's|^comment-body-||')
+                      echo "<details><summary><strong>$DEP_ID</strong></summary>"
+                      echo ""
+                      sed '1{/^<!-- git-ape-plan:/d;}' "$BODY"
+                      echo ""
+                      echo "</details>"
+                      echo ""
+                    done <<< "$BODIES"
+                  fi
+                fi
+              } > "$BODY_FILE"
+
+              echo "Aggregated body: $(wc -l < "$BODY_FILE") lines"
+
+              # JSON-encode the body for the ADO threads API
+              JSON_BODY=$(jq -Rs '{
+                comments: [{ parentCommentId: 0, content: ., commentType: 1 }],
+                status: 1
+              }' < "$BODY_FILE")
+
+              ORG_URL="$(System.CollectionUri)"
+              PROJECT="$(System.TeamProject)"
+              REPO_ID="$(Build.Repository.ID)"
+              AUTH_HEADER="Authorization: Bearer $SYSTEM_ACCESSTOKEN"
+              THREADS_URL="${ORG_URL}${PROJECT}/_apis/git/repositories/${REPO_ID}/pullRequests/${PR_ID}/threads?api-version=7.1"
+
+              # Find an existing thread carrying our marker (idempotent update)
+              EXISTING=$(curl -sS --retry 3 --retry-delay 2 --max-time 30 -H "$AUTH_HEADER" "$THREADS_URL" \
+                | jq -r --arg m "$MARKER" \
+                    '.value[]? | select((.comments[0].content // "") | contains($m)) | "\(.id) \(.comments[0].id)"' \
+                | head -1)
+
+              if [[ -n "$EXISTING" ]]; then
+                THREAD_ID=$(echo "$EXISTING" | awk '{print $1}')
+                COMMENT_ID=$(echo "$EXISTING" | awk '{print $2}')
+                UPDATE_URL="${ORG_URL}${PROJECT}/_apis/git/repositories/${REPO_ID}/pullRequests/${PR_ID}/threads/${THREAD_ID}/comments/${COMMENT_ID}?api-version=7.1"
+                UPDATE_BODY=$(jq -Rs '{content: ., parentCommentId: 0, commentType: 1}' < "$BODY_FILE")
+                echo "Updating existing thread $THREAD_ID, comment $COMMENT_ID"
+                curl -sS -f --retry 3 --retry-delay 2 --max-time 30 -X PATCH "$UPDATE_URL" \
+                  -H "$AUTH_HEADER" \
+                  -H "Content-Type: application/json" \
+                  -d "$UPDATE_BODY" >/dev/null
+              else
+                echo "Creating new PR thread"
+                curl -sS -f --retry 3 --retry-delay 2 --max-time 30 -X POST "$THREADS_URL" \
+                  -H "$AUTH_HEADER" \
+                  -H "Content-Type: application/json" \
+                  -d "$JSON_BODY" >/dev/null
+              fi
+
+              rm -f "$BODY_FILE"
+              echo "Consolidated plan comment posted/updated for PR #$PR_ID"
+            displayName: 'Post consolidated PR thread'
+            condition: always()
+            continueOnError: true
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)

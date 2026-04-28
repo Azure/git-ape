@@ -110,7 +110,7 @@ Use Azure MCP tools or `az` CLI for service-specific details:
 Use the `/azure-naming-research` skill to check if existing resource names follow CAF conventions:
 
 ```markdown
-Resource: starnwkdhk
+Resource: stmyappdev
 CAF Abbreviation: st ✓
 Format: st{project}{env}{random} ✓
 Length: 10 chars (3-24 valid) ✓
@@ -143,9 +143,9 @@ mkdir -p .azure/deployments/$DEPLOYMENT_ID
   "resources": [
     {
       "type": "Microsoft.Storage/storageAccounts",
-      "name": "starnwkdhk",
-      "region": "southeastasia",
-      "resourceGroup": "rg-arnwkdhk-dev-southeastasia",
+      "name": "stmyappdev",
+      "region": "eastus",
+      "resourceGroup": "rg-myapp-dev-eus",
       "sku": "Standard_LRS",
       "configuration": { ... }
     }
@@ -215,8 +215,8 @@ Invoke `/azure-security-analyzer` on the generated template to assess the import
 
 | # | Resource | Name | Type | CAF |
 |---|----------|------|------|-----|
-| 1 | Resource Group | rg-arnwkdhk-dev-southeastasia | Microsoft.Resources/resourceGroups | ✓ |
-| 2 | Storage Account | starnwkdhk | Microsoft.Storage/storageAccounts | ✓ |
+| 1 | Resource Group | rg-myapp-dev-eus | Microsoft.Resources/resourceGroups | ✓ |
+| 2 | Storage Account | stmyappdev | Microsoft.Storage/storageAccounts | ✓ |
 | 3 | Blob Service | default | Microsoft.Storage/.../blobServices | — |
 
 **Artifacts Created:**

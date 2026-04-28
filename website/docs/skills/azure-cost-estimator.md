@@ -319,11 +319,11 @@ Save the estimate to the deployment artifacts:
 {
   "estimatedAt": "2026-02-19T10:00:00Z",
   "currency": "USD",
-  "region": "southeastasia",
+  "region": "eastus",
   "monthlyTotal": 7.97,
   "resources": [
     {
-      "name": "vm-linuxvm-dev-southeastasia",
+      "name": "vm-myapp-dev-eus",
       "type": "Microsoft.Compute/virtualMachines",
       "sku": "Standard_B1ls",
       "meter": "B1ls",

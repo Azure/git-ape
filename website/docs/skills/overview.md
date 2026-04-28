@@ -23,7 +23,7 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 | [Azure Resource Availability](./azure-resource-availability) | Query live Azure APIs to validate resource availability before template generation or deployment. Checks VM SKU restrictions, Kubernetes/runtime version support, API version compatibility, and subscription quota. Use during requirements gathering and preflight to catch deployment failures early. | ✅ |
 | [Azure Role Selector](./azure-role-selector) | Recommend least-privilege Azure RBAC roles for deployed resources. Finds minimal built-in roles matching desired permissions or creates custom role definitions. Use during security analysis or when configuring access for service principals and managed identities. | ✅ |
 | [Azure Security Analyzer](./azure-security-analyzer) | Analyze Azure resource configurations against security best practices using Azure MCP bestpractices service. Produces per-resource security assessment with severity ratings and recommendations. Use during template generation before deployment confirmation. | ✅ |
-| [Prereq Check](./prereq-check) | Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing. | ✅ |
+| [Prereq Check](./prereq-check) | Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing. Enhanced with auto-installation capability. | ✅ |
 
 ## Post-Deploy Skills
 
@@ -39,6 +39,13 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 | [Azure Drift Detector](./azure-drift-detector) | Detect configuration drift between deployed Azure resources and stored deployment state. Compare actual Azure configuration against desired state in .azure/deployments/, identify differences, and guide user through reconciliation options. Use when checking for manual changes, policy remediations, or unauthorized modifications. | ✅ |
 | [Azure Rest Api Reference](./azure-rest-api-reference) | Look up Azure REST API and ARM template reference documentation for any resource type. Returns exact property schemas, required fields, valid values, and latest stable API versions. Use BEFORE generating or modifying ARM templates to ensure correctness. No Azure connection required. | ✅ |
 | [Git Ape Onboarding](./git-ape-onboarding) | Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets. | ✅ |
+
+## General Skills
+
+| Skill | Description | Invocable |
+|-------|-------------|:---------:|
+| [Git Ape Onboarding Azdo](./git-ape-onboarding-azdo) | Azure DevOps-specific onboarding playbook for Git-Ape. Activates the four ADO pipelines (plan, deploy, destroy, verify), grants build identity Git permissions, creates the Branch Policy required check, and verifies parallelism quota. Called by the `git-ape-onboarding` orchestrator skill after the shared OIDC + RBAC setup is complete. Do not invoke directly — let the orchestrator dispatch to this skill. | ✅ |
+| [Git Ape Onboarding Github](./git-ape-onboarding-github) | GitHub Actions-specific onboarding playbook for Git-Ape. Activates the four GitHub workflows (plan, deploy, destroy, verify), triggers the verify workflow, and enumerates GitHub-specific gotchas (org OIDC subject template, environment secrets). Called by the `git-ape-onboarding` orchestrator skill after the shared OIDC + RBAC setup is complete. Do not invoke directly — let the orchestrator dispatch to this skill. | ✅ |
 
 ## Skill Invocation in Deployment Flow
 

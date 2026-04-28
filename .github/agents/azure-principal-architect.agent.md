@@ -124,7 +124,7 @@ User: @azure-principal-architect review my deployment deploy-20260218-193500
 
 Agent: Loading deployment artifacts...
 
-## WAF Assessment: Storage Account (starnwkdhk)
+## WAF Assessment: Storage Account (stmyappdev)
 
 ### 🔒 Security: GOOD
 ✅ HTTPS-only enforced

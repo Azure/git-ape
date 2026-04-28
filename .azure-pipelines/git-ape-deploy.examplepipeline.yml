@@ -1,0 +1,309 @@
+# Git-Ape Deploy Pipeline (Azure DevOps)
+# Triggers on merge to main when deployment artifacts change.
+# Creates or updates the Azure Deployment Stack (idempotent — stack tracks every
+# resource it manages across resource-groups and scopes), captures outputs,
+# runs integration tests, and commits state.json back via $(System.AccessToken).
+#
+# Triggers:
+#   - CI on main with .azure/deployments/**/template.json or parameters.json changes
+#
+# Gating:
+#   - 'azure-deploy' ADO Environment with manual approval check replaces the
+#     GitHub `/deploy` comment trigger.
+#   - OIDC via Workload Identity Federation service connection '{{SERVICE_CONNECTION_NAME}}'.
+#   - Variable group '{{VARIABLE_GROUP_NAME}}' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+#   - Build identity needs 'Contribute' permission on the repo to commit state.json.
+
+name: 'git-ape-deploy-$(Date:yyyyMMdd)-$(Rev:r)'
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - .azure/deployments/**/template.json
+      - .azure/deployments/**/parameters.json
+
+pr: none
+
+variables:
+  - group: {{VARIABLE_GROUP_NAME}}
+  - name: azureServiceConnection
+    value: {{SERVICE_CONNECTION_NAME}}
+
+stages:
+  - stage: Detect
+    displayName: 'Detect deployments'
+    jobs:
+      - job: detect_deployments
+        displayName: 'Detect deployments to execute'
+        timeoutInMinutes: 10
+        pool:
+          name: Default
+        steps:
+          - checkout: self
+            fetchDepth: 0
+            persistCredentials: true
+
+          - template: templates/bootstrap-prereqs.yml
+
+          - bash: |
+              set -euo pipefail
+              CHANGED_FILES=$(git diff --name-only HEAD~1...HEAD -- \
+                '.azure/deployments/*/template.json' 2>/dev/null || true)
+
+              mkdir -p $(Build.ArtifactStagingDirectory)/detect
+
+              if [[ -z "$CHANGED_FILES" ]]; then
+                echo "No deployments found"
+                echo "false" > $(Build.ArtifactStagingDirectory)/detect/has_deployments
+                echo "[]" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+                MATRIX="{}"
+              else
+                DEPLOYMENT_IDS=$(echo "$CHANGED_FILES" \
+                  | sed 's|.azure/deployments/\([^/]*\)/.*|\1|' \
+                  | sort -u \
+                  | jq -R -s -c 'split("\n") | map(select(. != ""))')
+                # Build matrix object: {"id1": {"deployment_id": "id1"}, ...}
+                MATRIX=$(echo "$DEPLOYMENT_IDS" | jq -c 'map({(.): {deployment_id: .}}) | add // {}')
+                echo "Deployments to execute: $DEPLOYMENT_IDS"
+                echo "Matrix: $MATRIX"
+                echo "true" > $(Build.ArtifactStagingDirectory)/detect/has_deployments
+                echo "$DEPLOYMENT_IDS" > $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json
+              fi
+
+              # Output variables consumed by stage conditions and matrix strategy
+              HAS=$(cat $(Build.ArtifactStagingDirectory)/detect/has_deployments)
+              IDS=$(cat $(Build.ArtifactStagingDirectory)/detect/deployment_ids.json)
+              echo "##vso[task.setvariable variable=HAS_DEPLOYMENTS;isOutput=true]$HAS"
+              echo "##vso[task.setvariable variable=DEPLOYMENT_IDS;isOutput=true]$IDS"
+              echo "##vso[task.setvariable variable=DEPLOYMENT_MATRIX;isOutput=true]$MATRIX"
+            displayName: 'Find deployment directories'
+            name: find
+
+          - publish: $(Build.ArtifactStagingDirectory)/detect
+            artifact: detect
+            displayName: 'Publish detect results'
+
+  # NOTE: A separate Validate stage was removed in favor of trusting the
+  # plan pipeline's `az stack sub validate` (already gated by branch policy).
+  # `az stack sub create` itself validates server-side before applying changes,
+  # so any drift between PR submission and merge is caught by the deploy step.
+
+  - stage: Deploy
+    displayName: 'Deploy (gated)'
+    dependsOn:
+      - Detect
+    condition: succeeded()
+    jobs:
+      - deployment: deploy
+        displayName: 'Deploy to Azure'
+        timeoutInMinutes: 120
+        pool:
+          name: Default
+        environment: azure-deploy
+        # Serialize concurrent deploys so two pipeline runs don't race on the
+        # same state.json or attempt overlapping `az stack sub create` calls.
+        # Configure 'Exclusive lock' on the azure-deploy Environment (Approvals
+        # and checks) for this to take effect.
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: true
+
+                - template: templates/bootstrap-prereqs.yml
+
+                - download: current
+                  artifact: detect
+                  displayName: 'Download detect results'
+
+                - task: AzureCLI@2
+                  displayName: 'Create/update Deployment Stacks (parallel per deployment)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+
+                      HAS_DEPLOYMENTS=$(cat $(Pipeline.Workspace)/detect/has_deployments)
+                      if [[ "$HAS_DEPLOYMENTS" != "true" ]]; then
+                        echo "No deployments — skipping"
+                        exit 0
+                      fi
+
+                      DEPLOYMENT_IDS=$(cat $(Pipeline.Workspace)/detect/deployment_ids.json)
+                      LOG_DIR="$(mktemp -d)"
+
+                      deploy_one() {
+                        local DEPLOYMENT_ID="$1"
+                        local LOG="$LOG_DIR/$DEPLOYMENT_ID.log"
+                        local DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
+                        local LOCATION
+                        LOCATION=$(jq -r '.parameters.location.value // "eastus"' "$DEPLOY_DIR/parameters.json" 2>/dev/null || echo eastus)
+
+                        {
+                          echo "🚀 Deploying $DEPLOYMENT_ID via Deployment Stack..."
+                          local START
+                          START=$(date +%s)
+
+                          local DEPLOY_OUTPUT
+                          if ! DEPLOY_OUTPUT=$(az stack sub create \
+                              --name "$DEPLOYMENT_ID" \
+                              --location "$LOCATION" \
+                              --template-file "$DEPLOY_DIR/template.json" \
+                              --parameters @"$DEPLOY_DIR/parameters.json" \
+                              --action-on-unmanage deleteAll \
+                              --deny-settings-mode none \
+                              --yes \
+                              --output json 2>&1); then
+                            echo "##vso[task.logissue type=error]Deployment $DEPLOYMENT_ID failed"
+                            echo "$DEPLOY_OUTPUT"
+                            local DURATION=$(( $(date +%s) - START ))
+                            cat > "$DEPLOY_DIR/state.json" <<EOF
+                      {
+                        "deploymentId": "$DEPLOYMENT_ID",
+                        "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                        "status": "failed",
+                        "duration": "${DURATION}s",
+                        "subscription": "$(AZURE_SUBSCRIPTION_ID)",
+                        "location": "$LOCATION",
+                        "deployMethod": "stack",
+                        "stackId": null,
+                        "triggeredBy": "$(Build.RequestedFor)",
+                        "runId": "$(Build.BuildId)",
+                        "runUrl": "$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                      }
+                      EOF
+                            return 1
+                          fi
+
+                          local DURATION=$(( $(date +%s) - START ))
+                          local STACK_ID
+                          STACK_ID=$(echo "$DEPLOY_OUTPUT" | jq -r '.id // empty')
+                          local OUTPUTS
+                          OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.outputs // .properties.outputs // {}')
+                          local RG_NAME
+                          RG_NAME=$(echo "$OUTPUTS" | jq -r '.resourceGroupName.value // empty')
+
+                          local RESOURCES_JSON
+                          RESOURCES_JSON=$(az stack sub show --name "$DEPLOYMENT_ID" \
+                            --query 'resources[].{id:id,status:status,denyStatus:denyStatus}' \
+                            -o json 2>/dev/null || echo '[]')
+                          local RG_LIST
+                          RG_LIST=$(echo "$RESOURCES_JSON" | jq -r '[.[].id | capture("resourceGroups/(?<rg>[^/]+)") | .rg] | unique')
+
+                          cat > "$DEPLOY_DIR/state.json" <<EOF
+                      {
+                        "deploymentId": "$DEPLOYMENT_ID",
+                        "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                        "status": "succeeded",
+                        "duration": "${DURATION}s",
+                        "subscription": "$(AZURE_SUBSCRIPTION_ID)",
+                        "location": "$LOCATION",
+                        "deployMethod": "stack",
+                        "stackId": "$STACK_ID",
+                        "resourceGroup": "$RG_NAME",
+                        "resourceGroups": $RG_LIST,
+                        "managedResources": $RESOURCES_JSON,
+                        "triggeredBy": "$(Build.RequestedFor)",
+                        "runId": "$(Build.BuildId)",
+                        "runUrl": "$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+                      }
+                      EOF
+
+                          echo "✅ Stack $DEPLOYMENT_ID provisioned in ${DURATION}s (resource groups: $RG_NAME)"
+                        } > "$LOG" 2>&1
+                      }
+
+                      # Fan out: one background process per deployment.
+                      PIDS=()
+                      while read -r DEPLOYMENT_ID; do
+                        [[ -z "$DEPLOYMENT_ID" ]] && continue
+                        deploy_one "$DEPLOYMENT_ID" &
+                        PIDS+=($!)
+                      done < <(echo "$DEPLOYMENT_IDS" | jq -r '.[]')
+
+                      # Wait for all and collect failures
+                      FAILED=0
+                      for PID in "${PIDS[@]}"; do
+                        wait "$PID" || FAILED=$((FAILED + 1))
+                      done
+
+                      # Stream all per-deployment logs in order so output is readable
+                      for LOG in "$LOG_DIR"/*.log; do
+                        echo ""
+                        echo "═══ $(basename "$LOG" .log) ═══"
+                        cat "$LOG"
+                      done
+
+                      [[ "$FAILED" -gt 0 ]] && exit 1 || exit 0
+
+                - task: AzureCLI@2
+                  displayName: 'Run integration tests (parallel per deployment)'
+                  condition: succeededOrFailed()
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      DEPLOYMENT_IDS=$(cat $(Pipeline.Workspace)/detect/deployment_ids.json)
+                      LOG_DIR="$(mktemp -d)"
+
+                      test_one() {
+                        local DEPLOYMENT_ID="$1"
+                        local LOG="$LOG_DIR/$DEPLOYMENT_ID.log"
+                        local STATE_FILE=".azure/deployments/$DEPLOYMENT_ID/state.json"
+                        {
+                          [[ -f "$STATE_FILE" ]] || { echo "no state.json — skipping"; return 0; }
+                          local RG
+                          RG=$(jq -r '.resourceGroup // empty' "$STATE_FILE")
+                          [[ -n "$RG" ]] || { echo "no resourceGroup — skipping"; return 0; }
+
+                          echo "Verifying resources in RG: $RG"
+                          az resource list --resource-group "$RG" \
+                            --query "[].{name:name, type:type, provisioningState:provisioningState}" \
+                            --output table || true
+
+                          # HTTP smoke test for ingress endpoints
+                          local ENDPOINTS
+                          ENDPOINTS=$(az resource list --resource-group "$RG" \
+                            --query "[?type=='Microsoft.App/containerApps' || type=='Microsoft.Web/sites'].name" -o tsv)
+                          for NAME in $ENDPOINTS; do
+                            local FQDN
+                            FQDN=$(az containerapp show -n "$NAME" -g "$RG" \
+                              --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null \
+                              || az webapp show -n "$NAME" -g "$RG" --query "defaultHostName" -o tsv 2>/dev/null \
+                              || echo "")
+                            if [[ -n "$FQDN" ]]; then
+                              local HTTP_CODE
+                              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://$FQDN" 2>/dev/null || echo "000")
+                              echo "  $NAME → https://$FQDN → HTTP $HTTP_CODE"
+                            fi
+                          done
+                        } > "$LOG" 2>&1
+                      }
+
+                      PIDS=()
+                      while read -r DEPLOYMENT_ID; do
+                        [[ -z "$DEPLOYMENT_ID" ]] && continue
+                        test_one "$DEPLOYMENT_ID" &
+                        PIDS+=($!)
+                      done < <(echo "$DEPLOYMENT_IDS" | jq -r '.[]')
+
+                      for PID in "${PIDS[@]}"; do wait "$PID" || true; done
+
+                      for LOG in "$LOG_DIR"/*.log; do
+                        echo ""
+                        echo "═══ $(basename "$LOG" .log) ═══"
+                        cat "$LOG"
+                      done
+
+                - template: templates/commit-and-push-state.yml
+                  parameters:
+                    commitMessage: 'git-ape: update deployment state [skip ci]'
+                    displayName: 'Commit state.json'
