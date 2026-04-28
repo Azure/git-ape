@@ -14,6 +14,56 @@ Git-Ape supports two onboarding modes:
 | **Single environment** | One Azure subscription for all deployments | `azure-deploy`, `azure-destroy` | Repository-level |
 | **Multi-environment** | Separate subscriptions per stage (dev/staging/prod) | `azure-deploy-dev`, `azure-deploy-staging`, `azure-deploy-prod`, `azure-destroy` | Environment-level |
 
+## How OIDC Authentication Works
+
+Git-Ape uses OpenID Connect (OIDC) federation between GitHub Actions and Microsoft Entra ID. No client secrets are stored — GitHub mints a short-lived token at workflow runtime, and Entra exchanges it for an Azure access token based on a trust relationship you configure once.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+sequenceDiagram
+    autonumber
+    participant GH as GitHub Actions<br/>(workflow run)
+    participant Entra as Microsoft Entra ID<br/>(App Registration)
+    participant ARM as Azure Resource Manager
+
+    GH->>GH: Mint OIDC token<br/>subject: repo:org/repo:ref:refs/heads/main
+    GH->>Entra: Exchange token<br/>(client_id + federated credential)
+    Entra->>Entra: Verify subject matches<br/>federated credential
+    Entra-->>GH: Azure access token<br/>(short-lived, ~1h)
+    GH->>ARM: az deployment sub create<br/>Authorization: Bearer [token]
+    ARM->>ARM: Check RBAC role assignment<br/>on subscription
+    ARM-->>GH: Deployment result
+```
+
+**Trust components you configure during onboarding:**
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+graph LR
+    GH["<b>GitHub Repo</b><br/>org/repo"]
+    FC["<b>Federated Credential</b><br/>subject: repo:org/repo:..."]
+    APP["<b>Entra App Registration</b><br/>client_id + tenant_id"]
+    SP["<b>Service Principal</b><br/>object_id"]
+    SUB["<b>Azure Subscription</b><br/>subscription_id"]
+    ROLE["<b>RBAC Role</b><br/>Contributor / UAA"]
+
+    GH -->|trusts| FC
+    FC -->|attached to| APP
+    APP -->|backed by| SP
+    SP -->|assigned| ROLE
+    ROLE -->|scoped to| SUB
+
+    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+
+    class GH,FC gh
+    class APP,SP entra
+    class SUB,ROLE azure
+```
+
+The **Quick Start** below automates all of this. The **Manual Setup** section walks through each component individually.
+
 ## Quick Start (Automated)
 
 You can run onboarding from Copilot Chat with:
@@ -110,7 +160,7 @@ winget install GitHub.cli
 winget install jqlang.jq
 ```
 
-> **Note:** AutoCloud skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
+> **Note:** Git-Ape skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
 </details>
 
 You must be logged in to both:
@@ -618,109 +668,97 @@ Environment creation requires admin access to the repository. Ask a repo admin t
 
 ### Single Environment Mode
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        GitHub Repository                             │
-│                                                                      │
-│  Secrets (repo-level):           Environments:                       │
-│  ┌─────────────────────┐         ┌──────────────┐  ┌───────────────┐ │
-│  │ AZURE_CLIENT_ID     │         │ azure-deploy │  │ azure-destroy │ │
-│  │ AZURE_TENANT_ID     │         │ (main only)  │  │ (any branch)  │ │
-│  │ AZURE_SUBSCRIPTION_ID│        └──────┬───────┘  └──────┬────────┘ │
-│  │ SLACK_WEBHOOK_URL ⁽¹⁾│              │                  │          │
-│  └──────────┬──────────┘               │                  │          │
-│             │                          │                  │          │
-│  Workflows: │                          │                  │          │
-│  ┌──────────┴──────────────────────────┴──────────────────┴────────┐ │
-│  │  git-ape-plan.yml     → OIDC token (PR subject)               │ │
-│  │  git-ape-deploy.yml   → OIDC token (main / azure-deploy env)  │ │
-│  │  git-ape-destroy.yml  → OIDC token (azure-destroy env)        │ │
-│  │  git-ape-verify.yml   → OIDC token (workflow_dispatch)        │ │
-│  └──────────┬──────────────────────────────────────────────────────┘ │
-└─────────────┼────────────────────────────────────────────────────────┘
-              │ OIDC token exchange
-              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                         Entra ID (Azure AD)                          │
-│                                                                      │
-│  App Registration: sp-git-ape-{repo}                               │
-│  ┌────────────────────────────────────────────┐                      │
-│  │ Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx  │                      │
-│  │                                            │                      │
-│  │ Federated Credentials:                     │                      │
-│  │   • repo:org/repo:ref:refs/heads/main      │                      │
-│  │   • repo:org/repo:pull_request             │                      │
-│  │   • repo:org/repo:environment:azure-deploy │                      │
-│  │   • repo:org/repo:environment:azure-destroy│                      │
-│  └────────────────────┬───────────────────────┘                      │
-└───────────────────────┼──────────────────────────────────────────────┘
-                        │ Service Principal
-                        ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                       Azure Subscription                              │
-│                                                                       │
-│  RBAC: Contributor (+ User Access Administrator if RBAC in templates) │
-│                                                                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
-│  │ rg-app-dev  │  │ rg-api-prod │  │ rg-data-stg │  ...             │
-│  └─────────────┘  └─────────────┘  └─────────────┘                  │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+graph TD
+    subgraph GH["GitHub Repository"]
+        direction TB
+        SEC["<b>Repo Secrets</b><br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID<br/>SLACK_WEBHOOK_URL (optional)"]
+        ENVD["<b>azure-deploy</b><br/>main branch only"]
+        ENVX["<b>azure-destroy</b><br/>main branch only"]
+        WF["<b>Workflows</b><br/>git-ape-plan.yml (PR)<br/>git-ape-deploy.yml (main / azure-deploy)<br/>git-ape-destroy.yml (azure-destroy)<br/>git-ape-verify.yml (dispatch)"]
+        SEC --- WF
+        ENVD --- WF
+        ENVX --- WF
+    end
 
-⁽¹⁾ Optional
+    subgraph ENTRA["Microsoft Entra ID"]
+        APP["<b>App Registration</b><br/>sp-git-ape-{repo}<br/>client_id + tenant_id"]
+        FC["<b>Federated Credentials</b><br/>• repo:org/repo:ref:refs/heads/main<br/>• repo:org/repo:pull_request<br/>• repo:org/repo:environment:azure-deploy<br/>• repo:org/repo:environment:azure-destroy"]
+        APP --- FC
+    end
+
+    subgraph AZ["Azure Subscription"]
+        ROLE["<b>RBAC</b><br/>Contributor<br/>(+ UAA if templates assign roles)"]
+        RG1["rg-app-dev"]
+        RG2["rg-api-prod"]
+        RG3["rg-data-stg"]
+        ROLE --- RG1
+        ROLE --- RG2
+        ROLE --- RG3
+    end
+
+    WF -->|"OIDC token exchange"| FC
+    APP -->|"Service Principal"| ROLE
+
+    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+
+    class SEC,ENVD,ENVX,WF gh
+    class APP,FC entra
+    class ROLE,RG1,RG2,RG3 azure
 ```
 
 ### Multi-Environment Mode
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                              GitHub Repository                                    │
-│                                                                                   │
-│  Repo-level Secrets:              Environment Secrets:                            │
-│  ┌───────────────────┐            ┌─ azure-deploy-dev ──────────────────────────┐ │
-│  │ AZURE_CLIENT_ID   │            │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│  │ AZURE_TENANT_ID   │            │  AZURE_SUBSCRIPTION_ID → Dev Sub            │ │
-│  └───────────────────┘            └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-deploy-staging ──────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Staging Sub        │ │
-│                                   └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-deploy-prod ─────────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Prod Sub           │ │
-│                                   │  ⚠️ Required reviewers                      │ │
-│                                   └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-destroy ─────────────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Default Sub        │ │
-│                                   └─────────────────────────────────────────────┘ │
-└──────────────────────────┬───────────────────────────────────────────────────────┘
-                           │ OIDC token exchange
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                            Entra ID (Azure AD)                                    │
-│                                                                                   │
-│  App Registration: sp-git-ape-{repo}                                            │
-│  ┌────────────────────────────────────────────────────────┐                       │
-│  │ Federated Credentials:                                 │                       │
-│  │   • repo:org/repo:ref:refs/heads/main                  │                       │
-│  │   • repo:org/repo:pull_request                         │                       │
-│  │   • repo:org/repo:environment:azure-deploy-dev         │                       │
-│  │   • repo:org/repo:environment:azure-deploy-staging     │                       │
-│  │   • repo:org/repo:environment:azure-deploy-prod        │                       │
-│  │   • repo:org/repo:environment:azure-destroy            │                       │
-│  └────────────────────┬───────────────────────────────────┘                       │
-└───────────────────────┼──────────────────────────────────────────────────────────┘
-                        │ Service Principal (shared)
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│  Dev Sub     │ │ Staging Sub  │ │  Prod Sub    │
-│  Contributor │ │ Contributor  │ │ Contributor + │
-│              │ │              │ │ UAA           │
-│ ┌──────────┐ │ │ ┌──────────┐ │ │ ┌──────────┐ │
-│ │ rg-*-dev │ │ │ │ rg-*-stg │ │ │ │ rg-*-prod│ │
-│ └──────────┘ │ │ └──────────┘ │ │ └──────────┘ │
-└──────────────┘ └──────────────┘ └──────────────┘
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+graph TD
+    subgraph GH["GitHub Repository"]
+        direction TB
+        REPO["<b>Repo-level Secrets</b><br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID"]
+        EDEV["<b>azure-deploy-dev</b><br/>SUBSCRIPTION_ID → Dev"]
+        ESTG["<b>azure-deploy-staging</b><br/>SUBSCRIPTION_ID → Staging"]
+        EPRD["<b>azure-deploy-prod</b><br/>SUBSCRIPTION_ID → Prod<br/>⚠️ Required reviewers"]
+        EDST["<b>azure-destroy</b><br/>SUBSCRIPTION_ID → Default"]
+    end
+
+    subgraph ENTRA["Microsoft Entra ID"]
+        APP["<b>App Registration</b><br/>sp-git-ape-{repo}"]
+        FC["<b>Federated Credentials</b><br/>• ref:refs/heads/main<br/>• pull_request<br/>• environment:azure-deploy-dev<br/>• environment:azure-deploy-staging<br/>• environment:azure-deploy-prod<br/>• environment:azure-destroy"]
+        APP --- FC
+    end
+
+    DEV["<b>Dev Subscription</b><br/>Contributor<br/>rg-*-dev"]
+    STG["<b>Staging Subscription</b><br/>Contributor<br/>rg-*-stg"]
+    PRD["<b>Prod Subscription</b><br/>Contributor + UAA<br/>rg-*-prod"]
+
+    REPO --- EDEV
+    REPO --- ESTG
+    REPO --- EPRD
+    REPO --- EDST
+
+    EDEV -->|"OIDC"| FC
+    ESTG -->|"OIDC"| FC
+    EPRD -->|"OIDC"| FC
+    EDST -->|"OIDC"| FC
+
+    APP -->|"Service Principal"| DEV
+    APP -->|"Service Principal"| STG
+    APP -->|"Service Principal"| PRD
+
+    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef ghprod fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef azureprod fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d
+
+    class REPO,EDEV,ESTG,EDST gh
+    class EPRD ghprod
+    class APP,FC entra
+    class DEV,STG azure
+    class PRD azureprod
 ```
 
 ---

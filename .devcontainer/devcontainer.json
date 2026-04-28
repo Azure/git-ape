@@ -1,5 +1,5 @@
 {
-  "name": "AutoCloud Dev",
+  "name": "Git-Ape Dev",
   "image": "mcr.microsoft.com/devcontainers/python:3-3.12-bookworm",
 
   "features": {

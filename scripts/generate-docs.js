@@ -58,6 +58,31 @@ function toTitleCase(str) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Rewrite sibling `*.agent.md` markdown links to docusaurus-friendly slug links.
+// Source agents reference each other by filename (e.g. `[git-ape.agent.md](git-ape.agent.md)`),
+// but the generated docusaurus pages live as `<slug>.md`, so the link target must drop
+// the `.agent.md` extension and use the slug.
+function rewriteAgentLinks(body) {
+  return body.replace(/(\[[^\]\n]+\])\(([^)\s]+\.agent\.md)\)/g, (_match, label, url) => {
+    // Skip absolute URLs (they aren't broken)
+    if (/^https?:\/\//i.test(url)) return `${label}(${url})`;
+    const filename = url.split('/').pop().replace(/\.agent\.md$/, '');
+    const slug = slugify(filename);
+    return `${label}(${slug})`;
+  });
+}
+
+// Rewrite skill-relative resource links (scripts, references) to absolute GitHub URLs,
+// since those files are not copied into the docusaurus site.
+function rewriteSkillLinks(body, skillDir) {
+  const githubBase = `https://github.com/Azure/git-ape/blob/main/.github/skills/${skillDir}`;
+  return body.replace(/(\[[^\]\n]+\])\((\.?\.?\/?(?:scripts|references)\/[^)\s]+)\)/g, (_match, label, url) => {
+    if (/^https?:\/\//i.test(url)) return `${label}(${url})`;
+    const cleaned = url.replace(/^\.\//, '');
+    return `${label}(${githubBase}/${cleaned})`;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Agent doc generation
 // ---------------------------------------------------------------------------
@@ -87,7 +112,7 @@ function generateAgentDocs() {
     agents.push({ name, slug, description, userInvocable, file });
 
     // Extract meaningful body (skip the frontmatter warning section, keep substance)
-    const bodyTrimmed = body.trim();
+    const bodyTrimmed = rewriteAgentLinks(body.trim());
 
     let content = `---
 title: "${name}"
@@ -215,7 +240,7 @@ function generateSkillDocs() {
 
     skills.push({ name, slug, description, userInvocable, phase, dir });
 
-    const bodyTrimmed = body.trim();
+    const bodyTrimmed = rewriteSkillLinks(body.trim(), dir);
 
     let content = `---
 title: "${toTitleCase(name)}"

@@ -43,7 +43,7 @@ Execute ARM template deployments to Azure subscriptions, monitor real-time progr
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape.agent.md).
+see [git-ape.agent.md](git-ape).
 
 Use the shared progress bar and status line patterns for polling updates and summaries.
 

@@ -25,6 +25,7 @@ Git-Ape is a **platform engineering framework** built on GitHub Copilot. It prov
 ## Deployment Flow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph TD
     U["User prompt:<br/>deploy a Python function app"]
     U --> S1
@@ -41,6 +42,18 @@ graph TD
     S3["Stage 3: Deploy"]
     S3 --> S4
     S4["Stage 4: Validate & Test"]
+
+    classDef user fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef stage fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef fix fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+
+    class U user
+    class S1,S2 stage
+    class GATE,CONFIRM gate
+    class FIX fix
+    class S3,S4 deploy
 ```
 
 ## Execution Modes

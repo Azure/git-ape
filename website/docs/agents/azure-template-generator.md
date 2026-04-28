@@ -44,7 +44,7 @@ Transform deployment requirements into validated, secure ARM templates. Show use
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape.agent.md).
+see [git-ape.agent.md](git-ape).
 
 ## Approach
 

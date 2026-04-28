@@ -48,7 +48,7 @@ Evaluate Azure deployments against the 5 WAF pillars. Provide actionable archite
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape.agent.md).
+see [git-ape.agent.md](git-ape).
 
 ## WAF Pillar Assessment
 

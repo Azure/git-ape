@@ -15,10 +15,8 @@ Git-Ape provides GitHub Actions workflows for automated deployment lifecycle man
 
 | Workflow | File | Triggers | Jobs |
 |----------|------|----------|------|
-| [Git-Ape: Deploy](./git-ape-deploy) | `git-ape-deploy.yml` | push, issue_comment | check-comment-trigger, detect-deployments, deploy |
-| [Git-Ape: Destroy](./git-ape-destroy) | `git-ape-destroy.yml` | push, workflow_dispatch | detect-destroys, destroy |
-| [Git-Ape: Plan](./git-ape-plan) | `git-ape-plan.yml` | pull_request | detect-deployments, plan-local, plan-azure, plan-comment |
-| [Git-Ape: Verify Setup](./git-ape-verify) | `git-ape-verify.yml` | workflow_dispatch | verify |
+| [Git-Ape: Docs Check](./git-ape-docs-check) | `git-ape-docs-check.yml` | pull_request | check-docs |
+| [Git-Ape: Docs Deploy](./git-ape-docs) | `git-ape-docs.yml` | push | build, deploy |
 
 ## Pipeline Architecture
 

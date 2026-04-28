@@ -43,7 +43,7 @@ Interview users to gather ALL necessary information for Azure resource deploymen
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape.agent.md).
+see [git-ape.agent.md](git-ape).
 
 ## Execution Context Adaptation
 

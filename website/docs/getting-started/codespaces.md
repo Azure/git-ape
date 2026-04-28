@@ -7,13 +7,13 @@ description: "Dev container and Codespaces setup"
 
 # GitHub Codespaces Dev Environment
 
-AutoCloud includes a ready-to-use [dev container](https://containers.dev/) configuration so you can start contributing or using the project instantly in GitHub Codespaces (or any dev container-compatible tool like VS Code Dev Containers).
+Git-Ape includes a ready-to-use [dev container](https://containers.dev/) configuration so you can start contributing or using the project instantly in GitHub Codespaces (or any dev container-compatible tool like VS Code Dev Containers).
 
 ## Quick Start
 
 ### Option 1: GitHub Codespaces (recommended)
 
-1. Navigate to the [AutoCloud repository](https://github.com/Azure/autocloud).
+1. Navigate to the [Git-Ape repository](https://github.com/Azure/git-ape).
 2. Click **Code** → **Codespaces** → **Create codespace on main**.
 3. Wait for the container to build and the post-create setup to finish.
 4. Sign in to Azure with `az login` when prompted.
@@ -76,7 +76,7 @@ Once the environment is ready:
 
 1. **Sign in to Azure**: Run `az login` to authenticate. For Codespaces, `az login --use-device-code` works best.
 2. **Verify the setup**: Run `az account show` to confirm your subscription.
-3. **Start using AutoCloud**: Open Copilot Chat and try `@autocloud deploy a Python function app`.
+3. **Start using Git-Ape**: Open Copilot Chat and try `@git-ape deploy a Python function app`.
 
 ## Customization
 

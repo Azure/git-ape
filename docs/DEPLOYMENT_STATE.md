@@ -15,6 +15,43 @@ Every deployment creates a timestamped directory under `.azure/deployments/` con
 - Test results and logs for debugging
 - Error information for failure analysis
 
+## Deployment Lifecycle
+
+A deployment moves through a defined set of states tracked in `metadata.json`. Valid `status` values are `initialized`, `gathering-requirements`, `generating-template`, `awaiting-confirmation`, `deploying`, `testing`, `succeeded`, `failed`, `rolled-back`, `destroy-requested`, and `destroyed`. Terminal states (`succeeded`, `failed`, `rolled-back`, `destroyed`) are persisted in git for audit.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+stateDiagram-v2
+    state "gathering-requirements" as gatheringRequirements
+    state "generating-template" as generatingTemplate
+    state "awaiting-confirmation" as awaitingConfirmation
+    state "rolled-back" as rolledBack
+    state "destroy-requested" as destroyRequested
+
+    [*] --> initialized: deployment dir created
+    initialized --> gatheringRequirements: Requirements Gatherer
+    gatheringRequirements --> generatingTemplate: Template Generator
+    generatingTemplate --> awaitingConfirmation: security gate passed
+    generatingTemplate --> generatingTemplate: security gate blocked<br/>(fix loop)
+    awaitingConfirmation --> deploying: user / PR approval
+    awaitingConfirmation --> [*]: declined
+    deploying --> testing: az deployment ok
+    deploying --> failed: deployment error
+    testing --> succeeded: tests pass
+    testing --> failed: tests fail
+    failed --> rolledBack: rollback initiated
+    succeeded --> destroyRequested: PR sets metadata
+    destroyRequested --> destroyed: git-ape-destroy.yml
+    succeeded --> [*]
+    rolledBack --> [*]
+    destroyed --> [*]
+
+    classDef terminal fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef error fill:#fecaca,stroke:#b91c1c,color:#7f1d1d
+    class succeeded,destroyed terminal
+    class failed,rolledBack error
+```
+
 ## Directory Structure
 
 ```

@@ -112,7 +112,9 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
 7. Set GitHub repo or environment secrets.
 8. Create GitHub environments and branch policies when permissions allow.
 9. Capture compliance and Azure Policy preferences (see below).
-10. Verify federated credentials, role assignments, and secrets.
+10. Collect explicit acknowledgments for experimental status and production safety.
+11. Activate workflows by renaming `.exampleyml` to `.yml` (only if all acknowledgments confirmed; see Step 11 section below).
+12. Verify federated credentials, role assignments, secrets, and workflow activation.
 
 ### Step 9: Compliance & Azure Policy Preferences
 
@@ -139,13 +141,75 @@ After RBAC and environment setup, ask the user about compliance requirements and
    - Set the `### Policy Enforcement Mode` default to the user's choice
    - Commit the update as part of the onboarding changes
 
+### Step 11: Activate GitHub Workflows
+
+After collecting acknowledgments for experimental status and production safety (see agent's "Acknowledgment Phase"), activate the Git-Ape workflows by renaming `.exampleyml` files to `.yml` in the `.github/workflows/` directory.
+
+**Files to activate:**
+- `git-ape-plan.exampleyml` → `git-ape-plan.yml` (validates template and shows what-if)
+- `git-ape-deploy.exampleyml` → `git-ape-deploy.yml` (executes deployments)
+- `git-ape-destroy.exampleyml` → `git-ape-destroy.yml` (tears down resources)
+- `git-ape-verify.exampleyml` → `git-ape-verify.yml` (runs verification steps)
+
+**Rename commands (Unix/macOS/Linux):**
+```bash
+cd .github/workflows
+for f in *.exampleyml; do
+  target="${f%.exampleyml}.yml"
+  mv "$f" "$target"
+  echo "Renamed: $f -> $target"
+done
+```
+
+**Rename commands (Windows PowerShell):**
+```powershell
+cd .github\workflows
+Get-ChildItem *.exampleyml | ForEach-Object {
+  $newName = $_.Name -replace '\.exampleyml$', '.yml'
+  Rename-Item -Path $_.FullName -NewName $newName
+  Write-Host "Renamed: $($_.Name) -> $newName"
+}
+```
+
+**Verification (all platforms):**
+```bash
+ls .github/workflows/git-ape-*.yml
+```
+
+Should output:
+```
+git-ape-deploy.yml
+git-ape-destroy.yml
+git-ape-plan.yml
+git-ape-verify.yml
+```
+
+**Output after activation:**
+Display summary:
+```
+✅ Workflows activated:
+  - git-ape-plan.yml (validates and plans deployments)
+  - git-ape-deploy.yml (executes deployments and integration tests)
+  - git-ape-destroy.yml (tears down resources when requested)
+  - git-ape-verify.yml (runs post-deployment verification)
+
+Next steps:
+1. Review .github/workflows/git-ape-*.yml for familiarity
+2. Push changes to a feature branch and open a PR
+3. Verify the plan workflow runs and shows what-if analysis in the PR comment
+4. For first deployment, merge to main and monitor git-ape-deploy.yml execution
+```
+
 ## Safe-Execution Rules
 
 1. Echo target repository and subscription(s) before execution.
 2. Require explicit user confirmation before running onboarding.
 3. Never print secret values in chat output.
-4. Summarize what was created or updated (app registration, federated credentials, role assignments, GitHub environments).
-5. If onboarding fails, surface the failing step and command context, then stop.
+4. **Require explicit acknowledgments before activating workflows** — User must confirm Git-Ape is experimental, will review plans, and won't deploy to production.
+5. **Only activate workflows if ALL acknowledgments are confirmed** — Renaming happens only after explicit "Yes" to all three questions.
+6. If user refuses any acknowledgment, complete onboarding but skip workflow activation. User can enable later manually.
+7. Summarize what was created or updated (app registration, federated credentials, role assignments, GitHub environments, workflows activated).
+8. If onboarding fails, surface the failing step and command context, then stop.
 
 ## Suggested Agent Flow
 
@@ -153,10 +217,13 @@ After RBAC and environment setup, ask the user about compliance requirements and
 2. Confirm target repo URL, onboarding mode, and role model.
 3. Validate current Azure/GitHub auth context (subscription, tenant, GitHub org).
 4. Ask for final confirmation.
-5. Execute the required Azure CLI and GitHub CLI commands directly from this playbook.
+5. Execute the required Azure CLI and GitHub CLI commands directly from this playbook (Steps 1-8).
 6. Ask compliance framework and enforcement mode preferences (Step 9 in playbook).
 7. Update `copilot-instructions.md` with compliance preferences.
-8. Summarize outcome and suggest verification commands.
+8. **Display experimental warning and collect acknowledgments** (three explicit "Yes" answers required).
+9. If all acknowledgments confirmed, execute workflow activation (Step 11 in playbook).
+10. If any acknowledgment refused, skip workflow activation (workflows remain `.exampleyml`).
+11. Summarize outcome, activated workflows (if any), and suggest verification commands.
 
 ## Known Gotchas
 
