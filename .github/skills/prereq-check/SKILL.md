@@ -1,7 +1,7 @@
 ---
 name: prereq-check
-description: "Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing."
-argument-hint: "Run without arguments to check all prerequisites"
+description: "Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing. Enhanced with auto-installation capability."
+argument-hint: "Run without arguments to check all prerequisites, or with 'install' to auto-install missing tools"
 user-invocable: true
 ---
 
@@ -9,12 +9,28 @@ user-invocable: true
 
 Validates the local environment has the CLI tools and auth sessions needed to run Git-Ape skills.
 
+**Enhanced with auto-installation:** Can now automatically install missing prerequisites instead of just detecting them.
+
 ## When to Use
 
 - Before first-time onboarding (`/git-ape-onboarding`)
 - When any Git-Ape skill fails with a "command not found" error
 - When switching machines or dev containers
 - When a user asks "what do I need to install?"
+
+## Execution Modes
+
+### Detection Mode (Default)
+```text
+/prereq-check
+```
+Shows what's missing and provides install commands.
+
+### Auto-Installation Mode
+```text
+/prereq-check install
+```
+Automatically installs missing prerequisites.
 
 ## Required Tools
 
@@ -141,7 +157,7 @@ winget install GitHub.cli
 winget install jqlang.jq
 ```
 
-> **Windows note:** Git-Ape skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
+> **Windows note:** AutoCloud skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
 
 ### Step 5: Check Auth Sessions
 
@@ -212,11 +228,59 @@ az devops configure --defaults organization=https://dev.azure.com/<your-org> pro
 
 **Auth notes:** the `azure-devops` extension reuses the `az` login session for ADO. No PAT is required for Git-Ape onboarding. If `az devops user show` fails with `TF400813` or `403`, sign in again with `az login --allow-no-subscriptions` and ensure the signed-in identity is a member of the ADO organization.
 
-### Step 6: Summary
+### Step 6: Auto-Installation (Enhanced)
+
+When invoked with `install` mode, automatically install missing or outdated tools:
+
+**Windows (PowerShell):**
+```powershell
+# Auto-install missing tools
+if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+  Write-Host "Installing jq..."
+  winget install jqlang.jq
+}
+
+if (-not (az extension show --name azure-devops 2>$null)) {
+  Write-Host "Installing azure-devops extension..."
+  az extension add --name azure-devops
+}
+
+# Verify installations
+jq --version
+az extension show --name azure-devops --query version -o tsv
+```
+
+**macOS (Homebrew):**
+```bash
+# Auto-install missing tools
+command -v jq >/dev/null 2>&1 || {
+  echo "Installing jq..."
+  brew install jq
+}
+
+az extension show --name azure-devops >/dev/null 2>&1 || {
+  echo "Installing azure-devops extension..."
+  az extension add --name azure-devops
+}
+```
+
+**Ubuntu/Debian:**
+```bash
+# Auto-install missing tools
+command -v jq >/dev/null 2>&1 || {
+  echo "Installing jq..."
+  sudo apt-get update && sudo apt-get install -y jq
+}
+
+az extension show --name azure-devops >/dev/null 2>&1 || {
+  echo "Installing azure-devops extension..."
+  az extension add --name azure-devops
+}
+```
 
 Present a final verdict:
 
-- **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any Git-Ape skill.
+- **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any AutoCloud skill.
 - **⚠️ TOOLS MISSING** — List what to install. Do not proceed until resolved.
 - **⚠️ AUTH MISSING** — Tools OK but user needs to run `az login` and/or `gh auth login`.
 
@@ -283,4 +347,4 @@ az devops configure --defaults organization=https://dev.azure.com/<your-org> pro
 1. Run Steps 1–5 by executing the commands in the terminal.
 2. Present the results table and install commands (if needed).
 3. Do NOT install anything automatically — show the commands and let the user run them.
-4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/git-ape-onboarding`).
+4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/autocloud-onboarding`).

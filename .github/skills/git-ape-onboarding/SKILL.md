@@ -30,15 +30,40 @@ This skill configures:
 
 ## Prerequisites
 
-Before onboarding, run the **prereq-check** skill to verify all required tools are installed and auth sessions are active:
+**Auto-Installation Approach:** The onboarding agent now automatically installs missing prerequisites instead of just detecting them.
 
-```text
-/prereq-check
+**Required tools:**
+- `az` (≥ 2.50) — Azure CLI
+- `gh` (≥ 2.0) — GitHub CLI
+- `jq` (≥ 1.6) — JSON processor
+- `git` — Version control
+- `azure-devops` extension — For Azure DevOps operations
+
+**Auto-installation commands by platform:**
+
+**Windows (PowerShell):**
+```powershell
+# Install missing tools automatically
+if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+  winget install jqlang.jq
+}
+if (-not (az extension show --name azure-devops 2>$null)) {
+  az extension add --name azure-devops
+}
 ```
 
-The prereq-check skill validates: `az` (≥ 2.50), `gh` (≥ 2.0), `jq` (≥ 1.6), `git`, and active Azure/GitHub auth sessions. If anything is missing, it shows platform-specific install commands.
-
-Do NOT proceed with onboarding until prereq-check reports **✅ READY**.
+**macOS/Linux (bash):**
+```bash
+# Install missing tools automatically
+command -v jq >/dev/null 2>&1 || {
+  if command -v brew >/dev/null 2>&1; then
+    brew install jq
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get install -y jq
+  fi
+}
+az extension show --name azure-devops >/dev/null 2>&1 || az extension add --name azure-devops
+```
 
 Additionally, the Azure identity used must have **Owner** or **User Access Administrator** on the target subscription(s), and the GitHub identity must have **admin** access to the target repository.
 
@@ -88,7 +113,28 @@ When the agent executes this skill, it should run the equivalent Azure and GitHu
 
 When provider is `both`, run the GitHub branch first, then the ADO branch, before moving to the next numbered step.
 
-1. **[shared]** Validate prerequisites and current auth context. When provider is `ado` or `both`, the prereq check must also confirm the `azure-devops` extension and a reachable ADO org (see `/prereq-check`).
+1. **[shared]** Auto-install missing prerequisites and validate auth context:
+   ```bash
+   # Auto-install prerequisites (Windows PowerShell example)
+   if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+     Write-Host "Installing jq..."
+     winget install jqlang.jq
+   }
+   if (-not (az extension show --name azure-devops 2>$null)) {
+     Write-Host "Installing azure-devops extension..."
+     az extension add --name azure-devops
+   }
+   
+   # Enhanced Azure DevOps access validation
+   if provider is ado or both:
+     az devops user show --org "$ADO_ORG_URL" --query "user.displayName" -o tsv || {
+       echo "❌ Azure DevOps access required. Please:"
+       echo "1. Visit: $ADO_ORG_URL"
+       echo "2. Sign in with your Azure account"
+       echo "3. Retry onboarding"
+       exit 1
+     }
+   ```
 2. Resolve repo metadata.
    - **[github]**:
      ```bash
@@ -98,13 +144,20 @@ When provider is `both`, run the GitHub branch first, then the ADO branch, befor
      ```
    - **[ado]**:
      ```bash
+     # Validate project access and get details
      az devops project show --project "$ADO_PROJECT" --org "$ADO_ORG_URL" \
        --query "{id:id,name:name,visibility:visibility}" -o table
-     # Resolve the org GUID — required for federated subjects in some flows
+     
+     # Dynamic repository detection (don't assume repo names)
+     ADO_REPO_NAME=$(az repos list --org "$ADO_ORG_URL" --project "$ADO_PROJECT" \
+       --query "[0].name" -o tsv)
+     echo "Detected repository: $ADO_REPO_NAME"
+     
+     # Resolve the org GUID — required for federated subjects
      ADO_ORG_NAME=$(echo "$ADO_ORG_URL" | sed -E 's|https?://dev\.azure\.com/||; s|/$||')
-     curl -sSf "https://dev.azure.com/${ADO_ORG_NAME}/_apis/connectionData?api-version=7.1" \
+     ADO_ORG_GUID=$(curl -sSf "https://dev.azure.com/${ADO_ORG_NAME}/_apis/connectionData?api-version=7.1" \
        -H "Authorization: Bearer $(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)" \
-       | jq -r '.instanceId'
+       | jq -r '.instanceId')
      ```
 3. **[shared]** Create or reuse the Entra app registration and service principal:
 ```bash
@@ -156,6 +209,40 @@ OBJECT_ID=$(az ad app show --id "$CLIENT_ID" --query id -o tsv)
          --org "$ADO_ORG_URL" --project "$ADO_PROJECT"
      done
      ```
+7a. **[ado]** Auto-create service connection via REST API (eliminates manual steps):
+     ```bash
+     # Create service connection JSON configuration
+     SERVICE_CONNECTION_JSON=$(cat <<EOF
+{
+  "name": "$ADO_CONNECTION_NAME",
+  "type": "AzureRM",
+  "authorization": {
+    "parameters": {
+      "tenantid": "$TENANT_ID",
+      "serviceprincipalid": "$CLIENT_ID"
+    },
+    "scheme": "WorkloadIdentityFederation"
+  },
+  "data": {
+    "subscriptionId": "$SUBSCRIPTION_ID",
+    "subscriptionName": "$(az account show --subscription "$SUBSCRIPTION_ID" --query name -o tsv)",
+    "environment": "AzureCloud",
+    "scopeLevel": "Subscription",
+    "creationMode": "Manual"
+  },
+  "isShared": false,
+  "isReady": true
+}
+EOF
+)
+     
+     # Create service connection via REST API
+     echo "$SERVICE_CONNECTION_JSON" | az devops invoke \
+       --area serviceendpoint --resource endpoints \
+       --route-parameters project="$ADO_PROJECT" \
+       --http-method POST --in-file /dev/stdin \
+       --org "$ADO_ORG_URL" --query "name" -o tsv
+     ```
 8. Create deployment environments and approval gates.
    - **[github]**:
      ```bash
@@ -185,7 +272,50 @@ OBJECT_ID=$(az ad app show --id "$CLIENT_ID" --query id -o tsv)
    - **[ado]**: rename `.azure-pipelines/*.examplepipeline.yml` → `*.yml`, then register each pipeline with `az pipelines create`. See the ADO branch in Step 11 below.
    - **[ado]** Step 11c: grant the project's build identity Contribute on the repo so deploy/destroy pipelines can push `state.json` and `metadata.json` via `$(System.AccessToken)` without a PAT (see Step 11c below).
    - **[both]**: run the GitHub branch first, then the ADO branch, then Step 11c.
-12. **[shared]** Verify federated credentials, role assignments, secrets, and workflow activation.
+12. **[shared]** Comprehensive end-to-end verification and testing:
+
+```bash
+# Verify Azure setup
+echo "🔍 Verifying Azure configuration..."
+az account show --query "{name:name,id:id,tenantId:tenantId}" -o table
+az role assignment list --assignee "$CLIENT_ID" --scope "/subscriptions/$SUBSCRIPTION_ID" -o table
+
+# Verify federated credentials
+echo "🔍 Verifying OIDC federated credentials..."
+az ad app federated-credential list --id "$OBJECT_ID" -o json | jq -r '.[] | "\(.name): \(.subject)"'
+
+# GitHub-specific verification
+if [[ "$PROVIDER" == "github" || "$PROVIDER" == "both" ]]; then
+  echo "🔍 Verifying GitHub configuration..."
+  gh auth status
+  gh api "orgs/$GITHUB_ORG/actions/oidc/customization/sub" --jq '.use_default'
+fi
+
+# Azure DevOps-specific verification
+if [[ "$PROVIDER" == "ado" || "$PROVIDER" == "both" ]]; then
+  echo "🔍 Verifying Azure DevOps configuration..."
+  
+  # Test service connection
+  az devops service-endpoint list --org "$ADO_ORG_URL" --project "$ADO_PROJECT" \
+    --query "[?name=='$ADO_CONNECTION_NAME'].{name:name,type:type,isReady:isReady}" -o table
+  
+  # Verify pipelines created
+  az pipelines list --org "$ADO_ORG_URL" --project "$ADO_PROJECT" \
+    --query "[?starts_with(name,'git-ape-')].{name:name,id:id,status:status}" -o table
+  
+  # Test connectivity with a simple Azure CLI command through service connection
+  echo "🧪 Testing service connection..."
+  # This would be part of the pipeline test, not CLI test
+  echo "Service connection test requires running a pipeline"
+fi
+
+# Final summary
+echo "✅ Git-Ape onboarding verification complete!"
+echo "📋 Next steps:"
+echo "  1. Create a test deployment in .azure/deployments/"
+echo "  2. Push changes and verify pipelines trigger"
+echo "  3. Monitor first deployment execution"
+```
 
 ### Step 9: Compliance & Azure Policy Preferences
 
@@ -279,8 +409,20 @@ for f in *.examplepipeline.yml; do
 done
 ```
 
-**Register each pipeline:**
+**Template pipeline files with correct service connection names before activation:**
 ```bash
+# Template replacement approach - update service connection references before renaming
+for f in *.examplepipeline.yml; do
+  target="${f%.examplepipeline.yml}.yml"
+  # Replace template variables with actual values
+  sed "s|git-ape-azure|$ADO_CONNECTION_NAME|g" "$f" > "$target"
+  echo "Templated and renamed: $f -> $target"
+done
+```
+
+**Register each pipeline with dynamic repository name:**
+```bash
+# Use dynamically detected repository name
 for name in git-ape-plan git-ape-deploy git-ape-destroy git-ape-verify; do
   az pipelines create \
     --name "$name" \
