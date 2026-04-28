@@ -9,8 +9,8 @@
 # Gating:
 #   - 'azure-deploy' ADO Environment with manual approval check replaces the
 #     GitHub `/deploy` comment trigger.
-#   - OIDC via Workload Identity Federation service connection 'git-ape-azure'.
-#   - Variable group 'git-ape-azure-secrets' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+#   - OIDC via Workload Identity Federation service connection 'git-ape-azdo-demo'.
+#   - Variable group 'git-ape-azdo-demo-secrets' provides AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
 #   - Build identity needs 'Contribute' permission on the repo to commit state.json.
 
 name: 'git-ape-deploy-$(Date:yyyyMMdd)-$(Rev:r)'
@@ -27,9 +27,9 @@ trigger:
 pr: none
 
 variables:
-  - group: git-ape-azure-secrets
+  - group: git-ape-azdo-demo-secrets
   - name: azureServiceConnection
-    value: git-ape-azure
+    value: git-ape-azdo-demo
 
 stages:
   - stage: Detect
