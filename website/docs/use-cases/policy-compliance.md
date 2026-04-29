@@ -21,6 +21,15 @@ graph TD
     UNASSIGNED --> PART2["Part 2: Subscription<br/>Policy Assignments"]
     PART1 --> REPORT["policy-assessment.md"]
     PART2 --> REPORT
+
+    classDef input fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef scan fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef policy fill:#fef3c7,stroke:#92400e,stroke-width:1px,color:#78350f
+    classDef out fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    class TEMPLATE input
+    class SCAN scan
+    class ASSIGNED,UNASSIGNED,PART1,PART2 policy
+    class REPORT out
 ```
 
 ## Invoke It

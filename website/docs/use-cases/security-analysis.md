@@ -25,6 +25,17 @@ graph TD
     FIX --> ANALYZE
     MANUAL --> ANALYZE
     OVERRIDE --> PASSED
+
+    classDef input fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef process fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef passed fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    classDef blocked fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d
+    class TEMPLATE input
+    class ANALYZE,OPTIONS,FIX,MANUAL,OVERRIDE process
+    class RESULT gate
+    class PASSED passed
+    class BLOCKED blocked
 ```
 
 ## What Gets Checked
@@ -69,7 +80,7 @@ graph TD
 
 When a deployment fails after passing the security gate, Git-Ape follows strict recovery rules:
 
-:::danger Never Weaken Security
+:::danger[Never Weaken Security]
 - Do NOT re-enable shared key access
 - Do NOT disable firewalls or open NSGs
 - Do NOT remove authentication requirements

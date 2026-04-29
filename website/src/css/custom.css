@@ -562,6 +562,134 @@ blockquote::before {
   border-color: rgba(139, 157, 240, 0.08);
 }
 
+/* --- Mermaid: ensure arrows, lines, and labels are visible in BOTH themes --- */
+
+/* Light mode: edges + arrowheads use slate so they read against light fills */
+.docusaurus-mermaid-container svg .edgePath path,
+.docusaurus-mermaid-container svg .flowchart-link,
+.docusaurus-mermaid-container svg path.flowchart-link,
+.docusaurus-mermaid-container svg .messageLine0,
+.docusaurus-mermaid-container svg .messageLine1,
+.docusaurus-mermaid-container svg .actor-line {
+  stroke: #475569 !important;
+  stroke-width: 1.5px !important;
+}
+
+.docusaurus-mermaid-container svg marker path,
+.docusaurus-mermaid-container svg defs marker * {
+  fill: #475569 !important;
+  stroke: #475569 !important;
+}
+
+/* Edge labels (text on arrows) — opaque background so they read over lines */
+.docusaurus-mermaid-container svg .edgeLabel,
+.docusaurus-mermaid-container svg .edgeLabel rect,
+.docusaurus-mermaid-container svg .edgeLabel foreignObject div {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+}
+.docusaurus-mermaid-container svg .edgeLabel span,
+.docusaurus-mermaid-container svg .edgeLabel p {
+  color: #1e293b !important;
+  background-color: transparent !important;
+}
+
+/* Subgraph (cluster) — visible border + readable title */
+.docusaurus-mermaid-container svg .cluster rect {
+  stroke: #94a3b8 !important;
+  stroke-width: 1.5px !important;
+  fill: rgba(148, 163, 184, 0.08) !important;
+}
+.docusaurus-mermaid-container svg .cluster .nodeLabel,
+.docusaurus-mermaid-container svg .cluster text,
+.docusaurus-mermaid-container svg .cluster-label text {
+  fill: #1e293b !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+/* Sequence diagram: actor boxes, notes, dividers */
+.docusaurus-mermaid-container svg .actor {
+  stroke: #1f6feb !important;
+  fill: #dbeafe !important;
+}
+.docusaurus-mermaid-container svg text.actor > tspan {
+  fill: #0b3d91 !important;
+  font-weight: 600 !important;
+}
+.docusaurus-mermaid-container svg .note {
+  stroke: #b45309 !important;
+  fill: #fef3c7 !important;
+}
+.docusaurus-mermaid-container svg .noteText,
+.docusaurus-mermaid-container svg .noteText tspan {
+  fill: #7c2d12 !important;
+}
+.docusaurus-mermaid-container svg .messageText {
+  fill: #1e293b !important;
+  font-weight: 500 !important;
+}
+.docusaurus-mermaid-container svg .loopText,
+.docusaurus-mermaid-container svg .loopText tspan,
+.docusaurus-mermaid-container svg .labelText,
+.docusaurus-mermaid-container svg .labelText tspan {
+  fill: #1e293b !important;
+}
+
+/* State diagram bits */
+.docusaurus-mermaid-container svg .transition {
+  stroke: #475569 !important;
+  fill: none !important;
+}
+
+/* Dark mode overrides — keep colored node fills (set by classDef) but
+   make connecting lines, arrowheads, edge labels and cluster borders pop. */
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgePath path,
+[data-theme='dark'] .docusaurus-mermaid-container svg .flowchart-link,
+[data-theme='dark'] .docusaurus-mermaid-container svg path.flowchart-link,
+[data-theme='dark'] .docusaurus-mermaid-container svg .messageLine0,
+[data-theme='dark'] .docusaurus-mermaid-container svg .messageLine1,
+[data-theme='dark'] .docusaurus-mermaid-container svg .actor-line {
+  stroke: #cbd5e1 !important;
+  stroke-width: 1.75px !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg marker path,
+[data-theme='dark'] .docusaurus-mermaid-container svg defs marker * {
+  fill: #cbd5e1 !important;
+  stroke: #cbd5e1 !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgeLabel,
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgeLabel rect,
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgeLabel foreignObject div {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgeLabel span,
+[data-theme='dark'] .docusaurus-mermaid-container svg .edgeLabel p {
+  color: #e2e8f0 !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .cluster rect {
+  stroke: #64748b !important;
+  fill: rgba(100, 116, 139, 0.12) !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .cluster .nodeLabel,
+[data-theme='dark'] .docusaurus-mermaid-container svg .cluster text,
+[data-theme='dark'] .docusaurus-mermaid-container svg .cluster-label text {
+  fill: #e2e8f0 !important;
+  color: #e2e8f0 !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .messageText,
+[data-theme='dark'] .docusaurus-mermaid-container svg .loopText,
+[data-theme='dark'] .docusaurus-mermaid-container svg .loopText tspan,
+[data-theme='dark'] .docusaurus-mermaid-container svg .labelText,
+[data-theme='dark'] .docusaurus-mermaid-container svg .labelText tspan {
+  fill: #e2e8f0 !important;
+}
+[data-theme='dark'] .docusaurus-mermaid-container svg .transition {
+  stroke: #cbd5e1 !important;
+}
+
 /* ==========================================================================
    BREADCRUMBS
    ========================================================================== */
@@ -696,4 +824,165 @@ div[class*='announcementBar'] a {
 
 .ga-fade-in {
   animation: fadeInUp 0.6s ease-out both;
+}
+
+/* ==========================================================================
+   MERMAID ZOOM (click-to-fullscreen)
+   ========================================================================== */
+
+.docusaurus-mermaid-container[data-zoom-enhanced='true'] {
+  position: relative;
+  cursor: zoom-in;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.docusaurus-mermaid-container[data-zoom-enhanced='true']:hover {
+  box-shadow: var(--ga-shadow-md);
+}
+
+.docusaurus-mermaid-container[data-zoom-enhanced='true']:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.mermaid-zoom-hint {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(15, 20, 25, 0.6);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.docusaurus-mermaid-container[data-zoom-enhanced='true']:hover .mermaid-zoom-hint,
+.docusaurus-mermaid-container[data-zoom-enhanced='true']:focus-visible .mermaid-zoom-hint {
+  opacity: 1;
+}
+
+#mermaid-zoom-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+#mermaid-zoom-modal[hidden] {
+  display: none;
+}
+
+.mermaid-zoom-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 20, 25, 0.85);
+  backdrop-filter: blur(4px);
+  cursor: zoom-out;
+}
+
+.mermaid-zoom-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 1600px;
+  background: #ffffff;
+  border-radius: var(--ga-radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 3rem 2rem 2rem;
+  overflow: hidden;
+  display: flex;
+}
+
+[data-theme='dark'] .mermaid-zoom-stage {
+  background: #1a2332;
+}
+
+.mermaid-zoom-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  /* Subtle hint that scrolling is possible on small viewports */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mermaid-zoom-content svg {
+  /* Default: scale to fit viewport, but don't shrink below natural width.
+     This means wide diagrams stay readable and scroll horizontally on phones,
+     instead of being shrunk to an unreadable thumbnail. */
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: min(100%, 800px);
+}
+
+/* On small viewports (phones in either orientation), prefer letting the SVG
+   keep a readable size and scroll, rather than shrink to fit the short axis. */
+@media (max-width: 768px) {
+  .mermaid-zoom-stage {
+    padding: 2.5rem 0.75rem 0.75rem;
+    border-radius: 8px;
+  }
+  .mermaid-zoom-content svg {
+    /* Allow growing past the viewport so the user can scroll & read */
+    max-height: none;
+    min-width: 600px;
+  }
+  .mermaid-zoom-close {
+    top: 0.25rem;
+    right: 0.25rem;
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+  }
+}
+
+/* Landscape phones — ultra-short viewport, recover even more space */
+@media (max-height: 480px) {
+  .mermaid-zoom-stage {
+    padding: 2rem 0.5rem 0.5rem;
+  }
+}
+
+.mermaid-zoom-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(15, 20, 25, 0.08);
+  color: var(--ifm-color-content);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  z-index: 1;
+}
+
+.mermaid-zoom-close:hover {
+  background: rgba(15, 20, 25, 0.15);
+}
+
+[data-theme='dark'] .mermaid-zoom-close {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .mermaid-zoom-close:hover {
+  background: rgba(255, 255, 255, 0.15);
 }

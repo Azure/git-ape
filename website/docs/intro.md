@@ -14,13 +14,19 @@ slug: /intro
 
 Git-Ape is a **platform engineering framework** built on GitHub Copilot. It provides a structured, multi-agent system for planning, validating, and deploying Azure infrastructure — with security gates, cost analysis, and CI/CD pipeline integration built in.
 
-## What It Does
+It is the implementation of the thesis Microsoft published in [Platform Engineering for the Agentic AI Era](https://devblogs.microsoft.com/all-things-azure/platform-engineering-for-the-agentic-ai-era/) — agents and policy replacing module catalogues as the platform team's primary deliverable. See the **[Vision & Manifesto](./vision)** for the full thinking.
+
+## What it does
 
 - **Gather deployment requirements** through guided conversations
 - **Generate ARM templates** and supporting deployment artifacts
 - **Run security, preflight, and cost checks** before deployment
 - **Deploy and validate** with post-deployment health checks
 - **Manage lifecycle** with drift detection and teardown workflows
+
+## How it works
+
+Git-Ape enforces compliance at three layers — generation, plan, and runtime — so non-compliant code never reaches your subscription. See [Vision & Manifesto → Three layers of enforcement](./vision#how-it-works--three-layers-of-enforcement).
 
 ## Deployment Flow
 
@@ -79,6 +85,7 @@ copilot plugin install Azure/git-ape
 
 ## Next Steps
 
+- [Vision & Manifesto](./vision) — why Git-Ape exists and how it relates to module-first platforms
 - [Installation & Prerequisites](./getting-started/installation)
 - [Azure MCP Setup](./getting-started/azure-setup)
 
@@ -92,7 +99,7 @@ copilot plugin install Azure/git-ape
 
 ### Popular Use Cases
 
-- [Deploy a Function App](./use-cases/deploy-function-app)
+- [Deploy anything](./use-cases/deploy-anything)
 - [Security Analysis](./use-cases/security-analysis)
 - [CI/CD Pipeline](./use-cases/cicd-pipeline)
 - [Headless / Coding Agent Mode](./use-cases/headless-mode)

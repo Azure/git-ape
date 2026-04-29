@@ -10,6 +10,12 @@ keywords: [platform engineering, guardrails, policy, naming, self-service, gover
 
 > **TL;DR** — Git-Ape is your self-service deployment platform with built-in guardrails. Developers deploy independently while you maintain security, naming, policy, and cost standards.
 
+:::info[Why this matters]
+The [Git-Ape manifesto](/docs/vision) argues that the platform team's deliverable is no longer "here's a module, good luck with the 47 variables." It is **"here's an agent that knows our entire infrastructure context and generates compliant code on demand."**
+
+Guardrails move into the agent. Modules become knowledge. Drift remediation becomes continuous.
+:::
+
 <FeatureGrid columns={3}>
   <MetricCard value="CAF" label="Naming Enforced" icon="fas fa-tag" />
   <MetricCard value="RBAC" label="Least Privilege" icon="fas fa-user-shield" />
@@ -91,6 +97,13 @@ graph TD
 
     DEV --> |"PR + auto-deploy"| STG
     STG --> |"Approved PR + manual gate"| PROD
+
+    classDef dev fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef stg fill:#fde68a,stroke:#b45309,stroke-width:1px,color:#7c2d12
+    classDef prod fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d
+    class D1,D2,D3 dev
+    class S1,S2,S3 stg
+    class P1,P2,P3 prod
 ```
 
 Each environment gets:
@@ -102,6 +115,7 @@ Each environment gets:
 ## Self-Service Workflow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','actorBkg':'#dbeafe','actorBorder':'#1f6feb','actorTextColor':'#0b3d91','signalColor':'#475569','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#7c2d12'}}}%%
 sequenceDiagram
     participant Dev as Developer
     participant GA as Git-Ape

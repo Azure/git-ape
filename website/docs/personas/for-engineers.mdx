@@ -10,6 +10,12 @@ keywords: [engineer, developer, quick start, tutorial, cheatsheet, troubleshooti
 
 > **TL;DR** — Type `@git-ape deploy a Python function app` in VS Code Copilot Chat. It handles the rest — naming, security, cost, deployment, and testing.
 
+:::info[Why this matters]
+The [Git-Ape manifesto](/docs/vision) puts it simply: **interaction shifts from syntax to intent.** You describe what you want; the agent reasons over live Azure API specs and generates compliant code.
+
+No more memorizing CAF naming conventions, ARM property paths, or RBAC role IDs.
+:::
+
 ## 5-Minute Quick Start
 
 ### Step 1: Install
@@ -53,6 +59,17 @@ graph TD
     CONFIRM --> DEPLOY["🚀 Deployed"]
     DEPLOY --> TEST["✅ Integration Tests Passed"]
     TEST --> STATE["📁 State Committed to Repo"]
+
+    classDef user fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef agent fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef fix fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef done fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    class YOU,CONFIRM user
+    class RG,TG,SA,COST agent
+    class GATE gate
+    class FIX fix
+    class DEPLOY,TEST,STATE done
 ```
 
 ## Conversation Examples
@@ -120,6 +137,6 @@ A resource with that name already exists. Try a different project name or enviro
 ## Next Steps
 
 - [Installation Guide](/docs/getting-started/installation)
-- [Deploy a Function App](/docs/use-cases/deploy-function-app)
+- [Deploy anything](/docs/use-cases/deploy-anything)
 - [All Agents](/docs/agents/overview)
 - [All Skills](/docs/skills/overview)

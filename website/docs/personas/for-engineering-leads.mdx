@@ -10,6 +10,12 @@ keywords: [engineering lead, developer productivity, architecture, team enableme
 
 > **TL;DR** — Git-Ape automates Azure infrastructure quality so your team ships faster with fewer production incidents. No Azure expertise required from every developer.
 
+:::info[Why this matters]
+The [Git-Ape manifesto](/docs/vision) describes how the interaction layer collapses from CLIs, wrappers, and pipeline glue into a single intelligent layer. Your developers describe **what** they want; the agent handles **how** to express it safely.
+
+Fewer experts needed per repo. Same security baseline whether the deployment is built by a junior dev or a principal engineer.
+:::
+
 <FeatureGrid columns={3}>
   <MetricCard value="8" label="AI Agents" icon="fas fa-robot" />
   <MetricCard value="34" label="Built-in Skills" icon="fas fa-puzzle-piece" />
@@ -64,6 +70,7 @@ The **Principal Architect** agent evaluates every deployment against the Well-Ar
 ## Integration with Your Workflow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','actorBkg':'#dbeafe','actorBorder':'#1f6feb','actorTextColor':'#0b3d91','signalColor':'#475569','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#7c2d12'}}}%%
 sequenceDiagram
     participant Dev as Developer
     participant GA as @git-ape
@@ -86,6 +93,6 @@ sequenceDiagram
 ## Next Steps
 
 - [Quick Start for Engineers](/docs/personas/for-engineers)
-- [Deploy a Function App](/docs/use-cases/deploy-function-app)
+- [Deploy anything](/docs/use-cases/deploy-anything)
 - [CI/CD Pipeline Setup](/docs/use-cases/cicd-pipeline)
 - [Agents Overview](/docs/agents/overview)

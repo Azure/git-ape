@@ -3,6 +3,7 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
   docsSidebar: [
     'intro',
+    'vision',
     {
       type: 'category',
       label: 'Getting Started',
@@ -28,12 +29,10 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Use Cases',
+      label: 'What Git-Ape does',
       collapsed: false,
       items: [
-        'use-cases/deploy-function-app',
-        'use-cases/deploy-web-app-sql',
-        'use-cases/deploy-container-app',
+        'use-cases/deploy-anything',
         'use-cases/cost-estimation',
         'use-cases/security-analysis',
         'use-cases/waf-review',

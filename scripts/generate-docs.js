@@ -204,6 +204,17 @@ graph TD
         IE["IaC Exporter"]
         OB["Git-Ape Onboarding"]
     end
+
+    classDef orchestrator fill:#1f6feb,stroke:#0b3d91,stroke-width:2px,color:#ffffff
+    classDef pipeline fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef advisory fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef utility fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    class GA orchestrator
+    class RG,TG,WR,RD pipeline
+    class SG,UC gate
+    class PA,PO advisory
+    class IE,OB utility
 \`\`\`
 `;
 
@@ -320,6 +331,13 @@ graph LR
         S3["/${skills.filter(s => s.phase === 'Operations').map(s => s.name).join('\\n/')}"]
     end
     Pre --> Post --> Ops
+
+    classDef pre fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef post fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef ops fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class S1 pre
+    class S2 post
+    class S3 ops
 \`\`\`
 `;
 
@@ -469,6 +487,17 @@ graph LR
     DestroyMerge --> DestroyWF["git-ape-destroy.yml<br/>Delete Resources"]
 
     Manual["Manual Dispatch"] --> Verify["git-ape-verify.yml<br/>Verify Setup"]
+
+    classDef plan fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef review fill:#fde68a,stroke:#b45309,stroke-width:1px,color:#7c2d12
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef verify fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class PR,Plan plan
+    class Review,Merge,Comment review
+    class Deploy,Test deploy
+    class Destroy,DestroyMerge,DestroyWF destroy
+    class Manual,Verify verify
 \`\`\`
 `;
 

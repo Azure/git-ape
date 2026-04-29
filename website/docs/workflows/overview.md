@@ -39,4 +39,15 @@ graph LR
     DestroyMerge --> DestroyWF["git-ape-destroy.yml<br/>Delete Resources"]
 
     Manual["Manual Dispatch"] --> Verify["git-ape-verify.yml<br/>Verify Setup"]
+
+    classDef plan fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef review fill:#fde68a,stroke:#b45309,stroke-width:1px,color:#7c2d12
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef verify fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class PR,Plan plan
+    class Review,Merge,Comment review
+    class Deploy,Test deploy
+    class Destroy,DestroyMerge,DestroyWF destroy
+    class Manual,Verify verify
 ```

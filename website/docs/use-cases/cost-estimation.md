@@ -18,6 +18,15 @@ graph LR
     PARSE --> API["Azure Retail<br/>Prices API"]
     API --> CALC["Calculate<br/>monthly cost"]
     CALC --> REPORT["Per-resource<br/>cost breakdown"]
+
+    classDef input fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef process fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef api fill:#fef3c7,stroke:#92400e,stroke-width:1px,color:#78350f
+    classDef out fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    class TEMPLATE input
+    class PARSE,CALC process
+    class API api
+    class REPORT out
 ```
 
 The `azure-cost-estimator` skill:
@@ -59,5 +68,5 @@ You can also invoke it directly:
 ## Related
 
 - [Skills: Azure Cost Estimator](/docs/skills/azure-cost-estimator)
-- [Deploy Function App](/docs/use-cases/deploy-function-app)
+- [Deploy anything](/docs/use-cases/deploy-anything)
 - [For Executives](/docs/personas/for-executives)

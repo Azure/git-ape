@@ -10,6 +10,12 @@ keywords: [devops, SRE, CI/CD, OIDC, drift detection, GitHub Actions, deployment
 
 > **TL;DR** — Git-Ape provides four GitHub Actions workflows for the full deployment lifecycle: plan-on-PR, deploy-on-merge, destroy-on-request. OIDC auth, no stored secrets, drift detection included.
 
+:::info[Why this matters]
+The [Git-Ape manifesto](/docs/vision) frames GitHub as the new control plane: context, instructions, agents, validation, and cloud enforcement layered together. **Drift remediation becomes continuous** — agents detect drift, propose fixes, generate plans, request approval, and apply remediations.
+
+The gap between observability and action collapses.
+:::
+
 <FeatureGrid columns={4}>
   <MetricCard value="4" label="CI/CD Workflows" icon="fas fa-code-branch" />
   <MetricCard value="OIDC" label="Authentication" icon="fas fa-key" />
@@ -36,6 +42,15 @@ graph LR
 
     Manual["Manual dispatch"] --> Verify["git-ape-verify.yml"]
     Verify --> |"OIDC + RBAC check"| VerifyResult["Setup verified"]
+
+    classDef plan fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef verify fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class PR,Plan,Comment,Review plan
+    class Merge,Deploy,State,SlashDeploy deploy
+    class DestroyPR,DestroyMerge,Destroy,Cleaned destroy
+    class Manual,Verify,VerifyResult verify
 ```
 
 ## OIDC Setup (Zero Stored Secrets)
@@ -58,7 +73,7 @@ Subject:  repo:{org}/{repo}:ref:refs/heads/main
 Audience: api://AzureADTokenExchange
 ```
 
-:::tip Automated Setup
+:::tip[Automated Setup]
 Use `@git-ape-onboarding` to configure OIDC, RBAC, GitHub environments, and secrets in one guided session.
 :::
 
@@ -111,6 +126,17 @@ graph TD
     RECONCILE --> UPDATE["Update template to match"]
     RECONCILE --> REVERT["Redeploy to revert"]
     RECONCILE --> ACCEPT["Accept and update state"]
+
+    classDef start fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef clean fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    classDef cause fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef action fill:#fef3c7,stroke:#92400e,stroke-width:1px,color:#78350f
+    class DETECT,COMPARE,CLASSIFY start
+    class DRIFT gate
+    class CLEAN clean
+    class MANUAL,POLICY,UNKNOWN cause
+    class RECONCILE,UPDATE,REVERT,ACCEPT action
 ```
 
 ## GitHub Environment Setup

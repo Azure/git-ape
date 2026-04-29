@@ -20,6 +20,17 @@ graph TD
     TEMPLATE --> REVIEW["You review<br/>& adjust"]
     REVIEW --> COMMIT["Commit to<br/>.azure/deployments/"]
     COMMIT --> MANAGED["Now managed<br/>by Git-Ape"]
+
+    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef agent fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef artifact fill:#fef3c7,stroke:#92400e,stroke-width:1px,color:#78350f
+    classDef user fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#1e1b4b
+    classDef done fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    class LIVE azure
+    class EXPORT,ANALYZE agent
+    class TEMPLATE,COMMIT artifact
+    class REVIEW user
+    class MANAGED done
 ```
 
 ## Invoke It

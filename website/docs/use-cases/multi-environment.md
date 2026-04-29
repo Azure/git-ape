@@ -33,6 +33,13 @@ graph LR
 
     DEV --> |"Promote"| STAGING
     STAGING --> |"Promote"| PROD
+
+    classDef dev fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef stg fill:#fde68a,stroke:#b45309,stroke-width:1px,color:#7c2d12
+    classDef prod fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d
+    class D_RG,D_FUNC dev
+    class S_RG,S_FUNC stg
+    class P_RG1,P_FUNC1,P_RG2,P_FUNC2 prod
 ```
 
 ## File Structure
