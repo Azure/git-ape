@@ -12,10 +12,21 @@
     "ghcr.io/devcontainers/features/azure-cli:1": {},
     "ghcr.io/devcontainers/features/powershell:2": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/copilot-cli:1": {}
+    "ghcr.io/devcontainers/features/copilot-cli:1": {},
+    "ghcr.io/devcontainers/features/node:2.0.0": {
+      "version": "25"
+    }
   },
 
   "onCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "forwardPorts": [3333],
+  "portsAttributes": {
+    "3333": {
+      "label": "Docs Site",
+      "onAutoForward": "notify"
+    }
+  },
 
   "customizations": {
     "vscode": {
@@ -30,7 +41,8 @@
       ],
       "settings": {
         "azureMcp.serverMode": "namespace",
-        "azureMcp.readOnly": false
+        "azureMcp.readOnly": false,
+        "task.allowAutomaticTasks": "on"
       }
     }
   },
