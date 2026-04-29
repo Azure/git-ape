@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-resource-availability/SKILL.md -->
-
 ---
 title: "Azure Resource Availability"
 sidebar_label: "Azure Resource Availability"
 description: "Query live Azure APIs to validate resource availability before template generation or deployment. Checks VM SKU restrictions, Kubernetes/runtime version support, API version compatibility, and subscription quota. Use during requirements gathering and preflight to catch deployment failures early."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-resource-availability/SKILL.md -->
+
 
 # Azure Resource Availability
 

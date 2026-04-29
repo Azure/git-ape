@@ -1,14 +1,15 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-verify.yml -->
-
 ---
 title: "Git-Ape: Verify Setup"
 sidebar_label: "Verify Setup"
 description: "GitHub Actions workflow: Git-Ape: Verify Setup"
 ---
 
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-verify.exampleyml -->
+
+
 # Git-Ape: Verify Setup
 
-**Workflow file:** `.github/workflows/git-ape-verify.yml`
+**Workflow file:** `.github/workflows/git-ape-verify.exampleyml`
 
 ## Triggers
 

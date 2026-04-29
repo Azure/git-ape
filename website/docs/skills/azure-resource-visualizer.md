@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-resource-visualizer/SKILL.md -->
-
 ---
 title: "Azure Resource Visualizer"
 sidebar_label: "Azure Resource Visualizer"
 description: "Analyze deployed Azure resource groups and generate detailed Mermaid architecture diagrams showing relationships between resources. Use for post-deployment visualization, understanding existing infrastructure, or documenting live Azure environments."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-resource-visualizer/SKILL.md -->
+
 
 # Azure Resource Visualizer
 

@@ -1,11 +1,12 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/ -->
-
 ---
 title: "Skills Overview"
 sidebar_label: "Overview"
 sidebar_position: 1
 description: "Overview of all Git-Ape skills organized by deployment phase"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/ -->
+
 
 # Skills Overview
 

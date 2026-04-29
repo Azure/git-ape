@@ -47,7 +47,7 @@ function HeroSection() {
 
 const metrics = [
   { value: '8', label: 'AI Agents', icon: 'fas fa-robot' },
-  { value: '34', label: 'Skills', icon: 'fas fa-wrench' },
+  { value: '13', label: 'Skills', icon: 'fas fa-wrench' },
   { value: '4', label: 'CI/CD Workflows', icon: 'fas fa-code-branch' },
   { value: '5', label: 'WAF Pillars', icon: 'fas fa-shield-alt' },
   { value: '15+', label: 'Resource Types', icon: 'fas fa-cloud' },
@@ -219,7 +219,7 @@ const capabilities = [
   { title: 'Drift Detection', desc: 'Detect and reconcile manual changes vs. desired state.', icon: 'fas fa-exchange-alt', color: '#f39c12' },
   { title: 'Two Modes', desc: 'Interactive in VS Code or headless via Copilot Coding Agent.', icon: 'fas fa-sync-alt', color: '#1abc9c' },
   { title: '8 AI Agents', desc: 'Specialized agents from requirements to deployment validation.', icon: 'fas fa-robot', color: '#667eea' },
-  { title: '15+ Skills', desc: 'Azure and utility skills invoked automatically by agents.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
+  { title: '13 Skills', desc: 'Azure and utility skills invoked automatically by agents.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
 ];
 
 function CapabilitiesSection() {

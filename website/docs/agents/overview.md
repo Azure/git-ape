@@ -1,11 +1,12 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/ -->
-
 ---
 title: "Agents Overview"
 sidebar_label: "Overview"
 sidebar_position: 1
 description: "Overview of all Git-Ape agents and their orchestration"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/ -->
+
 
 # Agents Overview
 

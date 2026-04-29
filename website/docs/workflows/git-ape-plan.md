@@ -1,14 +1,15 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-plan.yml -->
-
 ---
 title: "Git-Ape: Plan"
 sidebar_label: "Plan"
 description: "GitHub Actions workflow: Git-Ape: Plan"
 ---
 
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-plan.exampleyml -->
+
+
 # Git-Ape: Plan
 
-**Workflow file:** `.github/workflows/git-ape-plan.yml`
+**Workflow file:** `.github/workflows/git-ape-plan.exampleyml`
 
 ## Triggers
 

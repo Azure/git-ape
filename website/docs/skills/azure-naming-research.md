@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-naming-research/SKILL.md -->
-
 ---
 title: "Azure Naming Research"
 sidebar_label: "Azure Naming Research"
 description: "Research Azure naming constraints and CAF abbreviations for a given resource type. Use when you need to look up the official CAF slug, naming rules (length, scope, valid characters), and derive validation/cleaning regex patterns for an Azure resource. Triggers on: CAF abbreviation lookup, Azure naming rules research, resource naming constraints."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-naming-research/SKILL.md -->
+
 
 # Azure Naming Research
 

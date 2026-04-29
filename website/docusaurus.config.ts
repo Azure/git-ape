@@ -22,12 +22,14 @@ const config: Config = {
   projectName: 'git-ape',
   trailingSlash: false,
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
 
   markdown: {
     mermaid: true,
     format: 'md',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   },
   themes: ['@docusaurus/theme-mermaid'],
 
@@ -65,7 +67,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/git-ape-social-card.png',
+    image: 'img/docusaurus-social-card.jpg',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,

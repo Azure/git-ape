@@ -49,6 +49,20 @@ The `post-create.sh` script runs automatically after the container is built and 
 - **Checkov** — IaC security scanner supporting ARM, Bicep, and Terraform templates.
 - **PSRule for Azure** — WAF-aligned validation rules for ARM and Bicep templates.
 - **ARM-TTK** — Microsoft's ARM Template Test Toolkit for template validation.
+- **Website dependencies** — `npm install` in the `website/` directory for Docusaurus docs.
+
+### VS Code Tasks
+
+Pre-configured tasks are available via **Terminal → Run Task** (or `⇧⌘B`):
+
+| Task | What it does |
+|------|-------------|
+| **Docs: Dev Server** | Starts Docusaurus in hot-reload mode on port 3333 |
+| **Docs: Build (local)** | Generates docs and builds with `baseUrl=/` for local preview |
+| **Docs: Build (production)** | Generates docs and builds with `baseUrl=/git-ape/` for GitHub Pages |
+| **Docs: Serve** | Builds locally and serves the static output on port 3333 |
+| **Docs: Generate** | Runs `generate-docs.js` to regenerate auto-generated pages |
+| **Docs: Install** | Installs website npm dependencies |
 
 ### VS Code Extensions
 
@@ -95,3 +109,5 @@ To add features or tools to the dev container:
 | ARM-TTK not found | Run `pwsh` and verify the profile loaded: `Get-Module arm-ttk -ListAvailable`. |
 | Checkov not found | Run `pip install --user checkov` manually. |
 | Extensions missing | Reload the window (`Ctrl+Shift+P` → `Developer: Reload Window`). |
+| Docs site broken locally | Make sure you use the **Docs: Build (local)** task or set `DOCUSAURUS_BASE_URL=/` before building. The production build uses `/git-ape/` as the base path. |
+| Port 3333 already in use | Run `lsof -ti:3333 \| xargs kill -9` to free the port. |

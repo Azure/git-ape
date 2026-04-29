@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/git-ape.agent.md -->
-
 ---
 title: "Git-Ape"
 sidebar_label: "Git-Ape"
 description: "Deploy Azure resources through guided workflow: gather requirements, generate ARM templates, verify intent, execute deployment, run integration tests. Use for Azure Functions, App Services, Storage, Databases, Container Apps."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/git-ape.agent.md -->
+
 
 # Git-Ape
 

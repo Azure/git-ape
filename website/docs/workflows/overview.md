@@ -1,11 +1,12 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/ -->
-
 ---
 title: "CI/CD Workflows Overview"
 sidebar_label: "Overview"
 sidebar_position: 1
 description: "Overview of Git-Ape GitHub Actions workflows"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/ -->
+
 
 # CI/CD Workflows Overview
 
@@ -15,8 +16,12 @@ Git-Ape provides GitHub Actions workflows for automated deployment lifecycle man
 
 | Workflow | File | Triggers | Jobs |
 |----------|------|----------|------|
+| [Git-Ape: Deploy](./git-ape-deploy) | `git-ape-deploy.exampleyml` | push, issue_comment | check-comment-trigger, detect-deployments, deploy |
+| [Git-Ape: Destroy](./git-ape-destroy) | `git-ape-destroy.exampleyml` | push, workflow_dispatch | detect-destroys, destroy |
 | [Git-Ape: Docs Check](./git-ape-docs-check) | `git-ape-docs-check.yml` | pull_request | check-docs |
 | [Git-Ape: Docs Deploy](./git-ape-docs) | `git-ape-docs.yml` | push | build, deploy |
+| [Git-Ape: Plan](./git-ape-plan) | `git-ape-plan.exampleyml` | pull_request | detect-deployments, plan-local, plan-azure, plan-comment |
+| [Git-Ape: Verify Setup](./git-ape-verify) | `git-ape-verify.exampleyml` | workflow_dispatch | verify |
 
 ## Pipeline Architecture
 

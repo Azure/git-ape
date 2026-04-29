@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-iac-exporter.agent.md -->
-
 ---
 title: "Azure IaC Exporter"
 sidebar_label: "Azure IaC Exporter"
 description: "Export existing Azure resources to ARM templates by analyzing live Azure state. Reverse-engineers deployed resources into IaC templates compatible with Git-Ape. Use when importing existing resources into Git-Ape management."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-iac-exporter.agent.md -->
+
 
 # Azure IaC Exporter
 

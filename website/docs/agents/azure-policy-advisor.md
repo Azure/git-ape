@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-policy-advisor.agent.md -->
-
 ---
 title: "Azure Policy Advisor"
 sidebar_label: "Azure Policy Advisor"
 description: "Assess Azure Policy compliance for ARM template resources. Queries existing subscription assignments and unassigned custom/built-in definitions, cross-references with Microsoft Learn recommendations. Produces split report: Part 1 (template improvements) and Part 2 (subscription-level policy assignments)."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-policy-advisor.agent.md -->
+
 
 # Azure Policy Advisor
 

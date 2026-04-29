@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-role-selector/SKILL.md -->
-
 ---
 title: "Azure Role Selector"
 sidebar_label: "Azure Role Selector"
 description: "Recommend least-privilege Azure RBAC roles for deployed resources. Finds minimal built-in roles matching desired permissions or creates custom role definitions. Use during security analysis or when configuring access for service principals and managed identities."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-role-selector/SKILL.md -->
+
 
 # Azure Role Selector
 

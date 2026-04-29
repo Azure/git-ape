@@ -1,14 +1,15 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-destroy.yml -->
-
 ---
 title: "Git-Ape: Destroy"
 sidebar_label: "Destroy"
 description: "GitHub Actions workflow: Git-Ape: Destroy"
 ---
 
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-destroy.exampleyml -->
+
+
 # Git-Ape: Destroy
 
-**Workflow file:** `.github/workflows/git-ape-destroy.yml`
+**Workflow file:** `.github/workflows/git-ape-destroy.exampleyml`
 
 ## Triggers
 
