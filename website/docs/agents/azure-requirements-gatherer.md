@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-requirements-gatherer.agent.md -->
+
 ---
 title: "Azure Requirements Gatherer"
 sidebar_label: "Azure Requirements Gatherer"
 description: "Gather Azure deployment requirements through guided questions. Validate subscription access, check resource naming conflicts, query existing resources. Use when starting any Azure deployment workflow."
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-requirements-gatherer.agent.md -->
-
 
 # Azure Requirements Gatherer
 
@@ -44,7 +43,7 @@ Interview users to gather ALL necessary information for Azure resource deploymen
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape).
+see [git-ape.agent.md](git-ape.agent.md).
 
 ## Execution Context Adaptation
 

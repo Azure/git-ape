@@ -519,6 +519,8 @@ In multi-environment mode, you might want:
 
 ### Step 5: Copy Git-Ape Workflows
 
+#### 5a. GitHub Actions (provider: `github` or `both`)
+
 Copy the workflow files to your repository:
 
 ```bash
@@ -545,6 +547,82 @@ The following workflows will be added:
 | `git-ape-verify.yml` | Manual dispatch | Verify OIDC, RBAC, and pipeline health |
 
 > **Note:** Drift detection and TTL-based cleanup are being replaced by agentic workflows — coming soon.
+
+#### 5b. Azure DevOps Pipelines (provider: `ado` or `both`)
+
+The four ADO pipeline files ship as **`*.examplepipeline.yml`** templates with two placeholder tokens. Substitute the tokens, rename to `*.yml`, then register each pipeline. The same shared `templates/` and `scripts/` directories are used by both providers and ship ready-to-use.
+
+**Inputs** — set these to match the resources you created in earlier steps:
+
+| Variable | Example | Created in |
+|----------|---------|------------|
+| `ADO_ORG_URL` | `https://dev.azure.com/contoso` | Step 1 (Azure DevOps org) |
+| `ADO_PROJECT` | `myapp-infra` | Step 1 |
+| `ADO_REPO_NAME` | `myapp-infra` | Step 1 |
+| `ADO_REPO_TYPE` | `tfsgit` (Azure Repos) or `github` (GitHub-backed) | Step 1 |
+| `ADO_CONNECTION_NAME` | `git-ape-azure` | Workload identity federation service connection (created in OIDC steps) |
+| `ADO_VARIABLE_GROUP` | `git-ape-azure-secrets` | Variable group with `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
+
+**Activate (substitute placeholders + rename):**
+
+```bash
+# Copy the ADO pipelines into your repo
+cp -r /tmp/git-ape/.azure-pipelines your-repo/.azure-pipelines
+
+cd your-repo/.azure-pipelines
+for f in *.examplepipeline.yml; do
+  target="${f%.examplepipeline.yml}.yml"
+  sed -e "s|{{SERVICE_CONNECTION_NAME}}|$ADO_CONNECTION_NAME|g" \
+      -e "s|{{VARIABLE_GROUP_NAME}}|$ADO_VARIABLE_GROUP|g" \
+      "$f" > "$target"
+  echo "Activated: $f -> $target"
+done
+cd -
+
+# Verify no placeholders remain (should print nothing)
+grep -rE '\{\{(SERVICE_CONNECTION_NAME|VARIABLE_GROUP_NAME)\}\}' \
+  your-repo/.azure-pipelines/*.yml && echo "ERROR: placeholders not fully substituted"
+
+# Commit the activated pipelines
+cd your-repo
+git add .azure-pipelines/
+git commit -m "feat: add Git-Ape Azure DevOps pipelines"
+git push
+```
+
+**Register each pipeline with ADO:**
+
+```bash
+for name in git-ape-plan git-ape-deploy git-ape-destroy git-ape-verify; do
+  az pipelines create \
+    --name "$name" \
+    --yaml-path ".azure-pipelines/${name}.yml" \
+    --org "$ADO_ORG_URL" --project "$ADO_PROJECT" \
+    --repository "$ADO_REPO_NAME" \
+    --repository-type "$ADO_REPO_TYPE" \
+    --branch main \
+    --skip-first-run true
+done
+```
+
+For GitHub-backed repos (Both mode), also pass `--service-connection <github-service-connection>`.
+
+The following pipelines will be registered:
+
+| Pipeline | Trigger | Purpose |
+|----------|---------|---------|
+| `git-ape-plan.yml` | Branch Policy Build Validation on PR | Validate, IaC scans, what-if, post PR thread comment |
+| `git-ape-deploy.yml` | Merge to main + `azure-deploy` environment approval | `az stack sub create` (parallel), integration tests, commit `state.json` |
+| `git-ape-destroy.yml` | Merge to main when `metadata.json.status = destroy-requested` | `az stack sub delete --action-on-unmanage deleteAll` + soft-delete sweep |
+| `git-ape-verify.yml` | Manual dispatch | OIDC + RBAC + cross-host tooling check |
+
+After registration:
+
+1. **Branch Policy → Build Validation** — required for the plan pipeline to trigger on PRs (Azure Repos silently ignores YAML `pr:` triggers). The `git-ape-onboarding-azdo` sub-skill creates this; if you're doing it by hand, use `az repos policy build create`.
+2. **Build identity Git permissions** — the deploy/destroy pipelines push `state.json` back to `main`. Grant the build identity ACL `allow=16516` (= `GenericContribute (4) + PolicyExempt (128) + PullRequestContribute (16384)`) on the repo. Without this, deploy succeeds but the state commit fails with `TF402455` and the plan PR comment never appears (silent 403 from the threads API).
+3. **Environment approvals** — create the `azure-deploy` and `azure-destroy` ADO environments and add a pre-deployment approval check on each. ADO's environment approval replaces the GitHub-specific `/deploy` PR-comment trigger.
+
+> **Tip:** All of the above (substitution, registration, branch policy, ACL grant, environment creation) is automated by `/git-ape-onboarding` with `cicd: ado` or `cicd: both`. The manual steps above are for inspection / repair.
 
 ### Step 6: Verify Setup
 
@@ -583,7 +661,9 @@ git push -u origin test/git-ape-onboarding
 gh pr create --title "Test: Git-Ape onboarding" --body "Verify the OIDC pipeline works end-to-end."
 ```
 
-If the PR triggers the `Git-Ape: Plan` workflow and it succeeds, your setup is complete.
+**GitHub Actions:** if the PR triggers the `Git-Ape: Plan` workflow and it succeeds, your GitHub setup is complete.
+
+**Azure DevOps Pipelines:** if the PR triggers the `git-ape-plan` pipeline (via Branch Policy → Build Validation) and it posts a plan thread comment on the PR, your ADO setup is complete. You can also run the `git-ape-verify` pipeline manually (`az pipelines run --name git-ape-verify`) to confirm OIDC, RBAC, and cross-host tooling without opening a PR.
 
 ---
 
@@ -714,110 +794,154 @@ If a state.json predates Deployment Stacks (`deployMethod` field absent or set t
 
 ### Single Environment Mode
 
+```mermaid
+flowchart TB
+    subgraph GH["GitHub Repository"]
+        direction TB
+        subgraph Secrets["Repo-level Secrets"]
+            S1["AZURE_CLIENT_ID<br/>AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID<br/>SLACK_WEBHOOK_URL ⁽¹⁾"]
+        end
+        subgraph Envs["Environments"]
+            E1["azure-deploy<br/>(main only)"]
+            E2["azure-destroy<br/>(any branch)"]
+        end
+        subgraph WF["Workflows"]
+            W1["git-ape-plan.yml<br/><i>OIDC token — PR subject</i>"]
+            W2["git-ape-deploy.yml<br/><i>OIDC token — main / azure-deploy env</i>"]
+            W3["git-ape-destroy.yml<br/><i>OIDC token — azure-destroy env</i>"]
+            W4["git-ape-verify.yml<br/><i>OIDC token — workflow_dispatch</i>"]
+        end
+        Secrets --> WF
+        Envs --> WF
+    end
+
+    subgraph Entra["Entra ID (Azure AD)"]
+        AR["<b>App Registration</b><br/>sp-git-ape-{repo}<br/>Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx"]
+        FC["<b>Federated Credentials</b><br/>• repo:org/repo:ref:refs/heads/main<br/>• repo:org/repo:pull_request<br/>• repo:org/repo:environment:azure-deploy<br/>• repo:org/repo:environment:azure-destroy"]
+        AR --- FC
+    end
+
+    subgraph Azure["Azure Subscription"]
+        direction TB
+        RBAC["RBAC: Contributor<br/>(+ User Access Administrator<br/>if RBAC in templates)"]
+        subgraph RGs["Resource Groups"]
+            direction LR
+            RG1["rg-app-dev"]
+            RG2["rg-api-prod"]
+            RG3["rg-data-stg"]
+            RGN["…"]
+        end
+        RBAC --> RGs
+    end
+
+    WF -->|OIDC token exchange| Entra
+    Entra -->|Service Principal| Azure
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        GitHub Repository                             │
-│                                                                      │
-│  Secrets (repo-level):           Environments:                       │
-│  ┌─────────────────────┐         ┌──────────────┐  ┌───────────────┐ │
-│  │ AZURE_CLIENT_ID     │         │ azure-deploy │  │ azure-destroy │ │
-│  │ AZURE_TENANT_ID     │         │ (main only)  │  │ (any branch)  │ │
-│  │ AZURE_SUBSCRIPTION_ID│        └──────┬───────┘  └──────┬────────┘ │
-│  │ SLACK_WEBHOOK_URL ⁽¹⁾│              │                  │          │
-│  └──────────┬──────────┘               │                  │          │
-│             │                          │                  │          │
-│  Workflows: │                          │                  │          │
-│  ┌──────────┴──────────────────────────┴──────────────────┴────────┐ │
-│  │  git-ape-plan.yml     → OIDC token (PR subject)               │ │
-│  │  git-ape-deploy.yml   → OIDC token (main / azure-deploy env)  │ │
-│  │  git-ape-destroy.yml  → OIDC token (azure-destroy env)        │ │
-│  │  git-ape-verify.yml   → OIDC token (workflow_dispatch)        │ │
-│  └──────────┬──────────────────────────────────────────────────────┘ │
-└─────────────┼────────────────────────────────────────────────────────┘
-              │ OIDC token exchange
-              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                         Entra ID (Azure AD)                          │
-│                                                                      │
-│  App Registration: sp-git-ape-{repo}                               │
-│  ┌────────────────────────────────────────────┐                      │
-│  │ Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx  │                      │
-│  │                                            │                      │
-│  │ Federated Credentials:                     │                      │
-│  │   • repo:org/repo:ref:refs/heads/main      │                      │
-│  │   • repo:org/repo:pull_request             │                      │
-│  │   • repo:org/repo:environment:azure-deploy │                      │
-│  │   • repo:org/repo:environment:azure-destroy│                      │
-│  └────────────────────┬───────────────────────┘                      │
-└───────────────────────┼──────────────────────────────────────────────┘
-                        │ Service Principal
-                        ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                       Azure Subscription                              │
-│                                                                       │
-│  RBAC: Contributor (+ User Access Administrator if RBAC in templates) │
-│                                                                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
-│  │ rg-app-dev  │  │ rg-api-prod │  │ rg-data-stg │  ...             │
-│  └─────────────┘  └─────────────┘  └─────────────┘                  │
-└──────────────────────────────────────────────────────────────────────┘
 
 ⁽¹⁾ Optional
-```
 
 ### Multi-Environment Mode
 
+```mermaid
+flowchart TB
+    subgraph GH["GitHub Repository"]
+        direction TB
+        subgraph RepoSecrets["Repo-level Secrets"]
+            R1["AZURE_CLIENT_ID<br/>AZURE_TENANT_ID"]
+        end
+        subgraph EnvSecrets["Environment Secrets"]
+            ED["<b>azure-deploy-dev</b><br/>AZURE_CLIENT_ID, AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID → Dev Sub"]
+            ES["<b>azure-deploy-staging</b><br/>AZURE_CLIENT_ID, AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID → Staging Sub"]
+            EP["<b>azure-deploy-prod</b><br/>AZURE_CLIENT_ID, AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID → Prod Sub<br/>⚠️ Required reviewers"]
+            EX["<b>azure-destroy</b><br/>AZURE_CLIENT_ID, AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID → Default Sub"]
+        end
+    end
+
+    subgraph Entra["Entra ID (Azure AD)"]
+        AR2["<b>App Registration</b><br/>sp-git-ape-{repo}"]
+        FC2["<b>Federated Credentials</b><br/>• repo:org/repo:ref:refs/heads/main<br/>• repo:org/repo:pull_request<br/>• repo:org/repo:environment:azure-deploy-dev<br/>• repo:org/repo:environment:azure-deploy-staging<br/>• repo:org/repo:environment:azure-deploy-prod<br/>• repo:org/repo:environment:azure-destroy"]
+        AR2 --- FC2
+    end
+
+    subgraph Subs["Azure Subscriptions"]
+        direction LR
+        DEV["<b>Dev Sub</b><br/>RBAC: Contributor<br/>rg-*-dev"]
+        STG["<b>Staging Sub</b><br/>RBAC: Contributor<br/>rg-*-stg"]
+        PRD["<b>Prod Sub</b><br/>RBAC: Contributor + UAA<br/>rg-*-prod"]
+    end
+
+    GH -->|OIDC token exchange| Entra
+    Entra -->|Service Principal<br/>(shared)| DEV
+    Entra -->|Service Principal<br/>(shared)| STG
+    Entra -->|Service Principal<br/>(shared)| PRD
 ```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                              GitHub Repository                                    │
-│                                                                                   │
-│  Repo-level Secrets:              Environment Secrets:                            │
-│  ┌───────────────────┐            ┌─ azure-deploy-dev ──────────────────────────┐ │
-│  │ AZURE_CLIENT_ID   │            │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│  │ AZURE_TENANT_ID   │            │  AZURE_SUBSCRIPTION_ID → Dev Sub            │ │
-│  └───────────────────┘            └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-deploy-staging ──────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Staging Sub        │ │
-│                                   └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-deploy-prod ─────────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Prod Sub           │ │
-│                                   │  ⚠️ Required reviewers                      │ │
-│                                   └─────────────────────────────────────────────┘ │
-│                                   ┌─ azure-destroy ─────────────────────────────┐ │
-│                                   │  AZURE_CLIENT_ID, AZURE_TENANT_ID           │ │
-│                                   │  AZURE_SUBSCRIPTION_ID → Default Sub        │ │
-│                                   └─────────────────────────────────────────────┘ │
-└──────────────────────────┬───────────────────────────────────────────────────────┘
-                           │ OIDC token exchange
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                            Entra ID (Azure AD)                                    │
-│                                                                                   │
-│  App Registration: sp-git-ape-{repo}                                            │
-│  ┌────────────────────────────────────────────────────────┐                       │
-│  │ Federated Credentials:                                 │                       │
-│  │   • repo:org/repo:ref:refs/heads/main                  │                       │
-│  │   • repo:org/repo:pull_request                         │                       │
-│  │   • repo:org/repo:environment:azure-deploy-dev         │                       │
-│  │   • repo:org/repo:environment:azure-deploy-staging     │                       │
-│  │   • repo:org/repo:environment:azure-deploy-prod        │                       │
-│  │   • repo:org/repo:environment:azure-destroy            │                       │
-│  └────────────────────┬───────────────────────────────────┘                       │
-└───────────────────────┼──────────────────────────────────────────────────────────┘
-                        │ Service Principal (shared)
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│  Dev Sub     │ │ Staging Sub  │ │  Prod Sub    │
-│  Contributor │ │ Contributor  │ │ Contributor + │
-│              │ │              │ │ UAA           │
-│ ┌──────────┐ │ │ ┌──────────┐ │ │ ┌──────────┐ │
-│ │ rg-*-dev │ │ │ │ rg-*-stg │ │ │ │ rg-*-prod│ │
-│ └──────────┘ │ │ └──────────┘ │ │ └──────────┘ │
-└──────────────┘ └──────────────┘ └──────────────┘
+
+### Azure DevOps Pipelines Mode
+
+Same Entra ID app registration, different fronting CI provider. The federated credential subject is `sc://<org>/<project>/<service-connection>` instead of GitHub's `repo:<org>/<repo>:...`.
+
+```mermaid
+flowchart TB
+    subgraph ADO["Azure DevOps Organization"]
+        direction TB
+        subgraph Project["ADO Project"]
+            direction TB
+            subgraph Repo["Azure Repos (or GitHub-backed)"]
+                R1[".azure-pipelines/git-ape-*.yml<br/>(activated from *.examplepipeline.yml)"]
+                R2[".azure/deployments/**"]
+            end
+            subgraph Pipelines["Pipelines"]
+                P1["git-ape-plan<br/><i>Branch Policy → Build Validation</i>"]
+                P2["git-ape-deploy<br/><i>azure-deploy environment</i>"]
+                P3["git-ape-destroy<br/><i>azure-destroy environment</i>"]
+                P4["git-ape-verify<br/><i>manual dispatch</i>"]
+            end
+            subgraph SharedCfg["Shared configuration"]
+                SC["<b>Service Connection</b><br/>git-ape-azure<br/>Workload Identity Federation"]
+                VG["<b>Variable Group</b><br/>git-ape-azure-secrets<br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID"]
+            end
+            subgraph Envs["ADO Environments"]
+                E1["azure-deploy<br/>⚠️ Pre-deployment approval"]
+                E2["azure-destroy<br/>⚠️ Required reviewer"]
+            end
+            subgraph BuildId["Build Identity"]
+                BI["<i>Project</i> Build Service<br/>ACL allow=16516<br/>(GenericContribute + PolicyExempt + PullRequestContribute)"]
+            end
+        end
+        Repo --> Pipelines
+        SharedCfg --> Pipelines
+        Envs --> Pipelines
+        BuildId -->|push state.json<br/>+ PR thread comment| Repo
+    end
+
+    subgraph Entra["Entra ID (Azure AD)"]
+        AR3["<b>App Registration</b><br/>sp-git-ape-{repo}<br/>(reused across providers)"]
+        FC3["<b>Federated Credentials</b><br/>• sc://&lt;org&gt;/&lt;project&gt;/git-ape-azure<br/>(plus any GitHub subjects if Both mode)"]
+        AR3 --- FC3
+    end
+
+    subgraph Azure["Azure Subscription"]
+        direction TB
+        RBAC2["RBAC: Contributor<br/>(+ User Access Administrator<br/>if RBAC in templates)"]
+        subgraph Stacks["Deployment Stacks"]
+            direction LR
+            ST1["deploy-…-myapp<br/>rg-app-prod"]
+            ST2["deploy-…-data<br/>rg-data-prod"]
+            STN["…"]
+        end
+        RBAC2 --> Stacks
+    end
+
+    Pipelines -->|OIDC token exchange<br/>via Service Connection| Entra
+    Entra -->|Workload Identity| Azure
 ```
+
+**ADO-specific footnotes:**
+
+- The PR-trigger comes from a **Branch Policy → Build Validation** check; ADO's YAML `pr:` block is silently ignored on Azure Repos, so the policy is what actually queues the plan pipeline on a PR.
+- Approval gates live on **ADO Environments** (`azure-deploy`, `azure-destroy`), replacing GitHub's `/deploy` PR-comment trigger.
+- The build identity needs three Git permissions in one ACL grant (`allow=16516`) to push `state.json` back and post the plan PR thread comment.
+- In **Both** mode, the same App Registration carries federated credentials for *both* providers — the `sc://...` subject for ADO and the `repo:...` subjects for GitHub Actions.
 
 ---
 

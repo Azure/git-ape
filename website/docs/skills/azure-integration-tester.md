@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-integration-tester/SKILL.md -->
+
 ---
 title: "Azure Integration Tester"
 sidebar_label: "Azure Integration Tester"
 description: "Run post-deployment integration tests for Azure resources. Verify Function Apps, Storage Accounts, Databases, App Services are healthy and accessible. Use after successful Azure deployment."
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-integration-tester/SKILL.md -->
-
 
 # Azure Integration Tester
 
@@ -49,7 +48,7 @@ Parse deployment outputs to identify resource types:
 
 **For Function Apps:**
 
-Execute [test-function-app.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-function-app.sh):
+Execute [test-function-app.sh](./scripts/test-function-app.sh):
 ```bash
 ./scripts/test-function-app.sh \
   --url "https://func-api-dev-eastus.azurewebsites.net" \
@@ -67,7 +66,7 @@ Tests performed:
 
 **For Storage Accounts:**
 
-Execute [test-storage.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-storage.sh):
+Execute [test-storage.sh](./scripts/test-storage.sh):
 ```bash
 ./scripts/test-storage.sh \
   --account-name "stwebappdev8k3m" \
@@ -84,7 +83,7 @@ Tests performed:
 
 **For Databases:**
 
-Execute [test-database.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-database.sh):
+Execute [test-database.sh](./scripts/test-database.sh):
 ```bash
 ./scripts/test-database.sh \
   --type "sqldb" \
@@ -183,13 +182,13 @@ Your Azure resources are deployed and verified. You can now:
 
 All test scripts are located in the `./scripts/` directory:
 
-- [test-function-app.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-function-app.sh) - Function App health checks
-- [test-storage.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-storage.sh) - Storage Account connectivity
-- [test-database.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/scripts/test-database.sh) - Database connection tests
+- [test-function-app.sh](./scripts/test-function-app.sh) - Function App health checks
+- [test-storage.sh](./scripts/test-storage.sh) - Storage Account connectivity
+- [test-database.sh](./scripts/test-database.sh) - Database connection tests
 
 ## Common Test Patterns
 
-See [test-patterns.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/references/test-patterns.md) for detailed test patterns including:
+See [test-patterns.md](./references/test-patterns.md) for detailed test patterns including:
 - Retry logic for transient failures
 - Health endpoint formats
 - Connection string handling

@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: plugin.json -->
+
 ---
 title: "plugin.json Reference"
 sidebar_label: "plugin.json"
 description: "Git-Ape Copilot CLI plugin manifest"
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: plugin.json -->
-
 
 # plugin.json
 

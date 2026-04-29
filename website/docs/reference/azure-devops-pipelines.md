@@ -13,11 +13,12 @@ Per-pipeline anatomy for `.azure-pipelines/git-ape-*.yml`. For GitHub Actions se
 
 ```
 .azure-pipelines/
-├── git-ape-plan.yml            ~580 lines  PR: validate, what-if, IaC scans, post PR comment
-├── git-ape-deploy.yml          ~270 lines  Merge: az stack sub create, integration tests
-├── git-ape-destroy.yml         ~330 lines  Merge (when destroy-requested): stack delete + sweep
-├── git-ape-verify.yml          ~325 lines  Manual: OIDC + RBAC + tooling check
-├── templates/
+├── git-ape-plan.examplepipeline.yml      ~580 lines  PR: validate, what-if, IaC scans, post PR comment
+├── git-ape-deploy.examplepipeline.yml    ~270 lines  Merge: az stack sub create, integration tests
+├── git-ape-destroy.examplepipeline.yml   ~330 lines  Merge (when destroy-requested): stack delete + sweep
+├── git-ape-verify.examplepipeline.yml    ~325 lines  Manual: OIDC + RBAC + tooling check
+├── git-ape-deploy.template.yml           ~195 lines  Minimal deploy-only template (used by tests / smoke)
+├── templates/                            (created during onboarding)
 │   ├── bootstrap-prereqs.yml      Cross-host install: jq always, python+pwsh on demand
 │   └── commit-and-push-state.yml  git push state.json/metadata.json with [skip ci]
 └── scripts/                       (shared with GitHub Actions)
@@ -25,6 +26,19 @@ Per-pipeline anatomy for `.azure-pipelines/git-ape-*.yml`. For GitHub Actions se
     ├── render-summary.sh          Per-deployment summary JSON for the aggregator's table
     └── render-destroy-plan.sh     Stack-aware destroy plan
 ```
+
+### Example → activated naming
+
+The four ADO pipelines ship as **`*.examplepipeline.yml`** with two placeholder tokens:
+
+| Placeholder | Replaced with | Default |
+|---|---|---|
+| `{{SERVICE_CONNECTION_NAME}}` | the workload-identity-federation service connection name | `git-ape-azure` |
+| `{{VARIABLE_GROUP_NAME}}` | the variable group containing `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` | `git-ape-azure-secrets` |
+
+The `git-ape-onboarding-azdo` sub-skill substitutes both tokens, renames each file to `*.yml`, and registers the pipeline via `az pipelines create`. After onboarding, the activated `git-ape-{plan,deploy,destroy,verify}.yml` files are what runs in CI — every reference further down this page describes that activated form.
+
+The remainder of this page describes the **activated** form (after token substitution). To inspect the raw template, look at the matching `*.examplepipeline.yml` in this repo.
 
 ## Plan pipeline
 

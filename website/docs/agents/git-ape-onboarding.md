@@ -20,14 +20,10 @@ description: "Onboard a new repository, subscription(s), and user access for Git
 
 ## Tools
 
-- `vscode`
 - `execute`
 - `read`
-- `agent`
-- `edit`
 - `search`
-- `web`
-- `browser`
+- `vscode`
 - `todo`
 
 ## Full Prompt
@@ -71,7 +67,7 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
    - Assign RBAC roles
    - **Auto-create service connections via REST API** (eliminates manual portal steps)
    - Create variable groups and environments
-7. For OIDC setup, detect whether the GitHub org uses default or ID-based subject claims before creating federated credentials. For ADO: create the service connection FIRST, then read back the actual OIDC issuer/subject from the connection endpoint (`workloadIdentityFederationIssuer` and `workloadIdentityFederationSubject` fields) — do NOT use the conventional `sc://<org>/<project>/<connection>` format as it does not match what ADO actually presents to Entra ID.
+7. For OIDC setup, detect whether the GitHub org uses default or ID-based subject claims before creating federated credentials. ADO service connections always use the deterministic subject `sc://<org>/<project>/<connection>`; no claim-template detection is required for the ADO branch.
 8. Ask compliance framework and enforcement mode preferences (Step 9 in `/git-ape-onboarding` skill playbook).
 9. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices.
 10. Display experimental warning and ask for three explicit acknowledgments:
@@ -175,43 +171,6 @@ If a GitHub Actions workflow fails with `AADSTS700213: No matching federated ide
 ```bash
 gh api repos/<ORG>/<REPO> --jq '{repo_id: .id, owner_id: .owner.id}'
 ```
-
-## ADO OIDC Failure Diagnosis
-
-If an Azure DevOps pipeline fails with `AADSTS700211: No matching federated identity record found for presented assertion issuer`, the federated credential on the Entra ID app does not match what the ADO service connection actually presents.
-
-**Root Cause:** The documented `sc://<org>/<project>/<connection>` subject and `https://vstoken.dev.azure.com/<org-guid>` issuer are NOT what ADO actually uses. The real values are:
-- Issuer: `https://login.microsoftonline.com/<tenant-id>/v2.0`
-- Subject: `/eid1/c/pub/t/<base64-tenant>/a/<base64-app>/sc/<org-guid>/<connection-id>`
-
-**Diagnosis steps:**
-1. Read the actual OIDC details from the service connection:
-   ```bash
-   ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
-   curl -sS -H "Authorization: Bearer $ADO_TOKEN" \
-     "https://dev.azure.com/<ORG>/<PROJECT>/_apis/serviceendpoint/endpoints/<SC_ID>?api-version=7.1" \
-     | jq '{issuer: .authorization.parameters.workloadIdentityFederationIssuer, subject: .authorization.parameters.workloadIdentityFederationSubject}'
-   ```
-2. Compare against the registered federated credential:
-   ```bash
-   az ad app federated-credential list --id <APP_OBJECT_ID> -o json | jq '.[] | {name, issuer, subject}'
-   ```
-3. If they don't match, delete the old credential and create a new one using the values from step 1.
-
-**Fix (use a JSON file to avoid shell quoting issues):**
-```bash
-cat > /tmp/fed-cred.json <<EOF
-{
-  "name": "<connection-name>",
-  "issuer": "<issuer-from-step-1>",
-  "subject": "<subject-from-step-1>",
-  "audiences": ["api://AzureADTokenExchange"]
-}
-EOF
-az ad app federated-credential create --id <APP_OBJECT_ID> --parameters @/tmp/fed-cred.json
-```
-
-**PowerShell note:** When creating federated credentials, `ConvertTo-Json` strips quotes when passed inline to `az ad app federated-credential create --parameters`. Always write to a temp file first and use `@path` syntax.
 
 ## Subscription State Check
 

@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-docs.yml -->
+
 ---
 title: "Git-Ape: Docs Deploy"
 sidebar_label: "Docs Deploy"
 description: "GitHub Actions workflow: Git-Ape: Docs Deploy"
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-docs.yml -->
-
 
 # Git-Ape: Docs Deploy
 

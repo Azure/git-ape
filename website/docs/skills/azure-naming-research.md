@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-naming-research/SKILL.md -->
+
 ---
 title: "Azure Naming Research"
 sidebar_label: "Azure Naming Research"
 description: "Research Azure naming constraints and CAF abbreviations for a given resource type. Use when you need to look up the official CAF slug, naming rules (length, scope, valid characters), and derive validation/cleaning regex patterns for an Azure resource. Triggers on: CAF abbreviation lookup, Azure naming rules research, resource naming constraints."
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-naming-research/SKILL.md -->
-
 
 # Azure Naming Research
 
@@ -54,7 +53,7 @@ Find the section matching the resource provider namespace from step 1. Extract: 
 
 ### 3. Derive field values
 
-See [references/regex-patterns.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-naming-research/references/regex-patterns.md) for the regex conversion tables.
+See [references/regex-patterns.md](references/regex-patterns.md) for the regex conversion tables.
 
 - **scope** mapping: "globally unique"→`"global"`, "resource group"→`"resourceGroup"`, "within parent"→`"parent"`, "subscription"→`"subscription"`
 - **dashes**: `true` if hyphens allowed

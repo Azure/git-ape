@@ -1,11 +1,10 @@
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-template-generator.agent.md -->
+
 ---
 title: "Azure Template Generator"
 sidebar_label: "Azure Template Generator"
 description: "Generate ARM templates from requirements. Apply Azure best practices, validate schema, show what-if analysis. Echo deployment intent for user confirmation. Use after requirements gathering is complete."
 ---
-
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-template-generator.agent.md -->
-
 
 # Azure Template Generator
 
@@ -45,7 +44,7 @@ Transform deployment requirements into validated, secure ARM templates. Show use
 ## Output Styling
 
 Follow the shared presentation style defined in Git-Ape:
-see [git-ape.agent.md](git-ape).
+see [git-ape.agent.md](git-ape.agent.md).
 
 ## Approach
 
