@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-rest-api-reference/SKILL.md -->
-
 ---
 title: "Azure Rest Api Reference"
 sidebar_label: "Azure Rest Api Reference"
 description: "Look up Azure REST API and ARM template reference documentation for any resource type. Returns exact property schemas, required fields, valid values, and latest stable API versions. Use BEFORE generating or modifying ARM templates to ensure correctness. No Azure connection required."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-rest-api-reference/SKILL.md -->
+
 
 # Azure Rest Api Reference
 

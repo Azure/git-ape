@@ -37,6 +37,13 @@ graph TD
 
     COMMENT --> APPROVE
     STATE --> DESTROY_PR
+
+    classDef plan fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef deploy fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    class COMMIT,PLAN,VALIDATE,WHATIF,COMMENT plan
+    class APPROVE,DEPLOY_WF,DEPLOY,TEST,STATE deploy
+    class DESTROY_PR,DESTROY_MERGE,DESTROY_WF,DELETE,UPDATE destroy
 ```
 
 ## Workflow Details

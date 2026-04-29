@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/SKILL.md -->
-
 ---
 title: "Git Ape Onboarding"
 sidebar_label: "Git Ape Onboarding"
 description: "Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/SKILL.md -->
+
 
 # Git Ape Onboarding
 

@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/plugin/marketplace.json -->
-
 ---
 title: "Marketplace Configuration"
 sidebar_label: "Marketplace"
 description: "Git-Ape marketplace plugin configuration"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/plugin/marketplace.json -->
+
 
 # Marketplace Configuration
 

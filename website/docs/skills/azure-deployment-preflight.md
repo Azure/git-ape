@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-deployment-preflight/SKILL.md -->
-
 ---
 title: "Azure Deployment Preflight"
 sidebar_label: "Azure Deployment Preflight"
 description: "Run preflight validation on ARM templates before deployment. Performs what-if analysis, permission checks, and generates a structured report with resource changes (create/modify/delete). Use before any deployment to preview changes and catch issues early."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-deployment-preflight/SKILL.md -->
+
 
 # Azure Deployment Preflight
 

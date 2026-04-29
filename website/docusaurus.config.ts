@@ -22,14 +22,18 @@ const config: Config = {
   projectName: 'git-ape',
   trailingSlash: false,
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
 
   markdown: {
     mermaid: true,
-    format: 'md',
+    format: 'detect',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   },
   themes: ['@docusaurus/theme-mermaid'],
+
+  clientModules: [require.resolve('./src/clientModules/mermaidZoom.ts')],
 
   stylesheets: [
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
@@ -65,7 +69,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/git-ape-social-card.png',
+    image: 'img/docusaurus-social-card.jpg',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
@@ -96,8 +100,8 @@ const config: Config = {
           position: 'left',
         },
         {
-          to: '/docs/use-cases/deploy-function-app',
-          label: 'Use Cases',
+          to: '/docs/use-cases/deploy-anything',
+          label: 'What it does',
           position: 'left',
         },
         {
@@ -128,6 +132,8 @@ const config: Config = {
           title: 'Resources',
           items: [
             { label: 'GitHub Repository', href: 'https://github.com/Azure/git-ape' },
+            { label: 'microsoft/hve-core', href: 'https://github.com/microsoft/hve-core' },
+            { label: 'microsoft/azure-skills', href: 'https://github.com/microsoft/azure-skills' },
             { label: 'Azure Cloud Adoption Framework', href: 'https://learn.microsoft.com/azure/cloud-adoption-framework/' },
             { label: 'License (MIT)', href: 'https://github.com/Azure/git-ape/blob/main/LICENSE' },
           ],

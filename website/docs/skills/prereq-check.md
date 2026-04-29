@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/prereq-check/SKILL.md -->
-
 ---
 title: "Prereq Check"
 sidebar_label: "Prereq Check"
 description: "Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/prereq-check/SKILL.md -->
+
 
 # Prereq Check
 

@@ -10,6 +10,12 @@ keywords: [executive, CTO, CIO, compliance, governance, cost, risk]
 
 > **TL;DR** — Git-Ape gives you automated compliance, cost visibility, and security enforcement for every Azure deployment — without slowing down your engineering teams.
 
+:::info[Why this matters]
+In the [Git-Ape manifesto](/docs/vision), compliance shifts from a gate teams pass through to something **inherent in the process**. Every deployment produces a verifiable trail — intent → plan → API calls → validation → evidence — reviewed and approved like any other change.
+
+This is what "continuous compliance" looks like in practice.
+:::
+
 <FeatureGrid columns={3}>
   <MetricCard value="100%" label="Security Enforced" icon="fas fa-shield-alt" />
   <MetricCard value="5" label="WAF Pillars Assessed" icon="fas fa-balance-scale" />
@@ -53,6 +59,17 @@ graph TD
     GATE -- "PASSED ✅" --> COST["Cost estimate shown"]
     COST --> DEPLOY["Deployed with integration tests"]
     DEPLOY --> STATE["State committed to repo"]
+
+    classDef user fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef process fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef fix fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
+    classDef done fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d
+    class DEV user
+    class REQ,TEMPLATE,COST process
+    class GATE gate
+    class FIX fix
+    class DEPLOY,STATE done
 ```
 
 ## Key Reports You Get

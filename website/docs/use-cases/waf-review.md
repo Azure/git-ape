@@ -20,6 +20,19 @@ graph LR
     WAF --> PERF["⚡ Performance"]
     WAF --> COST["💰 Cost"]
     WAF --> OPS["📋 Operations"]
+
+    classDef center fill:#1f6feb,stroke:#0b3d91,stroke-width:2px,color:#ffffff
+    classDef sec fill:#fecaca,stroke:#b91c1c,color:#7f1d1d
+    classDef rel fill:#dbeafe,stroke:#1f6feb,color:#0b3d91
+    classDef perf fill:#fde68a,stroke:#b45309,color:#7c2d12
+    classDef cost fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef ops fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    class WAF center
+    class SEC sec
+    class REL rel
+    class PERF perf
+    class COST cost
+    class OPS ops
 ```
 
 | Pillar | What It Assesses |

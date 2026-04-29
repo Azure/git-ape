@@ -13,6 +13,7 @@ keywords: [drift detection, configuration drift, reconciliation, state managemen
 ## How Drift Detection Works
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','actorBkg':'#dbeafe','actorBorder':'#1f6feb','actorTextColor':'#0b3d91','signalColor':'#475569','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#7c2d12'}}}%%
 sequenceDiagram
     participant User
     participant GitApe as Git-Ape

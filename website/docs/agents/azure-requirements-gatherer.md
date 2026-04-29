@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-requirements-gatherer.agent.md -->
-
 ---
 title: "Azure Requirements Gatherer"
 sidebar_label: "Azure Requirements Gatherer"
 description: "Gather Azure deployment requirements through guided questions. Validate subscription access, check resource naming conflicts, query existing resources. Use when starting any Azure deployment workflow."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-requirements-gatherer.agent.md -->
+
 
 # Azure Requirements Gatherer
 

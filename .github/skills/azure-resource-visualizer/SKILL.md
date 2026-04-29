@@ -95,6 +95,19 @@ graph TB
     FUNC -.->|"instrumentation key"| APPI
     APP -->|"secrets"| KV
     FUNC -->|"secrets"| KV
+
+    classDef internet fill:#e0e7ff,stroke:#4338ca,color:#1e1b4b
+    classDef compute fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef storage fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef monitor fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef secret fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    class Internet internet
+    class APP,FUNC compute
+    class SQL data
+    class STORAGE storage
+    class APPI monitor
+    class KV secret
 ```
 
 **Diagram Rules:**

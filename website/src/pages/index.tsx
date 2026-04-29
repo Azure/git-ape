@@ -20,20 +20,22 @@ function HeroSection() {
           <i className="fab fa-github" /> Deploy with GitHub Copilot
         </div>
         <Heading as="h1" className={styles.heroTitle}>
-          Deploy Cloud with{' '}
-          <span className={styles.heroGold}>Git-Ape</span>
+          Platform engineering for the{' '}
+          <span className={styles.heroGold}>agentic AI era</span>
         </Heading>
         <p className={styles.heroSubtitle}>
-          The intelligent multi-agent system for GitHub Copilot that handles
-          cloud deployments end-to-end — from requirements to production,
-          with security gates at every step.
+          <strong>Agents over modules. Intent over syntax. Evidence over audits.</strong>
+          <br /><br />
+          Git-Ape is the implementation of platform engineering for the
+          agentic AI era — natural-language intent in, compliant cloud
+          deployments out, policy enforced end-to-end.
         </p>
         <div className={styles.buttons}>
           <Link className={styles.btnPrimary} to="/docs/intro">
             <i className="fas fa-rocket" /> Get Started
           </Link>
-          <Link className={styles.btnSecondary} to="/docs/agents/overview">
-            <i className="fas fa-robot" /> Explore Agents
+          <Link className={styles.btnSecondary} to="/docs/vision">
+            <i className="fas fa-lightbulb" /> Read the Manifesto
           </Link>
         </div>
       </div>
@@ -42,16 +44,50 @@ function HeroSection() {
 }
 
 /* ==========================================================================
+   SECTION 1B: VIDEO INTRO
+   ========================================================================== */
+
+function VideoSection() {
+  return (
+    <section style={{ padding: '3rem 0', background: 'var(--ifm-background-color)' }}>
+      <div className="container">
+        <div style={{ maxWidth: '880px', margin: '0 auto', textAlign: 'center' }}>
+          <Heading as="h2" className={clsx(styles.sectionTitle, 'ga-gradient-text')}>
+            Watch the manifesto in 10 minutes
+          </Heading>
+          <p className={styles.sectionSubtitle}>
+            From <a href="https://devblogs.microsoft.com/all-things-azure/platform-engineering-for-the-agentic-ai-era/"
+                   target="_blank" rel="noopener noreferrer">Platform Engineering for the Agentic AI Era</a>
+          </p>
+          <div style={{
+            position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden',
+            borderRadius: '15px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', marginTop: '2rem',
+          }}>
+            <iframe
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
+              src="https://www.youtube.com/embed/Td6rv_RGArQ"
+              title="Platform Engineering for the Agentic AI Era"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ==========================================================================
    SECTION 2: IMPACT METRICS
    ========================================================================== */
 
 const metrics = [
-  { value: '8', label: 'AI Agents', icon: 'fas fa-robot' },
-  { value: '34', label: 'Skills', icon: 'fas fa-wrench' },
-  { value: '4', label: 'CI/CD Workflows', icon: 'fas fa-code-branch' },
-  { value: '5', label: 'WAF Pillars', icon: 'fas fa-shield-alt' },
-  { value: '15+', label: 'Resource Types', icon: 'fas fa-cloud' },
-  { value: '100%', label: 'Security Gate', icon: 'fas fa-lock' },
+  { value: 'Days→Min', label: 'Prompt to reviewed PR', icon: 'fas fa-clock' },
+  { value: '50→1', label: 'Modules → Agent', icon: 'fas fa-cubes' },
+  { value: '3', label: 'Compliance Layers', icon: 'fas fa-shield-alt' },
+  { value: '0', label: 'Stored Secrets (OIDC)', icon: 'fas fa-key' },
+  { value: 'Any', label: 'Cloud resource', icon: 'fas fa-cloud' },
+  { value: '100%', label: 'Audit Coverage', icon: 'fas fa-file-signature' },
 ];
 
 function MetricsSection() {
@@ -219,7 +255,7 @@ const capabilities = [
   { title: 'Drift Detection', desc: 'Detect and reconcile manual changes vs. desired state.', icon: 'fas fa-exchange-alt', color: '#f39c12' },
   { title: 'Two Modes', desc: 'Interactive in VS Code or headless via Copilot Coding Agent.', icon: 'fas fa-sync-alt', color: '#1abc9c' },
   { title: '8 AI Agents', desc: 'Specialized agents from requirements to deployment validation.', icon: 'fas fa-robot', color: '#667eea' },
-  { title: '15+ Skills', desc: 'Azure and utility skills invoked automatically by agents.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
+  { title: '13 Skills', desc: 'Azure and utility skills invoked automatically by agents.', icon: 'fas fa-puzzle-piece', color: '#764ba2' },
 ];
 
 function CapabilitiesSection() {
@@ -256,12 +292,14 @@ function CapabilitiesSection() {
    ========================================================================== */
 
 const useCases = [
-  { title: 'Serverless API', desc: 'Deploy Function Apps with Storage, App Insights, and managed identities.', icon: 'fas fa-bolt', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', link: '/docs/use-cases/deploy-function-app' },
-  { title: 'Web App + SQL', desc: 'Full-stack web application with SQL Database and Key Vault secrets.', icon: 'fas fa-globe', gradient: 'linear-gradient(135deg, #2ecc71, #27ae60)', link: '/docs/use-cases/deploy-web-app-sql' },
-  { title: 'Container Apps', desc: 'Container Apps with Registry, Log Analytics, and auto-scaling.', icon: 'fas fa-docker', gradient: 'linear-gradient(135deg, #3498db, #2980b9)', link: '/docs/use-cases/deploy-container-app' },
-  { title: 'Import Existing', desc: 'Reverse-engineer deployed cloud resources into IaC templates.', icon: 'fas fa-file-import', gradient: 'linear-gradient(135deg, #f39c12, #e67e22)', link: '/docs/use-cases/import-existing-infra' },
-  { title: 'Cost Analysis', desc: 'Estimate costs per resource before deploying using retail pricing.', icon: 'fas fa-chart-pie', gradient: 'linear-gradient(135deg, #e74c3c, #c0392b)', link: '/docs/use-cases/cost-estimation' },
-  { title: 'CI/CD Pipeline', desc: 'Full lifecycle with plan-on-PR, deploy-on-merge, and destroy flows.', icon: 'fas fa-code-branch', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad)', link: '/docs/use-cases/cicd-pipeline' },
+  { title: 'Generate', desc: 'Natural-language intent → IaC template. Any cloud resource type — if there\'s an API, git-ape can call it.', icon: 'fas fa-magic', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', link: '/docs/use-cases/deploy-anything' },
+  { title: 'Validate & Plan', desc: 'Security gate, what-if analysis, and cost estimate run before any merge — non-compliant code never reaches your subscription.', icon: 'fas fa-shield-alt', gradient: 'linear-gradient(135deg, #2ecc71, #27ae60)', link: '/docs/use-cases/security-analysis' },
+  { title: 'Deploy', desc: 'OIDC-based GitHub Actions deploy on PR merge or /deploy comment. No stored secrets, full audit trail.', icon: 'fas fa-rocket', gradient: 'linear-gradient(135deg, #3498db, #2980b9)', link: '/docs/use-cases/cicd-pipeline' },
+  { title: 'Test', desc: 'Post-deployment integration checks verify endpoints, identity, and connectivity — not just “deployment succeeded”.', icon: 'fas fa-vial', gradient: 'linear-gradient(135deg, #1abc9c, #16a085)', link: '/docs/skills/azure-integration-tester' },
+  { title: 'Detect drift', desc: 'Continuously reconcile live Azure state against your declared intent. Propose-and-approve fixes for any difference.', icon: 'fas fa-exchange-alt', gradient: 'linear-gradient(135deg, #f39c12, #e67e22)', link: '/docs/use-cases/drift-detection' },
+  { title: 'Import existing', desc: 'Reverse-engineer any resource group into IaC. Bring legacy or click-deployed infrastructure under Git-Ape governance.', icon: 'fas fa-file-import', gradient: 'linear-gradient(135deg, #e74c3c, #c0392b)', link: '/docs/use-cases/import-existing-infra' },
+  { title: 'Estimate cost', desc: 'Per-resource monthly cost from live Azure retail pricing — inside the PR, before any spend commitment.', icon: 'fas fa-chart-pie', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad)', link: '/docs/use-cases/cost-estimation' },
+  { title: 'Multi-environment', desc: 'One agent, dev / staging / prod with separate subscriptions, RBAC, and required-reviewer gates.', icon: 'fas fa-layer-group', gradient: 'linear-gradient(135deg, #ff6b6b, #ee5a52)', link: '/docs/use-cases/multi-environment' },
 ];
 
 function UseCasesSection() {
@@ -269,10 +307,10 @@ function UseCasesSection() {
     <section className={styles.useCasesSection}>
       <div className="container">
         <Heading as="h2" className={clsx(styles.sectionTitle, 'ga-gradient-text')}>
-          Use Cases
+          What Git-Ape does
         </Heading>
         <p className={styles.sectionSubtitle}>
-          Real-world deployment patterns powered by Git-Ape
+          The agent is workload-agnostic — these are the things it does to <em>any</em> Azure deployment
         </p>
         <div className={styles.useCasesGrid}>
           {useCases.map((uc, i) => (
@@ -296,12 +334,13 @@ function UseCasesSection() {
    ========================================================================== */
 
 const comparisons = [
-  { before: 'Manually write ARM templates from scratch', after: 'AI-generated templates from natural language' },
-  { before: 'Hope you remembered security best practices', after: 'Blocking security gate — 100% enforced' },
-  { before: 'Guess at naming conventions each time', after: 'Platform-compliant naming via naming research skills' },
-  { before: 'Discover cost surprises after deployment', after: 'Real-time cost estimation before deploying' },
-  { before: 'Manual drift detection (if at all)', after: 'Automated drift detection with reconciliation' },
-  { before: 'Siloed knowledge across team members', after: 'Living documentation auto-generated from source' },
+  { before: 'Maintain a catalogue of 50+ Bicep / Terraform modules', after: "Ship one agent. Update its context, not 50 modules" },
+  { before: 'Modules pinned to last year\u2019s API surface', after: 'Agent reads live Azure REST API specs at generation time' },
+  { before: 'Compliance is a gate teams pass through at PR time', after: 'Compliance is inherent — enforced at generation, plan, and runtime' },
+  { before: 'Humans translate intent into ARM / Bicep / HCL', after: 'Agent translates intent; humans approve and accept risk' },
+  { before: 'Stale README files describe what modules do', after: 'Living documentation generated at conversation time' },
+  { before: 'Drift detected manually, remediated weeks later', after: 'Drift detected, fix proposed, approved, applied — continuously' },
+  { before: 'Audit = point-in-time review of IaC files', after: 'Audit = immutable execution trace from intent → plan → evidence' },
 ];
 
 function ComparisonSection() {
@@ -309,10 +348,10 @@ function ComparisonSection() {
     <section className={styles.comparisonSection}>
       <div className="container">
         <Heading as="h2" className={clsx(styles.sectionTitle, 'ga-gradient-text')}>
-          Before &amp; After Git-Ape
+          Module-first vs. Agents + Policy
         </Heading>
         <p className={styles.sectionSubtitle}>
-          See how Git-Ape transforms cloud deployment workflows
+          The shift the manifesto describes — and what it means for your platform team
         </p>
         <div className={styles.comparisonWrapper}>
           <div style={{
@@ -323,10 +362,10 @@ function ComparisonSection() {
             {/* Headers */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
               <div style={{ background: 'linear-gradient(135deg, #e74c3c, #c0392b)', padding: '1rem 1.5rem', color: '#fff', fontWeight: 700, textAlign: 'center' }}>
-                <i className="fas fa-times-circle" style={{ marginRight: '0.5rem' }} /> Without Git-Ape
+                <i className="fas fa-times-circle" style={{ marginRight: '0.5rem' }} /> Module-first platform
               </div>
               <div style={{ background: 'linear-gradient(135deg, #2ecc71, #27ae60)', padding: '1rem 1.5rem', color: '#fff', fontWeight: 700, textAlign: 'center' }}>
-                <i className="fas fa-check-circle" style={{ marginRight: '0.5rem' }} /> With Git-Ape
+                <i className="fas fa-check-circle" style={{ marginRight: '0.5rem' }} /> Agents + policy (Git-Ape)
               </div>
             </div>
             {/* Rows */}
@@ -350,6 +389,17 @@ function ComparisonSection() {
             ))}
           </div>
         </div>
+        <p style={{
+          textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem',
+          color: 'var(--ifm-color-emphasis-600)',
+        }}>
+          Read the full thesis: <Link to="/docs/vision">Git-Ape Vision &amp; Manifesto</Link>{' '}
+          · Original article:{' '}
+          <a href="https://devblogs.microsoft.com/all-things-azure/platform-engineering-for-the-agentic-ai-era/"
+             target="_blank" rel="noopener noreferrer">
+            Platform Engineering for the Agentic AI Era
+          </a>
+        </p>
       </div>
     </section>
   );
@@ -405,12 +455,12 @@ export default function Home(): ReactNode {
       title="Intelligent Cloud Deployment Agents"
       description="Git-Ape — The intelligent multi-agent system for GitHub Copilot that handles cloud deployments end-to-end — with security gates at every step.">
       <HeroSection />
-      <MetricsSection />
-      <PersonasSection />
-      <TimelineSection />
-      <CapabilitiesSection />
       <UseCasesSection />
+      <TimelineSection />
+      <PersonasSection />
+      <CapabilitiesSection />
       <ComparisonSection />
+      <VideoSection />
       <CtaSection />
     </Layout>
   );

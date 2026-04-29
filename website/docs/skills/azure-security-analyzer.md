@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-security-analyzer/SKILL.md -->
-
 ---
 title: "Azure Security Analyzer"
 sidebar_label: "Azure Security Analyzer"
 description: "Analyze Azure resource configurations against security best practices using Azure MCP bestpractices service. Produces per-resource security assessment with severity ratings and recommendations. Use during template generation before deployment confirmation."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-security-analyzer/SKILL.md -->
+
 
 # Azure Security Analyzer
 

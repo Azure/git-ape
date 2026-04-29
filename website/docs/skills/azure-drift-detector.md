@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-drift-detector/SKILL.md -->
-
 ---
 title: "Azure Drift Detector"
 sidebar_label: "Azure Drift Detector"
 description: "Detect configuration drift between deployed Azure resources and stored deployment state. Compare actual Azure configuration against desired state in .azure/deployments/, identify differences, and guide user through reconciliation options. Use when checking for manual changes, policy remediations, or unauthorized modifications."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-drift-detector/SKILL.md -->
+
 
 # Azure Drift Detector
 

@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-template-generator.agent.md -->
-
 ---
 title: "Azure Template Generator"
 sidebar_label: "Azure Template Generator"
 description: "Generate ARM templates from requirements. Apply Azure best practices, validate schema, show what-if analysis. Echo deployment intent for user confirmation. Use after requirements gathering is complete."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-template-generator.agent.md -->
+
 
 # Azure Template Generator
 
@@ -447,6 +448,15 @@ graph LR
         Storage
         AppInsights
     end
+
+    classDef internet fill:#e0e7ff,stroke:#4338ca,color:#1e1b4b
+    classDef compute fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    classDef storage fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef monitor fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    class Internet internet
+    class FuncApp compute
+    class Storage storage
+    class AppInsights monitor
 ```
 
 **Web App + Database Stack:**
@@ -465,6 +475,17 @@ graph LR
         Storage
         AppInsights
     end
+
+    classDef internet fill:#e0e7ff,stroke:#4338ca,color:#1e1b4b
+    classDef compute fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef storage fill:#fef3c7,stroke:#92400e,color:#78350f
+    classDef monitor fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    class Internet internet
+    class WebApp compute
+    class SQL,SQLServer data
+    class Storage storage
+    class AppInsights monitor
 ```
 
 **Microservices Stack:**
@@ -485,6 +506,17 @@ graph TD
         Cosmos
         AppInsights
     end
+
+    classDef internet fill:#e0e7ff,stroke:#4338ca,color:#1e1b4b
+    classDef gateway fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef container fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef monitor fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    class Internet internet
+    class APIM gateway
+    class CA1,CA2 container
+    class Cosmos data
+    class AppInsights monitor
 ```
 
 **For multi-resource deployments**, always generate the diagram showing:

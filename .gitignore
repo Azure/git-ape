@@ -8,3 +8,6 @@
 website/node_modules/
 website/build/
 website/.docusaurus/
+
+# Playwright MCP test artifacts
+.playwright-mcp/

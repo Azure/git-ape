@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-resource-deployer.agent.md -->
-
 ---
 title: "Azure Resource Deployer"
 sidebar_label: "Azure Resource Deployer"
 description: "Execute ARM template deployments to Azure. Monitor deployment progress, handle failures with rollback options, verify resource creation. Use only after user has confirmed deployment intent."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-resource-deployer.agent.md -->
+
 
 # Azure Resource Deployer
 

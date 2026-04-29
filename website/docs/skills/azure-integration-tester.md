@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-integration-tester/SKILL.md -->
-
 ---
 title: "Azure Integration Tester"
 sidebar_label: "Azure Integration Tester"
 description: "Run post-deployment integration tests for Azure resources. Verify Function Apps, Storage Accounts, Databases, App Services are healthy and accessible. Use after successful Azure deployment."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-integration-tester/SKILL.md -->
+
 
 # Azure Integration Tester
 

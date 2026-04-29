@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-principal-architect.agent.md -->
-
 ---
 title: "Azure Principal Architect"
 sidebar_label: "Azure Principal Architect"
 description: "Provide expert Azure architecture guidance using the Well-Architected Framework (WAF) 5 pillars. Evaluate deployments against Security, Reliability, Performance, Cost, and Operational Excellence. Use for architecture reviews, trade-off analysis, and design validation."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/azure-principal-architect.agent.md -->
+
 
 # Azure Principal Architect
 

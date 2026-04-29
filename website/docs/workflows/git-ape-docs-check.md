@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-docs-check.yml -->
-
 ---
 title: "Git-Ape: Docs Check"
 sidebar_label: "Docs Check"
 description: "GitHub Actions workflow: Git-Ape: Docs Check"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-docs-check.yml -->
+
 
 # Git-Ape: Docs Check
 

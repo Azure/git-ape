@@ -1,11 +1,12 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/ -->
-
 ---
 title: "Skills Overview"
 sidebar_label: "Overview"
 sidebar_position: 1
 description: "Overview of all Git-Ape skills organized by deployment phase"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/ -->
+
 
 # Skills Overview
 
@@ -53,4 +54,11 @@ graph LR
         S3["/azure-drift-detector\n/azure-rest-api-reference\n/git-ape-onboarding"]
     end
     Pre --> Post --> Ops
+
+    classDef pre fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef post fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef ops fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class S1 pre
+    class S2 post
+    class S3 ops
 ```

@@ -364,6 +364,15 @@ graph LR
         Storage
         AppInsights
     end
+
+    classDef internet fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#1e1b4b
+    classDef compute fill:#dbeafe,stroke:#1f6feb,stroke-width:2px,color:#0b3d91
+    classDef storage fill:#fef3c7,stroke:#92400e,stroke-width:1px,color:#78350f
+    classDef monitor fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    class Internet internet
+    class FuncApp compute
+    class Storage storage
+    class AppInsights monitor
 ```
 
 ## Resource Inventory

@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/git-ape-onboarding.agent.md -->
-
 ---
 title: "Git-Ape Onboarding"
 sidebar_label: "Git-Ape Onboarding"
 description: "Onboard a new repository, subscription(s), and user access for Git-Ape using the git-ape-onboarding skill playbook. Configures OIDC, RBAC, GitHub environments, and secrets."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/git-ape-onboarding.agent.md -->
+
 
 # Git-Ape Onboarding
 

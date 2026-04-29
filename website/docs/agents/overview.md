@@ -1,11 +1,12 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/ -->
-
 ---
 title: "Agents Overview"
 sidebar_label: "Overview"
 sidebar_position: 1
 description: "Overview of all Git-Ape agents and their orchestration"
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/ -->
+
 
 # Agents Overview
 
@@ -53,4 +54,15 @@ graph TD
         IE["IaC Exporter"]
         OB["Git-Ape Onboarding"]
     end
+
+    classDef orchestrator fill:#1f6feb,stroke:#0b3d91,stroke-width:2px,color:#ffffff
+    classDef pipeline fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef advisory fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
+    classDef utility fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    class GA orchestrator
+    class RG,TG,WR,RD pipeline
+    class SG,UC gate
+    class PA,PO advisory
+    class IE,OB utility
 ```

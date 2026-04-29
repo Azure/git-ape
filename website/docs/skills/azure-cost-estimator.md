@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-cost-estimator/SKILL.md -->
-
 ---
 title: "Azure Cost Estimator"
 sidebar_label: "Azure Cost Estimator"
 description: "Estimate monthly costs for Azure resources by querying the Azure Retail Prices API. Parses ARM templates to identify resources, SKUs, and regions, then looks up real retail pricing. Produces a per-resource cost breakdown with monthly totals. Use during template generation or when user asks about costs."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-cost-estimator/SKILL.md -->
+
 
 # Azure Cost Estimator
 

@@ -1,14 +1,15 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-deploy.yml -->
-
 ---
 title: "Git-Ape: Deploy"
 sidebar_label: "Deploy"
 description: "GitHub Actions workflow: Git-Ape: Deploy"
 ---
 
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-deploy.exampleyml -->
+
+
 # Git-Ape: Deploy
 
-**Workflow file:** `.github/workflows/git-ape-deploy.yml`
+**Workflow file:** `.github/workflows/git-ape-deploy.exampleyml`
 
 ## Triggers
 

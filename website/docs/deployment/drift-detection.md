@@ -402,18 +402,25 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
 jobs:
   detect-drift:
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       
       - name: Install Azure CLI
         run: |
@@ -433,7 +440,7 @@ jobs:
           echo "warning=$WARNING" >> $GITHUB_OUTPUT
       
       - name: Upload Drift Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: drift-report-${{ github.run_id }}
           path: drift-report.json
@@ -459,7 +466,7 @@ jobs:
       
       - name: Create Issue on Critical Drift
         if: steps.drift-check.outputs.critical > 0
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');

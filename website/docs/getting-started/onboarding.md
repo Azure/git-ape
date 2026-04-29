@@ -2,63 +2,87 @@
 title: "Repository Onboarding"
 sidebar_label: "Onboarding"
 sidebar_position: 3
-description: "OIDC, RBAC, GitHub environments, and secrets setup"
+description: "Set up OIDC, RBAC, and GitHub environments for CI/CD pipelines"
 ---
 
-# Git-Ape Onboarding Guide
+# Repository onboarding
+
+This page helps you connect a GitHub repository to Azure so that Git-Ape's CI/CD workflows can deploy resources automatically. By the end you will have OIDC federation, RBAC roles, and GitHub environments configured.
 
 :::warning
-EXPERIMENTAL ONLY: This onboarding flow is provided for testing and evaluation.
-Do **not** use Git-Ape in production environments.
-Validate all generated configuration manually before any real deployment.
+EXPERIMENTAL ONLY — This onboarding flow is for testing and evaluation. Do **not** use Git-Ape in production environments. Validate all generated configuration manually before any real deployment.
 :::
-Set up a GitHub repository to use Git-Ape's CI/CD pipelines for Azure deployments. This guide covers Entra ID (Azure AD) configuration, OIDC federation, RBAC, and GitHub repository setup.
 
-Git-Ape supports two onboarding modes:
+## Choose your onboarding path
 
-| Mode | Use case | GitHub Environments | Secrets scope |
-|------|----------|-------------------|---------------|
-| **Single environment** | One Azure subscription for all deployments | `azure-deploy`, `azure-destroy` | Repository-level |
-| **Multi-environment** | Separate subscriptions per stage (dev/staging/prod) | `azure-deploy-dev`, `azure-deploy-staging`, `azure-deploy-prod`, `azure-destroy` | Environment-level |
+Git-Ape can automate the entire setup for you, or you can run each step manually.
 
-## How OIDC Authentication Works
+| Path | When to choose it |
+|------|-------------------|
+| **[Automated](#automated-onboarding)** | You want the fastest path. Copilot Chat runs every command for you. |
+| **[Manual](#manual-setup)** | You want to understand each component, or your organization requires manual approval of identity and RBAC changes. |
 
-Git-Ape uses OpenID Connect (OIDC) federation between GitHub Actions and Microsoft Entra ID. No client secrets are stored — GitHub mints a short-lived token at workflow runtime, and Entra exchanges it for an Azure access token based on a trust relationship you configure once.
+Both paths produce the same result: an Entra ID App Registration with OIDC federated credentials, RBAC role assignments, and GitHub environments with the required secrets.
+
+## Choose single or multi-environment mode {#choose-mode}
+
+Before onboarding, decide how many Azure subscriptions you need.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
+flowchart TD
+    A{"How many Azure<br/>subscriptions?"} -->|"One subscription<br/>for everything"| B["<b>Single environment</b><br/>Simpler setup<br/>Good for personal projects,<br/>demos, and small teams"]
+    A -->|"Separate subscriptions<br/>per stage"| C["<b>Multi-environment</b><br/>dev / staging / prod<br/>Blast-radius isolation<br/>Required reviewers on prod"]
+
+    classDef gate fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
+    classDef simple fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
+    classDef advanced fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
+    class A gate
+    class B simple
+    class C advanced
+```
+
+| | Single environment | Multi-environment |
+|---|---|---|
+| **GitHub environments** | `azure-deploy`, `azure-destroy` | `azure-deploy-dev`, `azure-deploy-staging`, `azure-deploy-prod`, `azure-destroy` |
+| **Secrets scope** | Repository-level | Environment-level per stage |
+| **Subscriptions** | One | One per stage |
+| **Federated credentials** | 4 | 4 + one per extra stage |
+| **Best for** | Personal projects, demos, PoCs | Teams, staging gates, production isolation |
+
+:::tip[Not sure?]
+Start with **single environment**. You can switch to multi-environment later by adding more federated credentials and GitHub environments.
+:::
+
+## How OIDC authentication works
+
+Git-Ape uses OpenID Connect (OIDC) so that **no client secrets are stored** in your repository. GitHub mints a short-lived token at workflow runtime, Entra ID verifies it against a trust relationship you configure once, and returns an Azure access token.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9','actorBkg':'#dbeafe','actorBorder':'#1f6feb','actorTextColor':'#0b3d91','actorLineColor':'#475569','signalColor':'#475569','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#7c2d12'}}}%%
 sequenceDiagram
     autonumber
-    participant GH as GitHub Actions<br/>(workflow run)
-    participant Entra as Microsoft Entra ID<br/>(App Registration)
+    participant GH as GitHub Actions
+    participant Entra as Microsoft Entra ID
     participant ARM as Azure Resource Manager
 
-    GH->>GH: Mint OIDC token<br/>subject: repo:org/repo:ref:refs/heads/main
-    GH->>Entra: Exchange token<br/>(client_id + federated credential)
-    Entra->>Entra: Verify subject matches<br/>federated credential
-    Entra-->>GH: Azure access token<br/>(short-lived, ~1h)
-    GH->>ARM: az deployment sub create<br/>Authorization: Bearer [token]
-    ARM->>ARM: Check RBAC role assignment<br/>on subscription
+    GH->>GH: Mint OIDC token
+    GH->>Entra: Exchange token (client_id + federated credential)
+    Entra->>Entra: Verify subject matches
+    Entra-->>GH: Azure access token (~1h)
+    GH->>ARM: az deployment sub create
     ARM-->>GH: Deployment result
 ```
 
-**Trust components you configure during onboarding:**
+The trust chain you create during onboarding:
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
 graph LR
-    GH["<b>GitHub Repo</b><br/>org/repo"]
-    FC["<b>Federated Credential</b><br/>subject: repo:org/repo:..."]
-    APP["<b>Entra App Registration</b><br/>client_id + tenant_id"]
-    SP["<b>Service Principal</b><br/>object_id"]
-    SUB["<b>Azure Subscription</b><br/>subscription_id"]
-    ROLE["<b>RBAC Role</b><br/>Contributor / UAA"]
-
-    GH -->|trusts| FC
-    FC -->|attached to| APP
-    APP -->|backed by| SP
-    SP -->|assigned| ROLE
-    ROLE -->|scoped to| SUB
+    GH["GitHub Repo"] -->|trusts| FC["Federated Credential"]
+    FC -->|attached to| APP["Entra App Registration"]
+    APP -->|backed by| SP["Service Principal"]
+    SP -->|assigned| ROLE["RBAC Role"]
+    ROLE -->|scoped to| SUB["Azure Subscription"]
 
     classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
     classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
@@ -69,148 +93,121 @@ graph LR
     class SUB,ROLE azure
 ```
 
-The **Quick Start** below automates all of this. The **Manual Setup** section walks through each component individually.
+---
 
-## Quick Start (Automated)
+## Automated onboarding
 
-You can run onboarding from Copilot Chat with:
+Run one of these commands in Copilot Chat:
 
 ```text
 @Git-Ape Onboarding onboard this repository
 ```
 
-or directly invoke the skill:
+or:
 
 ```text
 /git-ape-onboarding
 ```
 
-Both paths execute the same onboarding playbook through Copilot Chat.
+The skill collects five inputs (or uses sensible defaults):
 
-The skill-driven onboarding flow will gather or use:
-1. **GitHub repository URL** — e.g. `https://github.com/your-org/your-repo`
-2. **Entra ID App Registration name** — e.g. `sp-git-ape-your-repo`
-3. **Single or multi-environment mode** — choose whether to deploy to one or multiple Azure subscriptions
+1. **GitHub repository URL** — for example, `https://github.com/your-org/your-repo`
+2. **Entra ID App Registration name** — for example, `sp-git-ape-your-repo`
+3. **Mode** — single or multi-environment
 4. **Azure subscription(s)** — defaults to your current `az` subscription
 5. **RBAC role(s)** — Contributor (default) or Contributor + User Access Administrator
 
-### Parameterized Usage
-
-**Single environment:**
+### Example: single environment
 
 ```text
-/git-ape-onboarding onboard https://github.com/your-org/your-repo on subscription 00000000-0000-0000-0000-000000000000 with Contributor
+/git-ape-onboarding onboard https://github.com/your-org/your-repo on subscription 00000000-... with Contributor
 ```
 
-**Multi-environment:**
+### Example: multi-environment
 
 ```text
-/git-ape-onboarding onboard https://github.com/your-org/your-repo with dev on 11111111-1111-1111-1111-111111111111 as Contributor, staging on 22222222-2222-2222-2222-222222222222 as Contributor, prod on 33333333-3333-3333-3333-333333333333 as Contributor+UserAccessAdministrator
+/git-ape-onboarding onboard https://github.com/your-org/your-repo with dev on 11111111-... as Contributor, staging on 22222222-... as Contributor, prod on 33333333-... as Contributor+UserAccessAdministrator
 ```
 
-Each multi-environment entry creates:
-- A GitHub environment `azure-deploy-{name}` with environment-level secrets
-- A federated credential scoped to that environment
-- An RBAC role assignment on the specified subscription
+After the skill finishes, skip to [Verify your setup](#verify-setup).
 
 ---
 
-## Manual Setup
+## Manual setup
 
-If you prefer to inspect or execute each component manually, follow the steps below.
+Follow these steps if you want to run each command yourself or need to understand what the automated flow does.
 
 ### Prerequisites
 
-> **Tip:** Run `/prereq-check` in Copilot Chat to automatically validate all tools and auth sessions.
-
-| Tool | Minimum Version | Purpose |
+| Tool | Minimum version | Purpose |
 |------|-----------------|---------|
-| Azure CLI (`az`) | 2.50+ | Azure resource management, RBAC, OIDC |
-| GitHub CLI (`gh`) | 2.0+ | Repo secrets, environments, OIDC detection |
-| jq | 1.6+ | JSON parsing in scripts and workflows |
-| git | any | Version control (usually pre-installed) |
+| Azure CLI (`az`) | 2.50+ | Entra ID, RBAC, OIDC |
+| GitHub CLI (`gh`) | 2.0+ | Secrets, environments |
+| jq | 1.6+ | JSON parsing |
 
-**Install (pick your platform):**
+:::tip
+Run `/prereq-check` in Copilot Chat to validate tools and auth sessions automatically.
+:::
 
-<details><summary>macOS (Homebrew)</summary>
+<details>
+<summary><strong>Install commands by platform</strong></summary>
 
+**macOS:**
 ```bash
 brew install azure-cli gh jq
 ```
-</details>
 
-<details><summary>Ubuntu / Debian</summary>
-
+**Ubuntu / Debian:**
 ```bash
-# Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
-# GitHub CLI
-(type -p wget >/dev/null || sudo apt-get install wget -y) \
-  && sudo mkdir -p -m 755 /etc/apt/keyrings \
-  && out=$(mktemp) && wget -nv -O"$out" https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-  && cat "$out" | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-  && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-  && sudo apt-get update && sudo apt-get install gh -y
-
-# jq
+# GitHub CLI — see https://github.com/cli/cli/blob/trunk/docs/install_linux.md
 sudo apt-get install -y jq
 ```
-</details>
 
-<details><summary>Windows (PowerShell)</summary>
-
+**Windows (PowerShell):**
 ```powershell
 winget install Microsoft.AzureCLI
 winget install GitHub.cli
 winget install jqlang.jq
 ```
 
-> **Note:** Git-Ape commands require a Bash shell. Install [Git for Windows](https://gitforwindows.org/) and use Git Bash.
 </details>
 
-You must be logged in to both:
+Sign in to both:
+
 ```bash
-az login           # Azure — needs Owner or User Access Administrator on the subscription(s)
-gh auth login      # GitHub — needs admin access to the target repository
+az login           # needs Owner or User Access Administrator on the subscription
+gh auth login      # needs admin access to the target repository
 ```
 
 ### Step 1: Create an Entra ID App Registration
 
-This creates the identity that GitHub Actions will use to authenticate with Azure.
+This creates the identity that GitHub Actions will use.
 
 ```bash
-# Choose a name for your app registration
 SP_NAME="sp-git-ape-your-repo"
 
-# Create the app registration
 CLIENT_ID=$(az ad app create --display-name "$SP_NAME" --query appId -o tsv)
 echo "Client ID: $CLIENT_ID"
 
-# Create the service principal
 az ad sp create --id "$CLIENT_ID"
 
-# Note your tenant ID
 TENANT_ID=$(az account show --query tenantId -o tsv)
 echo "Tenant ID: $TENANT_ID"
 ```
 
-### Step 2: Configure OIDC Federated Credentials
+### Step 2: Add OIDC federated credentials
 
-OIDC eliminates stored secrets by letting GitHub Actions exchange a short-lived token for Azure access at runtime. The number of federated credentials depends on your mode.
+These tell Entra ID which GitHub tokens to trust.
 
 ```bash
-# Get the app object ID (different from client ID)
 OBJECT_ID=$(az ad app show --id "$CLIENT_ID" --query id -o tsv)
-
-# Your GitHub repo (org/repo format)
 REPO="your-org/your-repo"
 
-# Detect whether the GitHub org uses default or customized OIDC subjects
-USE_DEFAULT_SUBJECT=$(gh api "orgs/${REPO%%/*}/actions/oidc/customization/sub" --jq '.use_default' 2>/dev/null || echo true)
+# Detect customized OIDC subjects (some orgs override the default format)
+USE_DEFAULT=$(gh api "orgs/${REPO%%/*}/actions/oidc/customization/sub" --jq '.use_default' 2>/dev/null || echo true)
 
-if [[ "$USE_DEFAULT_SUBJECT" == "false" ]]; then
+if [[ "$USE_DEFAULT" == "false" ]]; then
   REPO_ID=$(gh api "repos/$REPO" --jq '.id')
   OWNER_ID=$(gh api "repos/$REPO" --jq '.owner.id')
   OIDC_PREFIX="repository_owner_id:${OWNER_ID}:repository_id:${REPO_ID}"
@@ -219,45 +216,41 @@ else
 fi
 ```
 
-Use `$OIDC_PREFIX` for all subjects below. On orgs with a customized subject template, `repo:org/repo:...` will fail with `AADSTS700213`.
-
-#### 2a. Main Branch (merge-triggered deployments)
+Create the credentials. You need **at least four** — main branch, pull requests, deploy environment, and destroy environment:
 
 ```bash
+# Main branch (merge-triggered deployments)
 az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
   "name": "fc-main-branch",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "'"$OIDC_PREFIX"':ref:refs/heads/main",
-  "description": "Main branch deployments",
   "audiences": ["api://AzureADTokenExchange"]
 }'
-```
 
-#### 2b. Pull Requests (plan validation)
-
-```bash
+# Pull requests (plan validation)
 az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
   "name": "fc-pull-request",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "'"$OIDC_PREFIX"':pull_request",
-  "description": "Pull request validation",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 ```
 
-#### 2c. Deploy Environment(s)
-
 <details>
-<summary><strong>Single environment mode</strong></summary>
-
-Create one federated credential for the `azure-deploy` environment:
+<summary><strong>Single environment: deploy + destroy credentials</strong></summary>
 
 ```bash
 az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
   "name": "fc-env-deploy",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "'"$OIDC_PREFIX"':environment:azure-deploy",
-  "description": "Deploy environment",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+
+az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
+  "name": "fc-env-destroy",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "'"$OIDC_PREFIX"':environment:azure-destroy",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 ```
@@ -265,92 +258,43 @@ az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
 </details>
 
 <details>
-<summary><strong>Multi-environment mode</strong></summary>
-
-Create one federated credential per environment. Each maps to a separate GitHub environment:
+<summary><strong>Multi-environment: per-stage deploy + destroy credentials</strong></summary>
 
 ```bash
-# Dev environment
-az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
-  "name": "fc-env-deploy-dev",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "'"$OIDC_PREFIX"':environment:azure-deploy-dev",
-  "description": "Deploy environment (dev)",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
+for ENV in dev staging prod; do
+  az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
+    "name": "fc-env-deploy-'"$ENV"'",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "'"$OIDC_PREFIX"':environment:azure-deploy-'"$ENV"'",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+done
 
-# Staging environment
 az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
-  "name": "fc-env-deploy-staging",
+  "name": "fc-env-destroy",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "'"$OIDC_PREFIX"':environment:azure-deploy-staging",
-  "description": "Deploy environment (staging)",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
-
-# Production environment
-az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
-  "name": "fc-env-deploy-prod",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "'"$OIDC_PREFIX"':environment:azure-deploy-prod",
-  "description": "Deploy environment (prod)",
+  "subject": "'"$OIDC_PREFIX"':environment:azure-destroy",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 ```
 
 </details>
 
-#### 2d. Destroy Environment (shared across all modes)
+Verify:
 
 ```bash
-az ad app federated-credential create --id "$OBJECT_ID" --parameters '{
-  "name": "fc-env-destroy",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "'"$OIDC_PREFIX"':environment:azure-destroy",
-  "description": "Destroy environment",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
+az ad app federated-credential list --id "$OBJECT_ID" \
+  --query "[].{name:name, subject:subject}" -o table
 ```
 
-#### Verify Credentials
+### Step 3: Assign RBAC roles
 
-```bash
-az ad app federated-credential list --id "$OBJECT_ID" --query "[].{name:name, subject:subject}" -o table
-```
-
-**Single environment** — expected 4 credentials:
-```
-Name               Subject
------------------  -----------------------------------------------
-fc-main-branch     <OIDC_PREFIX>:ref:refs/heads/main
-fc-pull-request    <OIDC_PREFIX>:pull_request
-fc-env-deploy      <OIDC_PREFIX>:environment:azure-deploy
-fc-env-destroy     <OIDC_PREFIX>:environment:azure-destroy
-```
-
-**Multi-environment (3 envs)** — expected 6 credentials:
-```
-Name                    Subject
-----------------------  ---------------------------------------------------
-fc-main-branch          <OIDC_PREFIX>:ref:refs/heads/main
-fc-pull-request         <OIDC_PREFIX>:pull_request
-fc-env-deploy-dev       <OIDC_PREFIX>:environment:azure-deploy-dev
-fc-env-deploy-staging   <OIDC_PREFIX>:environment:azure-deploy-staging
-fc-env-deploy-prod      <OIDC_PREFIX>:environment:azure-deploy-prod
-fc-env-destroy          <OIDC_PREFIX>:environment:azure-destroy
-```
-
-### Step 3: Assign RBAC Roles
-
-Grant the service principal permissions on your Azure subscription(s).
-
-#### Single Environment
+Grant the service principal permissions on your subscription(s).
 
 ```bash
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 SP_OBJECT_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
 
-# Contributor — create, modify, and delete resources
 az role assignment create \
   --assignee-object-id "$SP_OBJECT_ID" \
   --assignee-principal-type ServicePrincipal \
@@ -358,20 +302,12 @@ az role assignment create \
   --scope "/subscriptions/$SUBSCRIPTION_ID"
 ```
 
-If your templates include RBAC role assignments (e.g., managed identity access to storage), also add:
+:::tip[Do I need User Access Administrator?]
+Only if your ARM templates include RBAC role assignments — for example, granting a managed identity access to a storage account. If you are unsure, skip it for now. Deployments will tell you if the role is missing.
+:::
 
-```bash
-# User Access Administrator — manage role assignments
-az role assignment create \
-  --assignee-object-id "$SP_OBJECT_ID" \
-  --assignee-principal-type ServicePrincipal \
-  --role "User Access Administrator" \
-  --scope "/subscriptions/$SUBSCRIPTION_ID"
-```
-
-#### Multi-Environment
-
-Assign roles on each target subscription. Each environment can have a different role if needed:
+<details>
+<summary><strong>Multi-environment: assign roles per subscription</strong></summary>
 
 ```bash
 SP_OBJECT_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
@@ -404,198 +340,139 @@ az role assignment create \
   --scope "/subscriptions/$PROD_SUBSCRIPTION_ID"
 ```
 
-> **Note:** If multiple environments share the same subscription, you only need one set of role assignments for that subscription.
+</details>
 
-#### Verify RBAC
+### Step 4: Configure GitHub repository
 
-```bash
-az role assignment list --assignee "$SP_OBJECT_ID" --query "[].{role:roleDefinitionName, scope:scope}" -o table
-```
+#### Set secrets
 
-### Step 4: Configure GitHub Repository
-
-#### 4a. Set GitHub Secrets
-
-These are **identifiers**, not credentials — OIDC means no actual secrets are stored.
+These are identifiers, not actual credentials — OIDC means no secrets are stored.
 
 <details>
-<summary><strong>Single environment mode</strong></summary>
-
-Set secrets at the **repository level** (shared by all workflows):
+<summary><strong>Single environment</strong></summary>
 
 ```bash
 REPO="your-org/your-repo"
-
-echo "$CLIENT_ID" | gh secret set AZURE_CLIENT_ID -R "$REPO"
-echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID -R "$REPO"
+echo "$CLIENT_ID"       | gh secret set AZURE_CLIENT_ID -R "$REPO"
+echo "$TENANT_ID"       | gh secret set AZURE_TENANT_ID -R "$REPO"
 echo "$SUBSCRIPTION_ID" | gh secret set AZURE_SUBSCRIPTION_ID -R "$REPO"
 ```
 
 </details>
 
 <details>
-<summary><strong>Multi-environment mode</strong></summary>
+<summary><strong>Multi-environment</strong></summary>
 
-Set shared secrets at the **repository level**, then set the subscription per **environment**:
+Set shared values at the repo level, then the subscription per environment:
+
+```bash
+REPO="your-org/your-repo"
+echo "$CLIENT_ID" | gh secret set AZURE_CLIENT_ID -R "$REPO"
+echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID -R "$REPO"
+
+for ENV in dev staging prod; do
+  # Use the right subscription variable for each stage
+  gh secret set AZURE_CLIENT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$CLIENT_ID"
+  gh secret set AZURE_TENANT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$TENANT_ID"
+  gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-$ENV" --body "${ENV}_SUBSCRIPTION_ID_VALUE"
+done
+
+# Destroy environment
+gh secret set AZURE_CLIENT_ID       --repo "$REPO" --env "azure-destroy" --body "$CLIENT_ID"
+gh secret set AZURE_TENANT_ID       --repo "$REPO" --env "azure-destroy" --body "$TENANT_ID"
+gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-destroy" --body "$DEV_SUBSCRIPTION_ID"
+```
+
+</details>
+
+#### Create GitHub environments
+
+<details>
+<summary><strong>Single environment</strong></summary>
 
 ```bash
 REPO="your-org/your-repo"
 
-# Repo-level secrets (shared)
-echo "$CLIENT_ID" | gh secret set AZURE_CLIENT_ID -R "$REPO"
-echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID -R "$REPO"
-
-# Per-environment secrets
-# Dev
-gh secret set AZURE_CLIENT_ID --repo "$REPO" --env "azure-deploy-dev" --body "$CLIENT_ID"
-gh secret set AZURE_TENANT_ID --repo "$REPO" --env "azure-deploy-dev" --body "$TENANT_ID"
-gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-dev" --body "$DEV_SUBSCRIPTION_ID"
-
-# Staging
-gh secret set AZURE_CLIENT_ID --repo "$REPO" --env "azure-deploy-staging" --body "$CLIENT_ID"
-gh secret set AZURE_TENANT_ID --repo "$REPO" --env "azure-deploy-staging" --body "$TENANT_ID"
-gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-staging" --body "$STAGING_SUBSCRIPTION_ID"
-
-# Production
-gh secret set AZURE_CLIENT_ID --repo "$REPO" --env "azure-deploy-prod" --body "$CLIENT_ID"
-gh secret set AZURE_TENANT_ID --repo "$REPO" --env "azure-deploy-prod" --body "$TENANT_ID"
-gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-prod" --body "$PROD_SUBSCRIPTION_ID"
-
-# Destroy environment (uses first subscription as default)
-gh secret set AZURE_CLIENT_ID --repo "$REPO" --env "azure-destroy" --body "$CLIENT_ID"
-gh secret set AZURE_TENANT_ID --repo "$REPO" --env "azure-destroy" --body "$TENANT_ID"
-gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-destroy" --body "$DEV_SUBSCRIPTION_ID"
-```
-
-> **Tip:** Environment-level secrets override repo-level secrets. By setting `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` at the environment level, you can later switch to separate app registrations per environment without modifying workflows.
-
-</details>
-
-#### 4b. Create GitHub Environments
-
-<details>
-<summary><strong>Single environment mode</strong></summary>
-
-**azure-deploy** — for deployment jobs:
-
-```bash
-# Create environment with branch policy (main only)
+# azure-deploy — restricted to main branch
 gh api -X PUT "repos/$REPO/environments/azure-deploy" --input - <<'EOF'
-{
-  "deployment_branch_policy": {
-    "protected_branches": false,
-    "custom_branch_policies": true
-  }
-}
+{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+EOF
+gh api -X POST "repos/$REPO/environments/azure-deploy/deployment-branch-policies" \
+  --input - <<'EOF'
+{"name":"main","type":"branch"}
 EOF
 
-# Allow main branch
-gh api -X POST "repos/$REPO/environments/azure-deploy/deployment-branch-policies" --input - <<'EOF'
-{
-  "name": "main",
-  "type": "branch"
-}
+# azure-destroy
+gh api -X PUT "repos/$REPO/environments/azure-destroy" --input - <<'EOF'
+{"deployment_branch_policy":null}
 EOF
 ```
 
 </details>
 
 <details>
-<summary><strong>Multi-environment mode</strong></summary>
-
-Create one environment per deployment target:
+<summary><strong>Multi-environment</strong></summary>
 
 ```bash
-for ENV_NAME in dev staging prod; do
-  # Create environment with branch policy (main only)
-  gh api -X PUT "repos/$REPO/environments/azure-deploy-${ENV_NAME}" --input - <<'EOF'
-{
-  "deployment_branch_policy": {
-    "protected_branches": false,
-    "custom_branch_policies": true
-  }
-}
-EOF
+REPO="your-org/your-repo"
 
-  # Allow main branch
-  gh api -X POST "repos/$REPO/environments/azure-deploy-${ENV_NAME}/deployment-branch-policies" --input - <<'EOF'
-{
-  "name": "main",
-  "type": "branch"
-}
+for ENV in dev staging prod; do
+  gh api -X PUT "repos/$REPO/environments/azure-deploy-$ENV" --input - <<'EOF'
+{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+EOF
+  gh api -X POST "repos/$REPO/environments/azure-deploy-$ENV/deployment-branch-policies" \
+    --input - <<'EOF'
+{"name":"main","type":"branch"}
 EOF
 done
+
+gh api -X PUT "repos/$REPO/environments/azure-destroy" --input - <<'EOF'
+{"deployment_branch_policy":null}
+EOF
 ```
 
 </details>
 
-**azure-destroy** — for destroy jobs (same for both modes):
+:::tip[Add required reviewers for production]
+Go to **Settings → Environments → azure-deploy** (or `azure-deploy-prod` in multi-env mode), check **Required reviewers**, and add your team. This prevents unreviewed deployments from reaching production.
+:::
+
+### Step 5: Copy Git-Ape workflows
 
 ```bash
-gh api -X PUT "repos/$REPO/environments/azure-destroy" --input - <<'EOF'
-{
-  "deployment_branch_policy": null
-}
-EOF
-```
+# If you haven't already
+git clone https://github.com/Azure/git-ape.git /tmp/git-ape
 
-#### 4c. (Optional) Required Reviewers
-
-For production deployments, add required reviewers to the deploy environment:
-
-1. Go to **Settings → Environments → azure-deploy** (or **azure-deploy-prod** in multi-env mode)
-2. Check **Required reviewers**
-3. Add team members who should approve deployments
-
-In multi-environment mode, you might want:
-- `azure-deploy-dev` — no reviewer required (fast iteration)
-- `azure-deploy-staging` — optional reviewer
-- `azure-deploy-prod` — required reviewer (gate for production)
-
-### Step 5: Copy Git-Ape Workflows
-
-Copy the workflow files to your repository:
-
-```bash
-# Clone the git-ape repo if you haven't
-git clone https://github.com/your-org/git-ape.git /tmp/git-ape
-
-# Copy workflows to your repo
 cp /tmp/git-ape/.github/workflows/git-ape-*.yml your-repo/.github/workflows/
-
-# Commit and push
 cd your-repo
 git add .github/workflows/
 git commit -m "feat: add Git-Ape deployment workflows"
 git push
 ```
 
-The following workflows will be added:
+This adds four workflows:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `git-ape-plan.yml` | PR with template changes | Validate, security scan, what-if, cost estimate |
-| `git-ape-deploy.yml` | Merge to main or `/deploy` comment | Execute ARM deployment |
-| `git-ape-destroy.yml` | Merge PR with `destroy-requested` status | Delete resource group |
-| `git-ape-verify.yml` | Manual dispatch | Verify OIDC, RBAC, and pipeline health |
+| `git-ape-plan.yml` | PR with template changes | Validate, what-if, cost estimate |
+| `git-ape-deploy.yml` | Merge to main or `/deploy` comment | ARM deployment |
+| `git-ape-destroy.yml` | PR merge with `destroy-requested` status | Delete resource group |
+| `git-ape-verify.yml` | Manual dispatch | Verify OIDC and RBAC health |
 
-> **Note:** Drift detection and TTL-based cleanup are being replaced by agentic workflows — coming soon.
+---
 
-### Step 6: Verify Setup
+## Verify your setup {#verify-setup}
 
-Create a test deployment to verify the pipeline works:
+Create a test deployment to confirm the pipeline works end-to-end:
 
 ```bash
-# Create a minimal test template
 mkdir -p .azure/deployments/deploy-test
 
 cat > .azure/deployments/deploy-test/template.json <<'EOF'
 {
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {
-    "location": { "type": "string", "defaultValue": "eastus" }
-  },
+  "parameters": {"location": {"type": "string", "defaultValue": "eastus"}},
   "resources": []
 }
 EOF
@@ -604,214 +481,60 @@ cat > .azure/deployments/deploy-test/parameters.json <<'EOF'
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {
-    "location": { "value": "eastus" }
-  }
+  "parameters": {"location": {"value": "eastus"}}
 }
 EOF
 
-# Open a PR
 git checkout -b test/git-ape-onboarding
 git add .azure/deployments/deploy-test/
 git commit -m "test: verify git-ape pipeline"
 git push -u origin test/git-ape-onboarding
-gh pr create --title "Test: Git-Ape onboarding" --body "Verify the OIDC pipeline works end-to-end."
+gh pr create --title "Test: Git-Ape onboarding" --body "Verify the OIDC pipeline works."
 ```
 
-If the PR triggers the `Git-Ape: Plan` workflow and it succeeds, your setup is complete.
-
----
-
-## Optional: Slack Notifications
-
-To get Slack notifications on deploy/destroy/drift events:
-
-1. Create a Slack Incoming Webhook: [Slack API → Incoming Webhooks](https://api.slack.com/messaging/webhooks)
-2. Set the secret:
-   ```bash
-   echo "https://hooks.slack.com/services/T.../B.../..." | gh secret set SLACK_WEBHOOK_URL -R "$REPO"
-   ```
+If the `Git-Ape: Plan` workflow runs and succeeds on the PR, your setup is complete.
 
 ---
 
 ## Troubleshooting
 
-### "AADSTS700016: Application not found"
+<details>
+<summary><strong>"AADSTS700016: Application not found"</strong></summary>
 
-The federated credential subject doesn't match the workflow's token. Verify:
-```bash
-az ad app federated-credential list --id "$OBJECT_ID" -o table
-```
+The federated credential subject does not match the workflow token. Common causes:
+- Repository name is case-sensitive in the subject field.
+- Missing `pull_request` subject for PR-triggered workflows.
+- Missing `environment:azure-deploy` subject for deploy jobs.
 
-Common issues:
-- Repository name is case-sensitive in the `subject` field
-- `pull_request` subject is needed for PR-triggered workflows
-- `environment:azure-deploy` subject is needed for jobs using `environment: azure-deploy`
+Check: `az ad app federated-credential list --id "$OBJECT_ID" -o table`
 
-### "AuthorizationFailed" during deployment
+</details>
 
-The service principal lacks permissions. Check assignments:
-```bash
-az role assignment list --assignee "$SP_OBJECT_ID" -o table
-```
+<details>
+<summary><strong>"AuthorizationFailed" during deployment</strong></summary>
 
-Ensure **Contributor** role is assigned at the subscription scope.
+The service principal lacks permissions. Check: `az role assignment list --assignee "$SP_OBJECT_ID" -o table`
 
-### "Resource group not found" in plan workflow
+Ensure **Contributor** is assigned at the subscription scope.
 
-The OIDC token exchange succeeded but the subscription doesn't match. Verify:
-```bash
-# Check which subscription the service principal can access
-az account list --query "[?tenantId=='$TENANT_ID']" -o table
-```
+</details>
 
-### GitHub environment not created
+<details>
+<summary><strong>GitHub environment not created</strong></summary>
 
-Environment creation requires admin access to the repository. Ask a repo admin to create the `azure-deploy` and `azure-destroy` environments manually via **Settings → Environments**.
+Environment creation requires admin access to the repository. Ask a repo admin to create the environments manually via **Settings → Environments**.
+
+</details>
 
 ---
 
-## Architecture
-
-### Single Environment Mode
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
-graph TD
-    subgraph GH["GitHub Repository"]
-        direction TB
-        SEC["<b>Repo Secrets</b><br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID<br/>AZURE_SUBSCRIPTION_ID<br/>SLACK_WEBHOOK_URL (optional)"]
-        ENVD["<b>azure-deploy</b><br/>main branch only"]
-        ENVX["<b>azure-destroy</b><br/>main branch only"]
-        WF["<b>Workflows</b><br/>git-ape-plan.yml (PR)<br/>git-ape-deploy.yml (main / azure-deploy)<br/>git-ape-destroy.yml (azure-destroy)<br/>git-ape-verify.yml (dispatch)"]
-        SEC --- WF
-        ENVD --- WF
-        ENVX --- WF
-    end
-
-    subgraph ENTRA["Microsoft Entra ID"]
-        APP["<b>App Registration</b><br/>sp-git-ape-{repo}<br/>client_id + tenant_id"]
-        FC["<b>Federated Credentials</b><br/>• repo:org/repo:ref:refs/heads/main<br/>• repo:org/repo:pull_request<br/>• repo:org/repo:environment:azure-deploy<br/>• repo:org/repo:environment:azure-destroy"]
-        APP --- FC
-    end
-
-    subgraph AZ["Azure Subscription"]
-        ROLE["<b>RBAC</b><br/>Contributor<br/>(+ UAA if templates assign roles)"]
-        RG1["rg-app-dev"]
-        RG2["rg-api-prod"]
-        RG3["rg-data-stg"]
-        ROLE --- RG1
-        ROLE --- RG2
-        ROLE --- RG3
-    end
-
-    WF -->|"OIDC token exchange"| FC
-    APP -->|"Service Principal"| ROLE
-
-    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
-    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
-    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
-
-    class SEC,ENVD,ENVX,WF gh
-    class APP,FC entra
-    class ROLE,RG1,RG2,RG3 azure
-```
-
-### Multi-Environment Mode
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
-graph TD
-    subgraph GH["GitHub Repository"]
-        direction TB
-        REPO["<b>Repo-level Secrets</b><br/>AZURE_CLIENT_ID<br/>AZURE_TENANT_ID"]
-        EDEV["<b>azure-deploy-dev</b><br/>SUBSCRIPTION_ID → Dev"]
-        ESTG["<b>azure-deploy-staging</b><br/>SUBSCRIPTION_ID → Staging"]
-        EPRD["<b>azure-deploy-prod</b><br/>SUBSCRIPTION_ID → Prod<br/>⚠️ Required reviewers"]
-        EDST["<b>azure-destroy</b><br/>SUBSCRIPTION_ID → Default"]
-    end
-
-    subgraph ENTRA["Microsoft Entra ID"]
-        APP["<b>App Registration</b><br/>sp-git-ape-{repo}"]
-        FC["<b>Federated Credentials</b><br/>• ref:refs/heads/main<br/>• pull_request<br/>• environment:azure-deploy-dev<br/>• environment:azure-deploy-staging<br/>• environment:azure-deploy-prod<br/>• environment:azure-destroy"]
-        APP --- FC
-    end
-
-    DEV["<b>Dev Subscription</b><br/>Contributor<br/>rg-*-dev"]
-    STG["<b>Staging Subscription</b><br/>Contributor<br/>rg-*-stg"]
-    PRD["<b>Prod Subscription</b><br/>Contributor + UAA<br/>rg-*-prod"]
-
-    REPO --- EDEV
-    REPO --- ESTG
-    REPO --- EPRD
-    REPO --- EDST
-
-    EDEV -->|"OIDC"| FC
-    ESTG -->|"OIDC"| FC
-    EPRD -->|"OIDC"| FC
-    EDST -->|"OIDC"| FC
-
-    APP -->|"Service Principal"| DEV
-    APP -->|"Service Principal"| STG
-    APP -->|"Service Principal"| PRD
-
-    classDef gh fill:#dbeafe,stroke:#1f6feb,stroke-width:1px,color:#0b3d91
-    classDef ghprod fill:#fde68a,stroke:#b45309,stroke-width:2px,color:#7c2d12
-    classDef entra fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
-    classDef azure fill:#dcfce7,stroke:#15803d,stroke-width:1px,color:#14532d
-    classDef azureprod fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d
-
-    class REPO,EDEV,ESTG,EDST gh
-    class EPRD ghprod
-    class APP,FC entra
-    class DEV,STG azure
-    class PRD azureprod
-```
-
----
-
-## Security Considerations
+## Security considerations
 
 | Aspect | Implementation |
 |--------|---------------|
 | **No stored secrets** | OIDC federated identity — no client secrets or certificates |
 | **Scoped access** | Federated credentials are scoped per repo + branch/environment |
-| **Least privilege** | Only Contributor role by default; add UAA only if needed |
-| **Environment gates** | Deploy environments restricted to `main` branch; reviewers optional |
-| **Destructive protection** | `azure-destroy` environment can require manual approval |
-| **Subscription isolation** | Multi-env mode targets separate subscriptions per stage |
+| **Least privilege** | Contributor role by default; add User Access Administrator only when needed |
+| **Environment gates** | Deploy environments restricted to `main` branch |
+| **Destructive protection** | `azure-destroy` can require manual approval |
 | **Audit trail** | All deployments logged in `state.json` with actor, timestamp, run URL |
-
-### Multi-Environment Security Best Practices
-
-When using multi-environment mode:
-
-1. **Required reviewers on production** — Always add reviewers to `azure-deploy-prod`
-2. **Separate subscriptions** — Use distinct subscriptions for dev, staging, and prod to enforce blast radius isolation
-3. **Graduated RBAC** — Use minimal roles in dev (Contributor) and additional roles in prod only when needed
-4. **Environment variables for config** — Use GitHub environment variables (not secrets) for non-sensitive environment-specific values like region or resource name prefixes
-5. **Deployment promotion** — Deploy to dev first, then staging, then prod — never skip stages
-
-### Using Environments in Workflows
-
-With multi-environment mode, update your deploy workflow to select the correct environment:
-
-```yaml
-# In git-ape-deploy.yml, change the environment field to be dynamic:
-deploy:
-  environment: azure-deploy-${{ steps.params.outputs.environment }}
-  # This resolves to azure-deploy-dev, azure-deploy-staging, or azure-deploy-prod
-  # based on the "environment" parameter in parameters.json
-```
-
-The `environment` parameter in your `parameters.json` determines which GitHub environment (and therefore which Azure subscription) is used:
-
-```json
-{
-  "parameters": {
-    "environment": { "value": "prod" },
-    "location": { "value": "eastus" },
-    "project": { "value": "myapp" }
-  }
-}
-```

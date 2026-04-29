@@ -1,10 +1,11 @@
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-policy-advisor/SKILL.md -->
-
 ---
 title: "Azure Policy Advisor"
 sidebar_label: "Azure Policy Advisor"
 description: "Assess Azure Policy compliance for ARM template resources. Queries existing subscription assignments and unassigned custom/built-in definitions, cross-references with Microsoft Learn recommendations. Produces per-resource policy recommendations with implementation options."
 ---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-policy-advisor/SKILL.md -->
+
 
 # Azure Policy Advisor
 
