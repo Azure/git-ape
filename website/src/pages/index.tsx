@@ -452,8 +452,8 @@ function CtaSection() {
 export default function Home(): ReactNode {
   return (
     <Layout
-      title="Intelligent Cloud Deployment Agents"
-      description="Git-Ape — The intelligent multi-agent system for GitHub Copilot that handles cloud deployments end-to-end — with security gates at every step.">
+      title="Platform engineering for the agentic AI era"
+      description="Git-Ape — Agents over modules. Intent over syntax. Evidence over audits. Natural-language intent in, compliant cloud deployments out, policy enforced end-to-end.">
       <HeroSection />
       <UseCasesSection />
       <TimelineSection />
