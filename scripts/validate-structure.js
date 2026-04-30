@@ -335,8 +335,6 @@ function main() {
   console.log(`\n   Found ${skillDirs.length} skill directories`);
   console.log(`   Found ${agentFiles.length} agent files`);
 
-  const errorsBefore = errors.length;
-
   checkKebabCase(skillDirs, 'skill');
   checkSkillPresence(skillDirs);
   checkSkillFrontmatter(skillDirs);
