@@ -49,6 +49,7 @@ After the frontmatter, the skill body **must** include these sections:
 
 - `## When to Use` — Describes the scenarios where this skill should be invoked.
 - `## Procedure` — Step-by-step instructions the agent follows when executing the skill.
+  Equivalent headings (`## Execution Playbook`, `## Command Playbook`) are also accepted.
 
 ### Example
 
