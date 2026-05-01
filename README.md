@@ -53,6 +53,8 @@ Prerequisites: VS Code with GitHub Copilot enabled and the `chat.plugins.enabled
 
 1. Add the marketplace in your VS Code `settings.json`:
 
+   [![Open in VS Code](https://img.shields.io/badge/Open_Settings-VS_Code-007ACC?logo=visualstudiocode&logoColor=white)](vscode://settings/chat.plugins.marketplaces) [![Open in VS Code Insiders](https://img.shields.io/badge/Open_Settings-VS_Code_Insiders-24bfa5?logo=visualstudiocode&logoColor=white)](vscode-insiders://settings/chat.plugins.marketplaces)
+
    ```jsonc
    "chat.plugins.marketplaces": [
        "Azure/git-ape"
