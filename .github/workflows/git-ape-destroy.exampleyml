@@ -132,16 +132,34 @@ jobs:
           fi
 
           RG_NAME=$(jq -r '.resourceGroup // empty' "$STATE_FILE")
+          STACK_ID=$(jq -r '.stackId // empty' "$STATE_FILE")
+          DEPLOY_METHOD=$(jq -r '.deployMethod // "subscription"' "$STATE_FILE")
+          MANAGED_RESOURCES=$(jq -c '.managedResources // []' "$STATE_FILE")
+          RESOURCE_GROUPS=$(jq -c '.resourceGroups // []' "$STATE_FILE")
 
-          if [[ -z "$RG_NAME" ]]; then
-            echo "::error::No resource group found in state file"
+          # Fallback: if no stackId and no resourceGroup, cannot proceed
+          if [[ -z "$STACK_ID" && -z "$RG_NAME" ]]; then
+            echo "::error::No stack ID or resource group found in state file"
             echo "found=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "resource_group=$RG_NAME" >> "$GITHUB_OUTPUT"
-          echo "Will destroy resource group: $RG_NAME"
+          echo "stack_id=$STACK_ID" >> "$GITHUB_OUTPUT"
+          echo "deploy_method=$DEPLOY_METHOD" >> "$GITHUB_OUTPUT"
+          echo "managed_resources<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$MANAGED_RESOURCES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "resource_groups<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESOURCE_GROUPS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "$STACK_ID" ]]; then
+            echo "Will destroy via deployment stack: $STACK_ID"
+          else
+            echo "Will destroy resource group: $RG_NAME (fallback method)"
+          fi
 
       - name: Azure Login (OIDC)
         if: steps.state.outputs.found == 'true'
@@ -157,92 +175,153 @@ jobs:
         run: |
           RG="${{ steps.state.outputs.resource_group }}"
           DEPLOYMENT_ID="${{ matrix.deployment_id }}"
+          STACK_ID="${{ steps.state.outputs.stack_id }}"
+          DEPLOY_METHOD="${{ steps.state.outputs.deploy_method }}"
 
-          # Check if resource group exists
-          EXISTS=$(az group exists --name "$RG")
-          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
+          echo "=== Destroy Plan ==="
+          echo "Deployment:   $DEPLOYMENT_ID"
+          echo "Method:       $DEPLOY_METHOD"
 
-          if [[ "$EXISTS" != "true" ]]; then
-            echo "Resource group $RG does not exist (already deleted?)"
-            echo "resource_count=0" >> "$GITHUB_OUTPUT"
-            echo "sub_count=0" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [[ -n "$STACK_ID" ]]; then
+            # Check if stack still exists
+            STACK_EXISTS=$(az stack sub show --name "$DEPLOYMENT_ID" --query "id" -o tsv 2>/dev/null || echo "")
+            if [[ -n "$STACK_EXISTS" ]]; then
+              echo "stack_exists=true" >> "$GITHUB_OUTPUT"
+              echo "Stack:        $STACK_ID (exists)"
+
+              # List resources in the stack
+              STACK_RESOURCES=$(az stack sub show --name "$DEPLOYMENT_ID" --query "resources[].id" -o json 2>/dev/null || echo "[]")
+              RESOURCE_COUNT=$(echo "$STACK_RESOURCES" | jq 'length')
+              echo "resource_count=$RESOURCE_COUNT" >> "$GITHUB_OUTPUT"
+              echo "Resources:    $RESOURCE_COUNT managed by stack"
+            else
+              echo "stack_exists=false" >> "$GITHUB_OUTPUT"
+              echo "Stack not found — will use fallback"
+              echo "resource_count=0" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "stack_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # Inventory RG resources
-          RESOURCES=$(az resource list --resource-group "$RG" \
-            --query "[].{name:name, type:type, id:id, provisioningState:provisioningState}" \
-            --output json 2>/dev/null || echo "[]")
-          RESOURCE_COUNT=$(echo "$RESOURCES" | jq 'length')
+          # Check resource group existence (for fallback or soft-delete sweep)
+          if [[ -n "$RG" ]]; then
+            EXISTS=$(az group exists --name "$RG")
+            echo "rg_exists=$EXISTS" >> "$GITHUB_OUTPUT"
+            echo "RG:           $RG (exists=$EXISTS)"
 
-          echo "resource_count=$RESOURCE_COUNT" >> "$GITHUB_OUTPUT"
-          echo "resources<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$RESOURCES" >> "$GITHUB_OUTPUT"
+            if [[ "$EXISTS" == "true" ]]; then
+              RESOURCES=$(az resource list --resource-group "$RG" \
+                --query "[].{name:name, type:type, id:id, provisioningState:provisioningState}" \
+                --output json 2>/dev/null || echo "[]")
+              RESOURCE_COUNT=$(echo "$RESOURCES" | jq 'length')
+              # Only set resource_count if stack_exists is false (avoid overwrite)
+              if [[ "$STACK_ID" == "" ]]; then
+                echo "resource_count=$RESOURCE_COUNT" >> "$GITHUB_OUTPUT"
+              fi
+              echo "resources<<EOF" >> "$GITHUB_OUTPUT"
+              echo "$RESOURCES" >> "$GITHUB_OUTPUT"
+              echo "EOF" >> "$GITHUB_OUTPUT"
+              echo "$RESOURCES" | jq -r '.[] | "  - \(.type)/\(.name) (\(.provisioningState))"'
+            fi
+          else
+            echo "rg_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Identify soft-deletable resources from state
+          MANAGED_RESOURCES='${{ steps.state.outputs.managed_resources }}'
+          SOFT_DELETABLE=$(echo "$MANAGED_RESOURCES" | jq -c '[.[] | select(.softDeletable == true)]' 2>/dev/null || echo "[]")
+          SOFT_COUNT=$(echo "$SOFT_DELETABLE" | jq 'length')
+          echo "soft_deletable<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$SOFT_DELETABLE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "soft_count=$SOFT_COUNT" >> "$GITHUB_OUTPUT"
 
-          echo "Resource group $RG has $RESOURCE_COUNT resources"
-          echo "$RESOURCES" | jq -r '.[] | "  - \(.type)/\(.name) (\(.provisioningState))"'
+          if [[ "$SOFT_COUNT" -gt 0 ]]; then
+            echo "Soft-deletable: $SOFT_COUNT resource(s) — will attempt purge after deletion"
+            echo "$SOFT_DELETABLE" | jq -r '.[] | "  - \(.type): \(.id)"'
+          fi
 
-          # Query deployment operations to find subscription-scoped resources
-          # These are NOT deleted by az group delete (e.g. role assignments, policy assignments)
+          # Query subscription-scoped resources (for fallback only)
           SUB_RESOURCES="[]"
+          if [[ -z "$STACK_ID" ]]; then
+            OPS=$(az deployment operation sub list \
+              --name "$DEPLOYMENT_ID" \
+              --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
+              -o json 2>/dev/null || echo "[]")
 
-          OPS=$(az deployment operation sub list \
-            --name "$DEPLOYMENT_ID" \
-            --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
-            -o json 2>/dev/null || echo "[]")
-
-          if [[ "$OPS" != "[]" ]]; then
-            # Find subscription-scoped authorization/policy resources (role assignments, etc.)
-            # These live outside the RG and survive az group delete
-            SUB_RESOURCES=$(echo "$OPS" | jq -c '[
-              .[] | select(
-                (.resourceType // "" | test("Microsoft.Authorization|Microsoft.Policy")) and
-                (.id // "" | test("/resourceGroups/") | not)
-              )
-            ]')
-
-            # Check nested deployments for RG-scoped role assignments too
-            NESTED_NAMES=$(echo "$OPS" | jq -r '[
-              .[] | select(.resourceType == "Microsoft.Resources/deployments")
-            ] | .[].resourceName // empty')
-
-            for NESTED_NAME in $NESTED_NAMES; do
-              NESTED_OPS=$(az deployment operation group list \
-                --resource-group "$RG" --name "$NESTED_NAME" \
-                --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
-                -o json 2>/dev/null || echo "[]")
-
-              # Role assignments scoped to resources within the RG
-              NESTED_AUTH=$(echo "$NESTED_OPS" | jq -c '[
+            if [[ "$OPS" != "[]" ]]; then
+              SUB_RESOURCES=$(echo "$OPS" | jq -c '[
                 .[] | select(
-                  (.resourceType // "" | test("Microsoft.Authorization"))
+                  (.resourceType // "" | test("Microsoft.Authorization|Microsoft.Policy")) and
+                  (.id // "" | test("/resourceGroups/") | not)
                 )
               ]')
 
-              SUB_RESOURCES=$(jq -n --argjson a "$SUB_RESOURCES" --argjson b "$NESTED_AUTH" '$a + $b')
-            done
+              NESTED_NAMES=$(echo "$OPS" | jq -r '[
+                .[] | select(.resourceType == "Microsoft.Resources/deployments")
+              ] | .[].resourceName // empty')
+
+              for NESTED_NAME in $NESTED_NAMES; do
+                NESTED_OPS=$(az deployment operation group list \
+                  --resource-group "$RG" --name "$NESTED_NAME" \
+                  --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
+                  -o json 2>/dev/null || echo "[]")
+
+                NESTED_AUTH=$(echo "$NESTED_OPS" | jq -c '[
+                  .[] | select(
+                    (.resourceType // "" | test("Microsoft.Authorization"))
+                  )
+                ]')
+
+                SUB_RESOURCES=$(jq -n --argjson a "$SUB_RESOURCES" --argjson b "$NESTED_AUTH" '$a + $b')
+              done
+            fi
           fi
 
           SUB_COUNT=$(echo "$SUB_RESOURCES" | jq 'length')
-
           echo "sub_count=$SUB_COUNT" >> "$GITHUB_OUTPUT"
           echo "sub_resources<<EOF" >> "$GITHUB_OUTPUT"
           echo "$SUB_RESOURCES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-          echo ""
-          echo "=== Destroy Plan ==="
-          echo "Resource group:              $RG ($RESOURCE_COUNT resources)"
-          echo "Subscription-scoped resources: $SUB_COUNT"
           if [[ "$SUB_COUNT" -gt 0 ]]; then
+            echo "Sub-scoped:   $SUB_COUNT resource(s)"
             echo "$SUB_RESOURCES" | jq -r '.[] | "  - \(.resourceType): \(.resourceName) (\(.id))"'
           fi
           echo "==================="
 
-      - name: Delete subscription-scoped resources
+      - name: Destroy via deployment stack
+        id: destroy_stack
+        if: steps.state.outputs.found == 'true' && steps.check.outputs.stack_exists == 'true'
+        run: |
+          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
+          echo "🗑️ Deleting deployment stack: $DEPLOYMENT_ID"
+          echo "This deletes the stack and ALL managed resources (deleteAll)..."
+
+          START_TIME=$(date +%s)
+
+          az stack sub delete \
+            --name "$DEPLOYMENT_ID" \
+            --action-on-unmanage deleteAll \
+            --yes 2>&1 || {
+            echo "destroy_status=failed" >> "$GITHUB_OUTPUT"
+            echo "::error::Failed to delete deployment stack $DEPLOYMENT_ID"
+            exit 1
+          }
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "destroy_status=succeeded" >> "$GITHUB_OUTPUT"
+          echo "destroy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployment stack deleted in ${DURATION}s"
+
+      - name: Delete subscription-scoped resources (fallback)
         id: destroy_sub
-        if: steps.check.outputs.exists == 'true' && steps.check.outputs.sub_count != '0'
+        if: |
+          steps.state.outputs.found == 'true' &&
+          steps.check.outputs.stack_exists != 'true' &&
+          steps.check.outputs.rg_exists == 'true' &&
+          steps.check.outputs.sub_count != '0'
         run: |
           echo "🗑️ Deleting subscription-scoped resources first..."
           FAILED=0
@@ -259,9 +338,12 @@ jobs:
             echo "::warning::$FAILED subscription-scoped resource(s) failed to delete"
           fi
 
-      - name: Delete resource group
-        id: destroy
-        if: steps.check.outputs.exists == 'true'
+      - name: Delete resource group (fallback)
+        id: destroy_rg
+        if: |
+          steps.state.outputs.found == 'true' &&
+          steps.check.outputs.stack_exists != 'true' &&
+          steps.check.outputs.rg_exists == 'true'
         run: |
           RG="${{ steps.state.outputs.resource_group }}"
           echo "🗑️ Deleting resource group: $RG"
@@ -281,6 +363,91 @@ jobs:
           echo "destroy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
           echo "✅ Resource group deleted in ${DURATION}s: $RG"
 
+      - name: Purge soft-deleted resources
+        id: purge
+        if: |
+          always() &&
+          steps.state.outputs.found == 'true' &&
+          steps.check.outputs.soft_count != '0' &&
+          (steps.destroy_stack.outputs.destroy_status == 'succeeded' || steps.destroy_rg.outputs.destroy_status == 'succeeded')
+        run: |
+          echo "🧹 Checking for soft-deleted resources to purge..."
+          SOFT_DELETABLE='${{ steps.check.outputs.soft_deletable }}'
+          PURGE_RESULTS="[]"
+          RETAINED_COUNT=0
+
+          for ROW in $(echo "$SOFT_DELETABLE" | jq -r '.[] | @base64'); do
+            DECODED=$(echo "$ROW" | base64 -d)
+            RES_TYPE=$(echo "$DECODED" | jq -r '.type')
+            RES_ID=$(echo "$DECODED" | jq -r '.id')
+            PURGE_PROTECTED=$(echo "$DECODED" | jq -r '.purgeProtected')
+
+            # Extract resource name from ID
+            RES_NAME=$(echo "$RES_ID" | grep -oP '[^/]+$')
+
+            case "$RES_TYPE" in
+              "Microsoft.KeyVault/vaults")
+                # Check if vault is in soft-deleted state
+                DELETED_VAULT=$(az keyvault list-deleted --query "[?name=='$RES_NAME']" -o json 2>/dev/null || echo "[]")
+                if [[ $(echo "$DELETED_VAULT" | jq 'length') -gt 0 ]]; then
+                  if [[ "$PURGE_PROTECTED" == "true" ]]; then
+                    echo "  ⚠️ $RES_NAME: soft-deleted but purge-protected — cannot purge"
+                    RETAINED_COUNT=$((RETAINED_COUNT + 1))
+                    PURGE_RESULTS=$(echo "$PURGE_RESULTS" | jq --arg name "$RES_NAME" --arg type "$RES_TYPE" \
+                      '. + [{"name": $name, "type": $type, "action": "retained-soft-deleted", "reason": "purge-protected"}]')
+                  else
+                    echo "  🗑️ Purging soft-deleted vault: $RES_NAME"
+                    if az keyvault purge --name "$RES_NAME" 2>/dev/null; then
+                      echo "  ✅ Purged: $RES_NAME"
+                      PURGE_RESULTS=$(echo "$PURGE_RESULTS" | jq --arg name "$RES_NAME" --arg type "$RES_TYPE" \
+                        '. + [{"name": $name, "type": $type, "action": "purged"}]')
+                    else
+                      echo "  ⚠️ Failed to purge: $RES_NAME"
+                      RETAINED_COUNT=$((RETAINED_COUNT + 1))
+                      PURGE_RESULTS=$(echo "$PURGE_RESULTS" | jq --arg name "$RES_NAME" --arg type "$RES_TYPE" \
+                        '. + [{"name": $name, "type": $type, "action": "purge-failed"}]')
+                    fi
+                  fi
+                else
+                  echo "  ✅ $RES_NAME: not in soft-deleted state (already gone)"
+                fi
+                ;;
+              "Microsoft.CognitiveServices/accounts")
+                # Cognitive Services soft-delete purge
+                if [[ "$PURGE_PROTECTED" != "true" ]]; then
+                  LOCATION=$(echo "$RES_ID" | grep -oP '(?<=locations/)[^/]+' || echo "")
+                  if [[ -n "$LOCATION" ]]; then
+                    az cognitiveservices account purge --name "$RES_NAME" --location "$LOCATION" \
+                      --resource-group "" 2>/dev/null || true
+                  fi
+                fi
+                ;;
+              *)
+                echo "  ℹ️ $RES_TYPE: no purge implementation (soft-delete will expire naturally)"
+                ;;
+            esac
+          done
+
+          echo "retained_count=$RETAINED_COUNT" >> "$GITHUB_OUTPUT"
+          echo "purge_results<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PURGE_RESULTS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          if [[ "$RETAINED_COUNT" -gt 0 ]]; then
+            echo "⚠️ $RETAINED_COUNT resource(s) retained in soft-deleted state (purge-protected)"
+          fi
+
+      - name: Clean deployment history
+        if: |
+          always() &&
+          steps.state.outputs.found == 'true' &&
+          (steps.destroy_stack.outputs.destroy_status == 'succeeded' || steps.destroy_rg.outputs.destroy_status == 'succeeded')
+        continue-on-error: true
+        run: |
+          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
+          echo "🧹 Cleaning subscription deployment history entry: $DEPLOYMENT_ID"
+          az deployment sub delete --name "$DEPLOYMENT_ID" 2>/dev/null || true
+
       - name: Update deployment state
         if: always() && steps.state.outputs.found == 'true'
         run: |
@@ -289,19 +456,40 @@ jobs:
           STATE_FILE="$DEPLOY_DIR/state.json"
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-          if [[ "${{ steps.check.outputs.exists }}" == "false" ]]; then
+          # Determine final status based on which destroy path ran
+          STACK_EXISTS="${{ steps.check.outputs.stack_exists }}"
+          RG_EXISTS="${{ steps.check.outputs.rg_exists }}"
+          STACK_STATUS="${{ steps.destroy_stack.outputs.destroy_status }}"
+          RG_STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+          RETAINED_COUNT="${{ steps.purge.outputs.retained_count }}"
+
+          if [[ "$STACK_EXISTS" != "true" && "$RG_EXISTS" != "true" ]]; then
             STATUS="already-destroyed"
-          elif [[ "${{ steps.destroy.outputs.destroy_status }}" == "succeeded" ]]; then
-            STATUS="destroyed"
+          elif [[ "$STACK_STATUS" == "succeeded" || "$RG_STATUS" == "succeeded" ]]; then
+            if [[ "${RETAINED_COUNT:-0}" -gt 0 ]]; then
+              STATUS="retained-soft-deleted"
+            else
+              STATUS="destroyed"
+            fi
+          elif [[ "$STACK_STATUS" == "failed" || "$RG_STATUS" == "failed" ]]; then
+            STATUS="partially-destroyed"
           else
             STATUS="destroy-failed"
+          fi
+
+          # Determine duration from whichever path ran
+          DURATION="${{ steps.destroy_stack.outputs.destroy_duration }}"
+          if [[ -z "$DURATION" ]]; then
+            DURATION="${{ steps.destroy_rg.outputs.destroy_duration }}"
           fi
 
           # Update state file
           if [[ -f "$STATE_FILE" ]]; then
             jq --arg status "$STATUS" --arg ts "$TIMESTAMP" --arg actor "${{ github.actor }}" \
-              --arg duration "${{ steps.destroy.outputs.destroy_duration }}" \
-              '. + {status: $status, destroyedAt: $ts, destroyedBy: $actor, destroyDuration: $duration}' \
+              --arg duration "$DURATION" \
+              --arg purgeResults '${{ steps.purge.outputs.purge_results }}' \
+              '. + {status: $status, destroyedAt: $ts, destroyedBy: $actor, destroyDuration: $duration} |
+              if ($purgeResults | length) > 0 then . + {purgeResults: ($purgeResults | fromjson? // [])} else . end' \
               "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
           fi
 
@@ -323,26 +511,48 @@ jobs:
         run: |
           DEPLOY_ID="${{ matrix.deployment_id }}"
           RG="${{ steps.state.outputs.resource_group }}"
-          STATUS="${{ steps.destroy.outputs.destroy_status }}"
-          DURATION="${{ steps.destroy.outputs.destroy_duration }}"
+          STACK_EXISTS="${{ steps.check.outputs.stack_exists }}"
+          RG_EXISTS="${{ steps.check.outputs.rg_exists }}"
+          STACK_STATUS="${{ steps.destroy_stack.outputs.destroy_status }}"
+          RG_STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+          STACK_DURATION="${{ steps.destroy_stack.outputs.destroy_duration }}"
+          RG_DURATION="${{ steps.destroy_rg.outputs.destroy_duration }}"
           RESOURCE_COUNT="${{ steps.check.outputs.resource_count }}"
           SUB_COUNT="${{ steps.check.outputs.sub_count }}"
-          EXISTS="${{ steps.check.outputs.exists }}"
+          SOFT_COUNT="${{ steps.check.outputs.soft_count }}"
+          RETAINED_COUNT="${{ steps.purge.outputs.retained_count }}"
+          DEPLOY_METHOD="${{ steps.state.outputs.deploy_method }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           echo "============================================"
           echo "Git-Ape Destroy Summary"
           echo "============================================"
           echo "Deployment:     $DEPLOY_ID"
+          echo "Method:         $DEPLOY_METHOD"
           echo "Resource Group: $RG"
-          if [[ "$EXISTS" == "false" ]]; then
+
+          if [[ "$STACK_EXISTS" == "true" ]]; then
+            if [[ "$STACK_STATUS" == "succeeded" ]]; then
+              echo "Result:         ✅ Stack destroyed ($RESOURCE_COUNT resources via deleteAll)"
+              echo "Duration:       $STACK_DURATION"
+            else
+              echo "Result:         ❌ Stack delete failed"
+            fi
+          elif [[ "$RG_EXISTS" != "true" && "$STACK_EXISTS" != "true" ]]; then
             echo "Result:         Already destroyed"
-          elif [[ "$STATUS" == "succeeded" ]]; then
+          elif [[ "$RG_STATUS" == "succeeded" ]]; then
             echo "Result:         ✅ Destroyed ($RESOURCE_COUNT RG resources + $SUB_COUNT subscription-scoped)"
-            echo "Duration:       $DURATION"
+            echo "Duration:       $RG_DURATION"
           else
             echo "Result:         ❌ Failed"
           fi
+
+          if [[ "${RETAINED_COUNT:-0}" -gt 0 ]]; then
+            echo "Soft-deleted:   ⚠️ $RETAINED_COUNT resource(s) retained (purge-protected)"
+          elif [[ "${SOFT_COUNT:-0}" -gt 0 ]]; then
+            echo "Soft-deleted:   ✅ All soft-deleted resources purged"
+          fi
+
           echo "Run:            $RUN_URL"
           echo "============================================"
 
@@ -356,15 +566,17 @@ jobs:
 
           DEPLOY_ID="${{ matrix.deployment_id }}"
           RG="${{ steps.state.outputs.resource_group }}"
-          STATUS="${{ steps.destroy.outputs.destroy_status }}"
+          STACK_STATUS="${{ steps.destroy_stack.outputs.destroy_status }}"
+          RG_STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+          DEPLOY_METHOD="${{ steps.state.outputs.deploy_method }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          if [[ "$STATUS" == "succeeded" ]]; then
+          if [[ "$STACK_STATUS" == "succeeded" || "$RG_STATUS" == "succeeded" ]]; then
             EMOJI="🗑️"
-            MSG="Resource group *$RG* ($DEPLOY_ID) destroyed"
+            MSG="Deployment *$DEPLOY_ID* destroyed (method: $DEPLOY_METHOD)"
           else
             EMOJI="❌"
-            MSG="Destroy failed for *$RG* ($DEPLOY_ID)"
+            MSG="Destroy failed for *$DEPLOY_ID* (method: $DEPLOY_METHOD)"
           fi
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
