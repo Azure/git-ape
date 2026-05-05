@@ -35,6 +35,8 @@ Your organization must have the `chat.plugins.enabled` setting set to `true`. If
 
 1. Add the Git-Ape marketplace to your VS Code `settings.json`:
 
+   [![Open Settings in VS Code](https://img.shields.io/badge/Open_Settings-VS_Code-007ACC?logo=visualstudiocode&logoColor=white)](pathname:///open-settings.html) [![Open Settings in VS Code Insiders](https://img.shields.io/badge/Open_Settings-VS_Code_Insiders-24bfa5?logo=visualstudiocode&logoColor=white)](pathname:///open-settings-insiders.html)
+
    ```jsonc
    "chat.plugins.marketplaces": [
        "Azure/git-ape"
