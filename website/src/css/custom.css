@@ -911,8 +911,11 @@ div[class*='announcementBar'] a {
 .mermaid-zoom-content {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* `safe center` falls back to flex-start when content overflows, so the
+     top/left of large diagrams remain reachable via scroll. Without `safe`,
+     flex centering pushes overflow off the start edge and clips it. */
+  align-items: safe center;
+  justify-content: safe center;
   overflow: auto;
   /* Subtle hint that scrolling is possible on small viewports */
   scroll-behavior: smooth;
