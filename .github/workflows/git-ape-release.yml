@@ -1,0 +1,325 @@
+name: "Git-Ape: Plugin Release"
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without leading v, e.g. 0.1.0). Will create tag v<version>.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Prevent overlapping release runs that could push conflicting tags or commits.
+# Different tags/versions still queue rather than cancel — we never want to
+# abandon a release mid-flight.
+concurrency:
+  group: git-ape-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve target version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            # Tag push: github.ref = refs/tags/vX.Y.Z
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "❌ '$VERSION' is not valid semver"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Mark as prerelease if semver has a pre-release suffix (e.g. 0.1.0-rc.1).
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Resolved version: $VERSION (tag: v$VERSION)"
+
+      - name: Bump plugin.json and marketplace.json
+        id: bump
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PLUGIN_JSON="plugin.json"
+          MARKETPLACE_JSON=".github/plugin/marketplace.json"
+          PLUGIN_NAME=$(jq -r '.name' "$PLUGIN_JSON")
+
+          OLD_PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
+          OLD_MKT_VERSION=$(jq -r '.metadata.version' "$MARKETPLACE_JSON")
+          OLD_MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
+            '.plugins[] | select(.name == $name) | .version' "$MARKETPLACE_JSON")
+
+          echo "Current versions:"
+          echo "  plugin.json:        $OLD_PLUGIN_VERSION"
+          echo "  marketplace.meta:   $OLD_MKT_VERSION"
+          echo "  marketplace.entry:  $OLD_MKT_ENTRY_VERSION"
+          echo "Target version:       $VERSION"
+
+          jq --arg v "$VERSION" '.version = $v' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
+          mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"
+
+          jq --arg v "$VERSION" --arg name "$PLUGIN_NAME" '
+            .metadata.version = $v
+            | .plugins |= map(if .name == $name then .version = $v else . end)
+          ' "$MARKETPLACE_JSON" > "$MARKETPLACE_JSON.tmp"
+          mv "$MARKETPLACE_JSON.tmp" "$MARKETPLACE_JSON"
+
+          if git diff --quiet plugin.json .github/plugin/marketplace.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit version bump (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch' && steps.bump.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugin.json .github/plugin/marketplace.json
+          git commit -m "chore(release): bump plugin to v$VERSION"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "$TAG"
+
+      - name: Generate release notes
+        id: notes
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
+
+          # Collect commits grouped by conventional-commit type
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="$PREV_TAG..$TAG"
+          else
+            RANGE="$TAG"
+          fi
+
+          declare -A SECTIONS
+          SECTIONS=(
+            [feat]=""
+            [fix]=""
+            [docs]=""
+            [ci]=""
+            [chore]=""
+            [refactor]=""
+            [perf]=""
+            [test]=""
+            [other]=""
+          )
+
+          SECTION_TITLES=(
+            [feat]="Features"
+            [fix]="Bug Fixes"
+            [docs]="Documentation"
+            [ci]="CI/CD"
+            [chore]="Chores"
+            [refactor]="Refactoring"
+            [perf]="Performance"
+            [test]="Tests"
+            [other]="Other Changes"
+          )
+
+          while IFS= read -r line; do
+            hash="${line%% *}"
+            msg="${line#* }"
+
+            # Parse conventional commit: type(scope): description  OR  type: description
+            if [[ "$msg" =~ ^([a-zA-Z]+)(\(.*\))?!?:\ (.+)$ ]]; then
+              type="${BASH_REMATCH[1],,}"  # lowercase
+              scope="${BASH_REMATCH[2]}"
+              desc="${BASH_REMATCH[3]}"
+              scope="${scope#(}"
+              scope="${scope%)}"
+
+              if [[ -z "${SECTIONS[$type]+_}" ]]; then
+                type="other"
+              fi
+
+              if [[ -n "$scope" ]]; then
+                SECTIONS[$type]+="- **${scope}:** ${desc} (\`${hash}\`)"$'\n'
+              else
+                SECTIONS[$type]+="- ${desc} (\`${hash}\`)"$'\n'
+              fi
+            else
+              SECTIONS[other]+="- ${msg} (\`${hash}\`)"$'\n'
+            fi
+          done < <(git log --pretty=format:'%h %s' "$RANGE" | head -200)
+
+          # Build the release notes file
+          {
+            echo "## Git-Ape $TAG"
+            echo
+            if [[ -n "$PREV_TAG" ]]; then
+              echo "Changes since [$PREV_TAG](https://github.com/${{ github.repository }}/releases/tag/$PREV_TAG):"
+            else
+              echo "Initial tagged release."
+            fi
+            echo
+
+            # Emit sections in display order
+            for type in feat fix perf refactor docs ci test chore other; do
+              if [[ -n "${SECTIONS[$type]}" ]]; then
+                echo "### ${SECTION_TITLES[$type]}"
+                echo
+                echo -n "${SECTIONS[$type]}"
+                echo
+              fi
+            done
+
+            echo "## Install"
+            echo
+            echo '### VS Code'
+            echo
+            echo '```jsonc'
+            echo '"chat.plugins.marketplaces": ["Azure/git-ape"]'
+            echo '```'
+            echo
+            # shellcheck disable=SC2016
+            echo 'Then install **git-ape** from the `@agentPlugins` Extensions view.'
+            echo
+            echo '### Copilot CLI'
+            echo
+            echo '```bash'
+            echo 'copilot plugin marketplace add Azure/git-ape'
+            echo 'copilot plugin install git-ape@git-ape'
+            echo '```'
+          } > release-notes.md
+
+          {
+            echo 'notes<<EOF'
+            cat release-notes.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          PRERELEASE: ${{ steps.ver.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          PRERELEASE_FLAG=""
+          if [[ "$PRERELEASE" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            echo "Marking $TAG as a prerelease."
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating notes."
+            # shellcheck disable=SC2086
+            gh release edit "$TAG" --notes-file release-notes.md $PRERELEASE_FLAG
+          else
+            # shellcheck disable=SC2086
+            gh release create "$TAG" \
+              --title "Git-Ape $TAG" \
+              --notes-file release-notes.md \
+              $PRERELEASE_FLAG
+          fi
+
+      - name: Update CHANGELOG.md on main
+        if: steps.ver.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Always work against the tip of main so the changelog stays current,
+          # even when this run was triggered by a tag push from an older commit.
+          git fetch origin main
+          git checkout -B changelog-update origin/main
+
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Strip the heading + install footer from release-notes.md to get just
+          # the entry body. release-notes.md format:
+          #   ## Git-Ape vX.Y.Z
+          #   <body>
+          #   ## Install
+          #   ...
+          ENTRY_BODY=$(awk '
+            /^## Install$/ { exit }
+            /^## Git-Ape / { next }
+            { print }
+          ' release-notes.md | sed -e 's/[[:space:]]*$//' | awk 'NF || p { p=1; print }')
+
+          NEW_ENTRY=$(printf '## [%s] - %s\n\n%s\n' "$VERSION" "$DATE" "$ENTRY_BODY")
+
+          if [[ -f CHANGELOG.md ]]; then
+            # Insert new entry below the top-level header, preserving existing content.
+            awk -v entry="$NEW_ENTRY" '
+              BEGIN { inserted = 0 }
+              {
+                print
+                if (!inserted && /^# /) {
+                  print ""
+                  print entry
+                  inserted = 1
+                }
+              }
+            ' CHANGELOG.md > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+          else
+            {
+              echo "# Changelog"
+              echo
+              echo "All notable changes to this project are documented here."
+              echo "This project follows [Semantic Versioning](https://semver.org/)."
+              echo
+              echo "$NEW_ENTRY"
+            } > CHANGELOG.md
+          fi
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md unchanged; skipping commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): add entry for $TAG"
+
+          # Push directly to main. If the push fails (someone else moved main),
+          # fall back to opening a PR so the changelog still lands.
+          if ! git push origin HEAD:main; then
+            echo "Direct push to main rejected; opening a PR instead."
+            BRANCH="changelog/${TAG}"
+            git push origin "HEAD:$BRANCH"
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "docs(changelog): add entry for $TAG" \
+              --body "Automated changelog update for [$TAG](https://github.com/${{ github.repository }}/releases/tag/$TAG)."
+          fi

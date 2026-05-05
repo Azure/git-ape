@@ -1,0 +1,144 @@
+name: "Git-Ape: Plugin Version Check"
+
+on:
+  pull_request:
+    paths:
+      - 'plugin.json'
+      - '.github/plugin/marketplace.json'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-version-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate plugin.json and marketplace.json versions match
+        id: check
+        run: |
+          set -euo pipefail
+
+          PLUGIN_JSON="plugin.json"
+          MARKETPLACE_JSON=".github/plugin/marketplace.json"
+
+          if [[ ! -f "$PLUGIN_JSON" ]]; then
+            echo "❌ $PLUGIN_JSON not found"
+            exit 1
+          fi
+          if [[ ! -f "$MARKETPLACE_JSON" ]]; then
+            echo "❌ $MARKETPLACE_JSON not found"
+            exit 1
+          fi
+
+          PLUGIN_NAME=$(jq -r '.name' "$PLUGIN_JSON")
+          PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
+
+          # Marketplace has top-level metadata.version and per-plugin entry.version.
+          MKT_METADATA_VERSION=$(jq -r '.metadata.version // empty' "$MARKETPLACE_JSON")
+          MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
+            '.plugins[] | select(.name == $name) | .version' "$MARKETPLACE_JSON")
+          MKT_ENTRY_NAME_FOUND=$(jq -r --arg name "$PLUGIN_NAME" \
+            '[.plugins[] | select(.name == $name)] | length' "$MARKETPLACE_JSON")
+
+          echo "plugin.json:           name=$PLUGIN_NAME version=$PLUGIN_VERSION"
+          echo "marketplace metadata:  version=$MKT_METADATA_VERSION"
+          echo "marketplace entry:     name=$PLUGIN_NAME version=$MKT_ENTRY_VERSION"
+
+          ERRORS=0
+
+          # 1. plugin name must use kebab-case (VS Code agent plugin requirement).
+          if [[ ! "$PLUGIN_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "❌ plugin.json name '$PLUGIN_NAME' is not valid kebab-case (lowercase letters, numbers, hyphens)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ ${#PLUGIN_NAME} -gt 64 ]]; then
+            echo "❌ plugin.json name '$PLUGIN_NAME' exceeds 64 character limit"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          # 2. plugin must be listed in marketplace.
+          if [[ "$MKT_ENTRY_NAME_FOUND" -eq 0 ]]; then
+            echo "❌ marketplace.json has no plugin entry with name '$PLUGIN_NAME'"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          # 3. Versions must match across all three locations.
+          if [[ -n "$MKT_ENTRY_VERSION" && "$PLUGIN_VERSION" != "$MKT_ENTRY_VERSION" ]]; then
+            echo "❌ Version drift: plugin.json=$PLUGIN_VERSION but marketplace plugin entry=$MKT_ENTRY_VERSION"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ -n "$MKT_METADATA_VERSION" && "$PLUGIN_VERSION" != "$MKT_METADATA_VERSION" ]]; then
+            echo "⚠️ Marketplace metadata version ($MKT_METADATA_VERSION) does not match plugin.json ($PLUGIN_VERSION)"
+            echo "   These can intentionally differ if the marketplace versions independently."
+          fi
+
+          # 4. Version must be a valid semver-ish string (M.m.p with optional pre-release).
+          if [[ ! "$PLUGIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "❌ plugin.json version '$PLUGIN_VERSION' is not valid semver (expected M.m.p[-pre])"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ "$ERRORS" -gt 0 ]]; then
+            echo ""
+            echo "Plugin version check failed with $ERRORS error(s)."
+            echo "Bump plugin.json and the matching .github/plugin/marketplace.json plugin entry in lockstep."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ plugin.json and marketplace.json are in sync at version $PLUGIN_VERSION"
+
+      - name: Validate plugin paths exist
+        run: |
+          set -euo pipefail
+
+          PLUGIN_JSON="plugin.json"
+          AGENTS_PATH=$(jq -r '.agents // empty' "$PLUGIN_JSON")
+          SKILLS_PATH=$(jq -r '.skills // empty' "$PLUGIN_JSON")
+
+          ERRORS=0
+
+          if [[ -z "$AGENTS_PATH" ]]; then
+            echo "❌ plugin.json is missing the 'agents' path"
+            ERRORS=$((ERRORS + 1))
+          elif [[ ! -d "$AGENTS_PATH" ]]; then
+            echo "❌ Agents path '$AGENTS_PATH' (from plugin.json) does not exist"
+            ERRORS=$((ERRORS + 1))
+          else
+            AGENT_COUNT=$(find "$AGENTS_PATH" -maxdepth 2 -name '*.agent.md' -type f | wc -l | tr -d ' ')
+            if [[ "$AGENT_COUNT" -eq 0 ]]; then
+              echo "❌ Agents path '$AGENTS_PATH' contains no *.agent.md files"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "✅ Agents path '$AGENTS_PATH' contains $AGENT_COUNT agent file(s)"
+            fi
+          fi
+
+          if [[ -z "$SKILLS_PATH" ]]; then
+            echo "❌ plugin.json is missing the 'skills' path"
+            ERRORS=$((ERRORS + 1))
+          elif [[ ! -d "$SKILLS_PATH" ]]; then
+            echo "❌ Skills path '$SKILLS_PATH' (from plugin.json) does not exist"
+            ERRORS=$((ERRORS + 1))
+          else
+            SKILL_COUNT=$(find "$SKILLS_PATH" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -type f | wc -l | tr -d ' ')
+            if [[ "$SKILL_COUNT" -eq 0 ]]; then
+              echo "❌ Skills path '$SKILLS_PATH' contains no */SKILL.md files"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "✅ Skills path '$SKILLS_PATH' contains $SKILL_COUNT skill(s)"
+            fi
+          fi
+
+          if [[ "$ERRORS" -gt 0 ]]; then
+            echo ""
+            echo "Plugin path validation failed with $ERRORS error(s)."
+            echo "Update plugin.json 'agents' and 'skills' fields to match the repo layout."
+            exit 1
+          fi

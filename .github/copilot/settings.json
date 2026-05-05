@@ -1,0 +1,14 @@
+{
+  "$schema": "https://aka.ms/vscode-chat-customization-schema",
+  "extraKnownMarketplaces": {
+    "git-ape": {
+      "source": {
+        "source": "github",
+        "repo": "Azure/git-ape"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "git-ape@git-ape": true
+  }
+}

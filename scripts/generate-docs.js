@@ -521,12 +521,12 @@ function generateReferenceDocs() {
     const content = `---
 title: "plugin.json Reference"
 sidebar_label: "plugin.json"
-description: "Git-Ape Copilot CLI plugin manifest"
+description: "Git-Ape plugin manifest (VS Code agent plugin and Copilot CLI plugin)"
 ---
 
 # plugin.json
 
-The plugin manifest defines the Git-Ape Copilot CLI plugin metadata.
+The plugin manifest defines the Git-Ape plugin metadata. The same manifest is consumed by both the [VS Code agent plugin](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) loader and the [GitHub Copilot CLI plugin](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference) loader — no separate config is required.
 
 ## Current Configuration
 
