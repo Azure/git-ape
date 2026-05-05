@@ -89,6 +89,8 @@ You should see the Git-Ape orchestrator respond. If it does not, reload the VS C
 
 You have Git-Ape installed. Here is the recommended path depending on what you want to do:
 
+- [VS Code vs Copilot CLI](./vscode-vs-cli) — feature parity and when to pick which surface
+
 ```mermaid
 flowchart TD
     A["Git-Ape installed<br/>(VS Code or CLI)"] --> B{"What do you want to do?"}
