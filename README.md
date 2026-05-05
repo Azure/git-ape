@@ -72,7 +72,11 @@ copilot plugin marketplace add Azure/git-ape
 copilot plugin install git-ape@git-ape
 copilot plugin list   # Should show: git-ape@git-ape
 ```
-
+```Within Copilot CLI
+/plugin marketplace add https://github.com/Azure/git-ape
+/plugin install git-ape@git-ape
+/plugin list   # Should show: git-ape@git-ape
+```
 #### Option C: Local development install
 
 Clone this repository and register the local checkout as a VS Code plugin in `settings.json`:
