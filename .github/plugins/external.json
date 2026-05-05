@@ -1,0 +1,19 @@
+[
+  {
+    "name": "ape-context",
+    "description": "Extension for git-ape that provides enhanced context management, allowing platform teams to set up a baseline for Engineering context, tools use & intent",
+    "version": "1.0.0",
+    "author": {
+      "name": "Suzanne Daniels",
+      "url": "https://suuu.us"
+    },
+    "homepage": "https://github.com/suuus/ape-context",
+    "keywords": ["context", "intent", "infrastructure", "deployment", "documentation", "git-ape"],
+    "license": "MIT",
+    "repository": "https://github.com/suuus/ape-context",
+    "source": {
+      "source": "github",
+      "repo": "suuus/ape-context"
+    }
+  }
+]
