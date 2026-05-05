@@ -8,7 +8,7 @@ const baseUrl =
 
 const config: Config = {
   title: 'Git-Ape',
-  tagline: 'Intelligent cloud deployment agent system for GitHub Copilot',
+  tagline: 'Platform engineering for the agentic AI era — agents over modules, intent over syntax, evidence over audits',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -69,7 +69,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/git-ape-social-card.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
