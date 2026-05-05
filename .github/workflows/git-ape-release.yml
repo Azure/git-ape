@@ -115,13 +115,25 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           set -euo pipefail
-          PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
+
+          # Use the tag as the tip of the range when it exists as a ref. On
+          # workflow_dispatch with versions already aligned, the prior
+          # "Commit version bump" step is skipped, so the tag does not yet
+          # exist locally — fall back to HEAD so git log still walks the
+          # right commits.
+          if git rev-parse --verify "$TAG" >/dev/null 2>&1; then
+            TIP="$TAG"
+          else
+            TIP="HEAD"
+          fi
+
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TIP}^" 2>/dev/null || echo "")
 
           # Collect commits grouped by conventional-commit type
           if [[ -n "$PREV_TAG" ]]; then
-            RANGE="$PREV_TAG..$TAG"
+            RANGE="${PREV_TAG}..${TIP}"
           else
-            RANGE="$TAG"
+            RANGE="$TIP"
           fi
 
           declare -A SECTIONS=(
