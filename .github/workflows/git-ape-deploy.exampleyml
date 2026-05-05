@@ -240,18 +240,39 @@ jobs:
           echo "🚀 Starting deployment: ${{ matrix.deployment_id }}"
           START_TIME=$(date +%s)
 
-          DEPLOY_OUTPUT=$(az deployment sub create \
-            --name "${{ matrix.deployment_id }}" \
-            --location "${{ steps.params.outputs.location }}" \
-            --template-file "${{ steps.params.outputs.deploy_dir }}/template.json" \
-            --parameters @"${{ steps.params.outputs.deploy_dir }}/parameters.json" \
-            --output json 2>&1)
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
+          LOCATION="${{ steps.params.outputs.location }}"
+
+          # Determine deploy method: prefer deployment stacks (idempotent destroy)
+          # Fall back to az deployment sub create if stacks are unavailable
+          DEPLOY_METHOD="stack"
+
+          if [[ "$DEPLOY_METHOD" == "stack" ]]; then
+            DEPLOY_OUTPUT=$(az stack sub create \
+              --name "$DEPLOYMENT_ID" \
+              --location "$LOCATION" \
+              --template-file "$DEPLOY_DIR/template.json" \
+              --parameters @"$DEPLOY_DIR/parameters.json" \
+              --action-on-unmanage deleteAll \
+              --deny-settings-mode none \
+              --yes \
+              --output json 2>&1)
+          else
+            DEPLOY_OUTPUT=$(az deployment sub create \
+              --name "$DEPLOYMENT_ID" \
+              --location "$LOCATION" \
+              --template-file "$DEPLOY_DIR/template.json" \
+              --parameters @"$DEPLOY_DIR/parameters.json" \
+              --output json 2>&1)
+          fi
 
           EXIT_CODE=$?
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
 
           echo "deploy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
+          echo "deploy_method=$DEPLOY_METHOD" >> "$GITHUB_OUTPUT"
 
           if [[ $EXIT_CODE -ne 0 ]]; then
             echo "deploy_status=failed" >> "$GITHUB_OUTPUT"
@@ -270,8 +291,18 @@ jobs:
 
           echo "deploy_status=succeeded" >> "$GITHUB_OUTPUT"
 
-          # Extract outputs
-          OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.properties.outputs // {}')
+          # Extract outputs depending on deploy method
+          if [[ "$DEPLOY_METHOD" == "stack" ]]; then
+            # For stacks, extract the stack ID
+            STACK_ID=$(echo "$DEPLOY_OUTPUT" | jq -r '.id // empty')
+            echo "stack_id=$STACK_ID" >> "$GITHUB_OUTPUT"
+
+            # Extract outputs from the stack's deployment
+            OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.outputs // {}')
+          else
+            OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.properties.outputs // {}')
+          fi
+
           echo "deploy_outputs<<EOF" >> "$GITHUB_OUTPUT"
           echo "$OUTPUTS" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -280,7 +311,99 @@ jobs:
           RG_NAME=$(echo "$OUTPUTS" | jq -r '.resourceGroupName.value // empty')
           echo "resource_group=$RG_NAME" >> "$GITHUB_OUTPUT"
 
-          echo "✅ Deployment succeeded in ${DURATION}s"
+          echo "✅ Deployment succeeded in ${DURATION}s (method: $DEPLOY_METHOD)"
+
+      - name: Capture managed resources
+        id: capture
+        if: steps.deploy.outputs.deploy_status == 'succeeded'
+        run: |
+          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
+          DEPLOY_METHOD="${{ steps.deploy.outputs.deploy_method }}"
+          RG_NAME="${{ steps.deploy.outputs.resource_group }}"
+          STACK_ID="${{ steps.deploy.outputs.stack_id }}"
+
+          # Known soft-deletable resource types
+          SOFT_DELETABLE_TYPES="Microsoft.KeyVault/vaults Microsoft.CognitiveServices/accounts Microsoft.AppConfiguration/configurationStores Microsoft.ApiManagement/service Microsoft.MachineLearningServices/workspaces Microsoft.RecoveryServices/vaults"
+
+          MANAGED_RESOURCES="[]"
+          RESOURCE_GROUPS="[]"
+
+          if [[ "$DEPLOY_METHOD" == "stack" && -n "$STACK_ID" ]]; then
+            # Stacks natively track all managed resources
+            STACK_RESOURCES=$(az stack sub show \
+              --name "$DEPLOYMENT_ID" \
+              --query "resources[].id" \
+              -o json 2>/dev/null || echo "[]")
+
+            # Build managedResources array from stack resources
+            for RES_ID in $(echo "$STACK_RESOURCES" | jq -r '.[]' 2>/dev/null); do
+              RES_TYPE=$(echo "$RES_ID" | grep -oP 'providers/\K[^/]+/[^/]+' | tail -1)
+              RES_SCOPE="resourceGroup"
+              if echo "$RES_ID" | grep -q "/resourceGroups/"; then
+                RES_SCOPE="resourceGroup"
+              else
+                RES_SCOPE="subscription"
+              fi
+
+              IS_SOFT_DELETABLE="false"
+              for SD_TYPE in $SOFT_DELETABLE_TYPES; do
+                if [[ "$RES_TYPE" == "$SD_TYPE" ]]; then
+                  IS_SOFT_DELETABLE="true"
+                  break
+                fi
+              done
+
+              MANAGED_RESOURCES=$(echo "$MANAGED_RESOURCES" | jq --arg id "$RES_ID" --arg type "$RES_TYPE" \
+                --arg scope "$RES_SCOPE" --argjson sd "$IS_SOFT_DELETABLE" \
+                '. + [{"id": $id, "type": $type, "scope": $scope, "softDeletable": $sd, "purgeProtected": false}]')
+            done
+
+            # Extract resource groups from managed resources
+            RESOURCE_GROUPS=$(echo "$MANAGED_RESOURCES" | jq -c '[.[].id | capture("/resourceGroups/(?<rg>[^/]+)") | .rg] | unique')
+          else
+            # Fallback: walk deployment operations recursively
+            OPS=$(az deployment operation sub list \
+              --name "$DEPLOYMENT_ID" \
+              --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
+              -o json 2>/dev/null || echo "[]")
+
+            for RES_ID in $(echo "$OPS" | jq -r '.[].id // empty' 2>/dev/null); do
+              RES_TYPE=$(echo "$OPS" | jq -r ".[] | select(.id == \"$RES_ID\") | .resourceType // empty")
+              RES_SCOPE="resourceGroup"
+              if echo "$RES_ID" | grep -q "/resourceGroups/"; then
+                RES_SCOPE="resourceGroup"
+              else
+                RES_SCOPE="subscription"
+              fi
+
+              IS_SOFT_DELETABLE="false"
+              for SD_TYPE in $SOFT_DELETABLE_TYPES; do
+                if [[ "$RES_TYPE" == "$SD_TYPE" ]]; then
+                  IS_SOFT_DELETABLE="true"
+                  break
+                fi
+              done
+
+              MANAGED_RESOURCES=$(echo "$MANAGED_RESOURCES" | jq --arg id "$RES_ID" --arg type "$RES_TYPE" \
+                --arg scope "$RES_SCOPE" --argjson sd "$IS_SOFT_DELETABLE" \
+                '. + [{"id": $id, "type": $type, "scope": $scope, "softDeletable": $sd, "purgeProtected": false}]')
+            done
+
+            # Collect resource groups
+            if [[ -n "$RG_NAME" ]]; then
+              RESOURCE_GROUPS="[\"$RG_NAME\"]"
+            fi
+          fi
+
+          echo "managed_resources<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$MANAGED_RESOURCES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "resource_groups<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESOURCE_GROUPS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          RESOURCE_COUNT=$(echo "$MANAGED_RESOURCES" | jq 'length')
+          echo "📋 Captured $RESOURCE_COUNT managed resources"
 
       - name: Run integration tests
         id: tests
@@ -349,25 +472,60 @@ jobs:
           DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
           STATUS="${{ steps.deploy.outputs.deploy_status || 'failed' }}"
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          DEPLOY_METHOD="${{ steps.deploy.outputs.deploy_method }}"
+          STACK_ID="${{ steps.deploy.outputs.stack_id }}"
+          MANAGED_RESOURCES='${{ steps.capture.outputs.managed_resources }}'
+          RESOURCE_GROUPS='${{ steps.capture.outputs.resource_groups }}'
 
-          # Create/update state.json
-          cat > "$DEPLOY_DIR/state.json" <<EOF
-          {
-            "deploymentId": "${{ matrix.deployment_id }}",
-            "timestamp": "$TIMESTAMP",
-            "status": "$STATUS",
-            "duration": "${{ steps.deploy.outputs.deploy_duration }}",
-            "subscription": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-            "location": "${{ steps.params.outputs.location }}",
-            "project": "${{ steps.params.outputs.project }}",
-            "environment": "${{ steps.params.outputs.environment }}",
-            "resourceGroup": "${{ steps.deploy.outputs.resource_group }}",
-            "triggeredBy": "${{ github.actor }}",
-            "triggerEvent": "${{ github.event_name }}",
-            "runId": "${{ github.run_id }}",
-            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-          EOF
+          # Ensure managed resources and resource groups are valid JSON
+          if ! echo "$MANAGED_RESOURCES" | jq empty 2>/dev/null; then
+            MANAGED_RESOURCES="[]"
+          fi
+          if ! echo "$RESOURCE_GROUPS" | jq empty 2>/dev/null; then
+            RESOURCE_GROUPS="[]"
+          fi
+
+          # Create/update state.json with extended schema
+          jq -n \
+            --arg deploymentId "${{ matrix.deployment_id }}" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg status "$STATUS" \
+            --arg duration "${{ steps.deploy.outputs.deploy_duration }}" \
+            --arg subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --arg location "${{ steps.params.outputs.location }}" \
+            --arg project "${{ steps.params.outputs.project }}" \
+            --arg environment "${{ steps.params.outputs.environment }}" \
+            --arg resourceGroup "${{ steps.deploy.outputs.resource_group }}" \
+            --arg triggeredBy "${{ github.actor }}" \
+            --arg triggerEvent "${{ github.event_name }}" \
+            --arg runId "${{ github.run_id }}" \
+            --arg runUrl "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg deployMethod "$DEPLOY_METHOD" \
+            --arg stackId "$STACK_ID" \
+            --argjson managedResources "$MANAGED_RESOURCES" \
+            --argjson resourceGroups "$RESOURCE_GROUPS" \
+            --argjson subscriptions "[\"${{ secrets.AZURE_SUBSCRIPTION_ID }}\"]" \
+            '{
+              deploymentId: $deploymentId,
+              timestamp: $timestamp,
+              status: $status,
+              duration: $duration,
+              subscription: $subscription,
+              location: $location,
+              project: $project,
+              environment: $environment,
+              resourceGroup: $resourceGroup,
+              triggeredBy: $triggeredBy,
+              triggerEvent: $triggerEvent,
+              runId: $runId,
+              runUrl: $runUrl,
+              deployMethod: $deployMethod,
+              stackId: (if $stackId == "" then null else $stackId end),
+              managedResources: $managedResources,
+              resourceGroups: $resourceGroups,
+              subscriptions: $subscriptions,
+              externalReferences: []
+            }' > "$DEPLOY_DIR/state.json"
 
       - name: Commit deployment state
         if: always()
@@ -376,9 +534,13 @@ jobs:
           STATUS="${{ steps.deploy.outputs.deploy_status }}"
           STATUS=${STATUS:-failed}
 
-          # Update metadata.json status from pending to actual result
+          # Update metadata.json status from pending to actual result, add deployMethod and resourceGroups
           if [[ -f "$DEPLOY_DIR/metadata.json" ]]; then
-            jq --arg status "$STATUS" '.status = $status' \
+            DEPLOY_METHOD="${{ steps.deploy.outputs.deploy_method }}"
+            DEPLOY_METHOD=${DEPLOY_METHOD:-subscription}
+            RG_NAME="${{ steps.deploy.outputs.resource_group }}"
+            jq --arg status "$STATUS" --arg method "$DEPLOY_METHOD" --arg rg "$RG_NAME" \
+              '.status = $status | .deployMethod = $method | .resourceGroups = (if $rg == "" then [] else [$rg] end)' \
               "$DEPLOY_DIR/metadata.json" > "$DEPLOY_DIR/metadata.json.tmp" \
               && mv "$DEPLOY_DIR/metadata.json.tmp" "$DEPLOY_DIR/metadata.json"
           fi

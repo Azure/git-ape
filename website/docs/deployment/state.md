@@ -26,7 +26,7 @@ Each deployment directory contains:
 
 ## Deployment Lifecycle
 
-A deployment moves through a defined set of states tracked in `metadata.json`. Valid `status` values are `initialized`, `gathering-requirements`, `generating-template`, `awaiting-confirmation`, `deploying`, `testing`, `succeeded`, `failed`, `rolled-back`, `destroy-requested`, and `destroyed`. Terminal states (`succeeded`, `failed`, `rolled-back`, `destroyed`) are persisted in git for audit.
+A deployment moves through a defined set of states tracked in `metadata.json`. Valid `status` values are `initialized`, `gathering-requirements`, `generating-template`, `awaiting-confirmation`, `deploying`, `testing`, `succeeded`, `failed`, `rolled-back`, `destroy-requested`, `destroyed`, `partially-destroyed`, and `retained-soft-deleted`. Terminal states (`succeeded`, `failed`, `rolled-back`, `destroyed`, `partially-destroyed`, `retained-soft-deleted`) are persisted in git for audit.
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontSize':'13px','lineColor':'#64748b','textColor':'#1e293b','primaryTextColor':'#0f172a','edgeLabelBackground':'#f8fafc','tertiaryColor':'#f1f5f9'}}}%%
@@ -51,14 +51,23 @@ stateDiagram-v2
     failed --> rolledBack: rollback initiated
     succeeded --> destroyRequested: PR sets metadata
     destroyRequested --> destroyed: git-ape-destroy.yml
+    destroyRequested --> partiallyDestroyed: partial failure
+    destroyRequested --> retainedSoftDeleted: purge-protected resources remain
     succeeded --> [*]
     rolledBack --> [*]
     destroyed --> [*]
+    partiallyDestroyed --> [*]
+    retainedSoftDeleted --> [*]
+
+    state "partially-destroyed" as partiallyDestroyed
+    state "retained-soft-deleted" as retainedSoftDeleted
 
     classDef terminal fill:#dcfce7,stroke:#15803d,color:#14532d
     classDef error fill:#fecaca,stroke:#b91c1c,color:#7f1d1d
+    classDef warning fill:#fef9c3,stroke:#a16207,color:#713f12
     class succeeded,destroyed terminal
     class failed,rolledBack error
+    class partiallyDestroyed,retainedSoftDeleted warning
 ```
 
 ## Directory Structure
@@ -113,7 +122,9 @@ Contains deployment tracking information.
   "region": "eastus",
   "project": "api",
   "environment": "dev",
+  "deployMethod": "stack",
   "resourceGroup": "rg-api-dev-eastus",
+  "resourceGroups": ["rg-api-dev-eastus"],
   "resources": [
     {
       "type": "Microsoft.Web/sites",
@@ -126,6 +137,11 @@ Contains deployment tracking information.
   "createdBy": "git-ape-agent"
 }
 ```
+
+**Fields:**
+- `deployMethod` - Deployment method used: `stack` (Azure Deployment Stacks, default for new deployments) or `subscription` (legacy `az deployment sub create`)
+- `resourceGroup` - Primary resource group name (kept for backward compatibility)
+- `resourceGroups` - Array of all resource groups managed by this deployment (supports multi-RG templates)
 
 **Status values:**
 - `initialized` - Deployment directory created
@@ -140,6 +156,83 @@ Contains deployment tracking information.
 - `destroyed` - Resources torn down
 - `already-destroyed` - Resources were already deleted
 - `destroy-requested` - Teardown has been requested
+- `partially-destroyed` - Some resources deleted but others remain (e.g., locks blocking deletion, transient errors)
+- `retained-soft-deleted` - Destroy completed but purge-protected resources remain soft-deleted until retention expires
+
+### state.json
+
+Contains runtime deployment state populated after `az deployment` or `az stack` completes. Used by the destroy workflow to determine teardown strategy.
+
+**Example (Deployment Stacks):**
+
+```json
+{
+  "deploymentId": "deploy-20260218-143022",
+  "timestamp": "2026-02-18T14:30:22Z",
+  "status": "succeeded",
+  "duration": "210s",
+  "subscription": "00000000-0000-0000-0000-000000000000",
+  "location": "eastus",
+  "project": "api",
+  "environment": "dev",
+  "resourceGroup": "rg-api-dev-eastus",
+  "triggeredBy": "octocat",
+  "triggerEvent": "push",
+  "runId": "12345678",
+  "runUrl": "https://github.com/org/repo/actions/runs/12345678",
+  "stackId": "/subscriptions/00000000-.../providers/Microsoft.Resources/deploymentStacks/deploy-20260218-143022",
+  "deployMethod": "stack",
+  "managedResources": [
+    {
+      "id": "/subscriptions/.../resourceGroups/rg-api-dev-eastus/providers/Microsoft.KeyVault/vaults/kv-api-dev-eus",
+      "type": "Microsoft.KeyVault/vaults",
+      "scope": "resourceGroup",
+      "apiVersion": "2024-04-01",
+      "softDeletable": true,
+      "purgeProtected": true
+    },
+    {
+      "id": "/subscriptions/.../resourceGroups/rg-api-dev-eastus/providers/Microsoft.Storage/storageAccounts/stapidev8k3m",
+      "type": "Microsoft.Storage/storageAccounts",
+      "scope": "resourceGroup",
+      "apiVersion": "2023-05-01",
+      "softDeletable": false,
+      "purgeProtected": false
+    }
+  ],
+  "resourceGroups": ["rg-api-dev-eastus"],
+  "subscriptions": ["00000000-0000-0000-0000-000000000000"],
+  "externalReferences": [
+    {
+      "kind": "privateEndpointConnection",
+      "targetResourceId": "/subscriptions/.../providers/Microsoft.Network/privateEndpoints/pe-kv-api"
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stackId` | `string \| null` | Azure Deployment Stack resource ID. When present, destroy uses `az stack sub delete` for complete cleanup. |
+| `deployMethod` | `"stack" \| "subscription"` | Deployment method used. `stack` = Deployment Stacks (default); `subscription` = legacy `az deployment sub create`. |
+| `managedResources` | `array` | Flat list of all resources managed by this deployment, regardless of scope. Populated by walking deployment operations recursively. |
+| `managedResources[].id` | `string` | Full ARM resource ID. |
+| `managedResources[].type` | `string` | ARM resource type (e.g., `Microsoft.KeyVault/vaults`). |
+| `managedResources[].scope` | `string` | Scope level: `resourceGroup`, `subscription`, or `managementGroup`. |
+| `managedResources[].apiVersion` | `string` | API version used for the resource. |
+| `managedResources[].softDeletable` | `boolean` | Whether the resource type supports soft-delete (Key Vault, Cognitive Services, etc.). |
+| `managedResources[].purgeProtected` | `boolean` | Whether the resource has purge protection enabled (cannot be permanently deleted until retention expires). |
+| `resourceGroups` | `array` | All resource groups created/managed by this deployment. |
+| `subscriptions` | `array` | All subscriptions involved in this deployment. |
+| `externalReferences` | `array` | Cross-deployment references (private endpoint connections, VNet peerings, DNS records in shared zones). |
+
+**Destroy strategy selection:**
+
+1. If `stackId` is present → `az stack sub delete --name <stackId> --action-on-unmanage deleteAll`
+2. If `stackId` is null → fallback to state-driven delete using `managedResources[]` and `resourceGroups[]`
+3. If neither field is populated (legacy state) → fall back to single `az group delete` on `resourceGroup`
 
 ### requirements.json
 
