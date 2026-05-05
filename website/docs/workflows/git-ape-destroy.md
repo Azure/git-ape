@@ -42,7 +42,7 @@ description: "GitHub Actions workflow: Git-Ape: Destroy"
 | **Runs On** | `ubuntu-latest` |
 | **Environment** | `azure-destroy` |
 | **Depends On** | `detect-destroys` |
-| **Steps** | 9 |
+| **Steps** | 10 |
 
 
 
@@ -371,6 +371,18 @@ jobs:
           git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json"
           git diff --cached --quiet || git commit -m "git-ape: mark ${{ matrix.deployment_id }} as $STATUS"
           git push || echo "::warning::Could not push state update"
+
+      - name: Amend ADR
+        if: steps.destroy.outputs.destroy_status == 'succeeded' || steps.check.outputs.exists == 'false'
+        run: |
+          chmod +x .github/scripts/adr-manager.sh
+          .github/scripts/adr-manager.sh amend "${{ matrix.deployment_id }}" "Deployment destroyed"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .azure/adrs/ 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "git-ape: amend ADR for ${{ matrix.deployment_id }} [destroyed]"
+          git push || echo "::warning::Could not push ADR amendment"
 
       - name: Post summary
         if: always()
