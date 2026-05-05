@@ -124,8 +124,7 @@ jobs:
             RANGE="$TAG"
           fi
 
-          declare -A SECTIONS
-          SECTIONS=(
+          declare -A SECTIONS=(
             [feat]=""
             [fix]=""
             [docs]=""
@@ -137,7 +136,7 @@ jobs:
             [other]=""
           )
 
-          SECTION_TITLES=(
+          declare -A SECTION_TITLES=(
             [feat]="Features"
             [fix]="Bug Fixes"
             [docs]="Documentation"
