@@ -91,6 +91,12 @@ stateDiagram-v2
     ├── architecture.md
     ├── deployment.log
     └── rollback.log                   # Rollback actions
+
+.azure/adrs/
+├── INDEX.md                           # Auto-maintained ADR index
+├── 0001-deploy-api-dev.md            # ADR for first deployment
+├── 0002-deploy-webapp-prod.md        # ADR for second deployment
+└── ...
 ```
 
 
@@ -123,7 +129,9 @@ Contains deployment tracking information.
     }
   ],
   "estimatedMonthlyCost": "$12.50",
-  "createdBy": "git-ape-agent"
+  "createdBy": "git-ape-agent",
+  "adrFile": ".azure/adrs/0001-deploy-api-dev.md",
+  "adrNumber": 1
 }
 ```
 
