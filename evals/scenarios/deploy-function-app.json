@@ -1,0 +1,39 @@
+{
+  "id": "deploy-function-app",
+  "description": "Core deployment path: user requests a Function App with supporting resources",
+  "intent": "Deploy a Python Function App with Storage and App Insights in East US",
+  "expected_agent": "Git-Ape",
+  "expected_sub_agents": [
+    "Azure Requirements Gatherer",
+    "Azure Template Generator",
+    "Azure Resource Deployer"
+  ],
+  "expected_skill_sequence": [
+    "prereq-check",
+    "azure-naming-research",
+    "azure-resource-availability",
+    "azure-cost-estimator",
+    "azure-security-analyzer",
+    "azure-deployment-preflight",
+    "azure-integration-tester"
+  ],
+  "assertions": [
+    {
+      "type": "skill_invoked",
+      "skill": "azure-security-analyzer",
+      "note": "Security gate must run before deployment"
+    },
+    {
+      "type": "skill_order",
+      "before": "azure-deployment-preflight",
+      "after": "azure-integration-tester",
+      "note": "Preflight must complete before integration tests"
+    },
+    {
+      "type": "agent_delegates",
+      "from": "Git-Ape",
+      "to": "Azure Requirements Gatherer",
+      "note": "Requirements are gathered before template generation"
+    }
+  ]
+}
