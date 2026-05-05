@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docs: Install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/website" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Docs: Generate",
+      "type": "shell",
+      "command": "node scripts/generate-docs.js",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": [],
+      "dependsOn": "Docs: Install"
+    },
+    {
+      "label": "Docs: Build (local)",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/website",
+        "env": { "DOCUSAURUS_BASE_URL": "/" }
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "dependsOn": "Docs: Generate"
+    },
+    {
+      "label": "Docs: Build (production)",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/website" },
+      "group": "build",
+      "problemMatcher": [],
+      "dependsOn": "Docs: Generate"
+    },
+    {
+      "label": "Docs: Serve",
+      "type": "shell",
+      "command": "npm run serve -- --port 3333 --no-open",
+      "options": { "cwd": "${workspaceFolder}/website" },
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": "Docs: Build (local)"
+    },
+    {
+      "label": "Docs: Dev Server",
+      "type": "shell",
+      "command": "npm start -- --port 3333 --no-open",
+      "options": { "cwd": "${workspaceFolder}/website" },
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": "Docs: Install"
+    }
+  ]
+}

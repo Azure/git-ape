@@ -73,4 +73,13 @@ if [ "$status" -ne 0 ]; then
   exit "$status"
 fi
 
+# Install Docusaurus website dependencies
+echo "==> Installing website dependencies..."
+if [ -f website/package.json ]; then
+  (cd website && npm install --no-audit --no-fund)
+  echo "==> Website dependencies installed"
+else
+  echo "==> website/package.json not found, skipping"
+fi
+
 echo "==> Dev environment ready"
