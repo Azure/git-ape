@@ -57,8 +57,19 @@ jobs:
           fi
           echo "Resolved version: $VERSION (tag: v$VERSION)"
 
-      - name: Bump plugin.json and marketplace.json
-        id: bump
+      - name: Validate tagged commit is on main history
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "❌ Tagged commit $GITHUB_SHA is not reachable from origin/main."
+            echo "Create release tags from commits already merged to main."
+            exit 1
+          fi
+          echo "✅ Tagged commit is reachable from origin/main."
+
+      - name: Validate release version invariant
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
@@ -68,45 +79,53 @@ jobs:
           MARKETPLACE_JSON=".github/plugin/marketplace.json"
           PLUGIN_NAME=$(jq -r '.name' "$PLUGIN_JSON")
 
-          OLD_PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
-          OLD_MKT_VERSION=$(jq -r '.metadata.version' "$MARKETPLACE_JSON")
-          OLD_MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
+          PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
+          MKT_METADATA_VERSION=$(jq -r '.metadata.version' "$MARKETPLACE_JSON")
+          MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
             '.plugins[] | select(.name == $name) | .version' "$MARKETPLACE_JSON")
 
-          echo "Current versions:"
-          echo "  plugin.json:        $OLD_PLUGIN_VERSION"
-          echo "  marketplace.meta:   $OLD_MKT_VERSION"
-          echo "  marketplace.entry:  $OLD_MKT_ENTRY_VERSION"
+          echo "Current versions at release commit:"
+          echo "  plugin.json:        $PLUGIN_VERSION"
+          echo "  marketplace.meta:   $MKT_METADATA_VERSION"
+          echo "  marketplace.entry:  $MKT_ENTRY_VERSION"
           echo "Target version:       $VERSION"
 
-          jq --arg v "$VERSION" '.version = $v' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
-          mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"
+          ERRORS=0
 
-          jq --arg v "$VERSION" --arg name "$PLUGIN_NAME" '
-            .metadata.version = $v
-            | .plugins |= map(if .name == $name then .version = $v else . end)
-          ' "$MARKETPLACE_JSON" > "$MARKETPLACE_JSON.tmp"
-          mv "$MARKETPLACE_JSON.tmp" "$MARKETPLACE_JSON"
-
-          if git diff --quiet plugin.json .github/plugin/marketplace.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          if [[ "$PLUGIN_VERSION" != "$VERSION" ]]; then
+            echo "❌ plugin.json version ($PLUGIN_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
           fi
 
-      - name: Commit version bump (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch' && steps.bump.outputs.changed == 'true'
+          if [[ "$MKT_ENTRY_VERSION" != "$VERSION" ]]; then
+            echo "❌ marketplace plugin entry version ($MKT_ENTRY_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ "$MKT_METADATA_VERSION" != "$VERSION" ]]; then
+            echo "❌ marketplace metadata.version ($MKT_METADATA_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ "$ERRORS" -gt 0 ]]; then
+            echo
+            echo "Release invariant failed: tag v$VERSION must point to a commit where version files are already synchronized."
+            echo "Fix by merging a release PR that bumps plugin.json + .github/plugin/marketplace.json before tagging."
+            exit 1
+          fi
+
+      - name: Ensure release tag exists (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add plugin.json .github/plugin/marketplace.json
-          git commit -m "chore(release): bump plugin to v$VERSION"
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing it."
+            exit 0
+          fi
+
           git tag -a "$TAG" -m "Release $TAG"
-          git push origin HEAD:${{ github.ref_name }}
           git push origin "$TAG"
 
       - name: Generate release notes
@@ -321,99 +340,3 @@ jobs:
           VSIX_FILE=$(ls ./*.vsix)
           echo "Publishing $VSIX_FILE to VS Code Marketplace (Release channel)"
           vsce publish --packagePath "$VSIX_FILE" --no-dependencies
-
-      - name: Bump version files and update CHANGELOG.md on main
-        if: steps.ver.outputs.prerelease == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.ver.outputs.tag }}
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          # Always work against the tip of main so the bump + changelog stay
-          # current, even when this run was triggered by a tag push from an
-          # older commit. (On tag-push the earlier "Commit version bump" step
-          # is skipped, so plugin.json / marketplace.json on main would
-          # otherwise stay at the previous version.)
-          git fetch origin main
-          git checkout -B changelog-update origin/main
-
-          # Re-apply the version bump against the fresh main tree so the same
-          # commit lands the version-bearing files AND the changelog entry.
-          PLUGIN_JSON="plugin.json"
-          MARKETPLACE_JSON=".github/plugin/marketplace.json"
-          PLUGIN_NAME=$(jq -r '.name' "$PLUGIN_JSON")
-
-          jq --arg v "$VERSION" '.version = $v' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
-          mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"
-
-          jq --arg v "$VERSION" --arg name "$PLUGIN_NAME" '
-            .metadata.version = $v
-            | .plugins |= map(if .name == $name then .version = $v else . end)
-          ' "$MARKETPLACE_JSON" > "$MARKETPLACE_JSON.tmp"
-          mv "$MARKETPLACE_JSON.tmp" "$MARKETPLACE_JSON"
-
-          DATE=$(date -u +%Y-%m-%d)
-
-          # Strip the heading + install footer from release-notes.md to get just
-          # the entry body. release-notes.md format:
-          #   ## Git-Ape vX.Y.Z
-          #   <body>
-          #   ## Install
-          #   ...
-          ENTRY_BODY=$(awk '
-            /^## Install$/ { exit }
-            /^## Git-Ape / { next }
-            { print }
-          ' release-notes.md | sed -e 's/[[:space:]]*$//' | awk 'NF || p { p=1; print }')
-
-          NEW_ENTRY=$(printf '## [%s] - %s\n\n%s\n' "$VERSION" "$DATE" "$ENTRY_BODY")
-
-          if [[ -f CHANGELOG.md ]]; then
-            # Insert new entry below the top-level header, preserving existing content.
-            awk -v entry="$NEW_ENTRY" '
-              BEGIN { inserted = 0 }
-              {
-                print
-                if (!inserted && /^# /) {
-                  print ""
-                  print entry
-                  inserted = 1
-                }
-              }
-            ' CHANGELOG.md > CHANGELOG.md.tmp
-            mv CHANGELOG.md.tmp CHANGELOG.md
-          else
-            {
-              echo "# Changelog"
-              echo
-              echo "All notable changes to this project are documented here."
-              echo "This project follows [Semantic Versioning](https://semver.org/)."
-              echo
-              echo "$NEW_ENTRY"
-            } > CHANGELOG.md
-          fi
-
-          if git diff --quiet CHANGELOG.md plugin.json .github/plugin/marketplace.json; then
-            echo "No version or changelog drift on main; skipping commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md plugin.json .github/plugin/marketplace.json
-          git commit -m "chore(release): bump to $TAG and update changelog"
-
-          # Push directly to main. If the push fails (someone else moved main),
-          # fall back to opening a PR so the bump + changelog still land.
-          if ! git push origin HEAD:main; then
-            echo "Direct push to main rejected; opening a PR instead."
-            BRANCH="release/${TAG}"
-            git push origin "HEAD:$BRANCH"
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "chore(release): bump to $TAG and update changelog" \
-              --body "Automated post-release update for [$TAG](https://github.com/${{ github.repository }}/releases/tag/$TAG): bumps \`plugin.json\` + \`.github/plugin/marketplace.json\` to \`$VERSION\` and appends the changelog entry."
-          fi
