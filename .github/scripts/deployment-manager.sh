@@ -110,6 +110,18 @@ show_deployment() {
         jq '.tests[] | {name, status, result}' "$DEPLOYMENT_PATH/tests.json"
     fi
     
+    # Show linked ADR if available
+    if [[ -f "$DEPLOYMENT_PATH/metadata.json" ]]; then
+        local ADR_FILE
+        ADR_FILE=$(jq -r '.adrFile // empty' "$DEPLOYMENT_PATH/metadata.json")
+        if [[ -n "$ADR_FILE" && -f "$WORKSPACE_ROOT/$ADR_FILE" ]]; then
+            local ADR_NUM
+            ADR_NUM=$(jq -r '.adrNumber // "?"' "$DEPLOYMENT_PATH/metadata.json")
+            echo -e "\n${GREEN}Architecture Decision Record:${NC}"
+            echo "  ADR-$(printf "%04d" "$ADR_NUM"): $ADR_FILE"
+        fi
+    fi
+
     # Show errors if any
     if [[ -f "$DEPLOYMENT_PATH/error.log" ]]; then
         echo -e "\n${RED}Errors:${NC}"

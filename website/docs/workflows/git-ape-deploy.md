@@ -57,7 +57,7 @@ This workflow ships as `git-ape-deploy.exampleyml` and is **inert** until rename
 | **Runs On** | `ubuntu-latest` |
 | **Environment** | `azure-deploy` |
 | **Depends On** | `detect-deployments`, `check-comment-trigger` |
-| **Steps** | 13 |
+| **Steps** | 14 |
 
 
 
@@ -438,6 +438,12 @@ jobs:
           }
           EOF
 
+      - name: Generate ADR
+        if: steps.deploy.outputs.deploy_status == 'succeeded'
+        run: |
+          chmod +x .github/scripts/adr-manager.sh
+          .github/scripts/adr-manager.sh generate "${{ matrix.deployment_id }}"
+
       - name: Commit deployment state
         if: always()
         run: |
@@ -458,6 +464,7 @@ jobs:
           # Stash the updated state and metadata files before switching branches
           cp "$DEPLOY_DIR/state.json" /tmp/state.json 2>/dev/null || true
           cp "$DEPLOY_DIR/metadata.json" /tmp/metadata.json 2>/dev/null || true
+          cp -r .azure/adrs /tmp/adrs 2>/dev/null || true
 
           # Ensure we push to main regardless of which ref was checked out
           git fetch origin main
@@ -466,8 +473,13 @@ jobs:
           # Restore the updated state and metadata files onto main
           cp /tmp/state.json "$DEPLOY_DIR/state.json" 2>/dev/null || true
           cp /tmp/metadata.json "$DEPLOY_DIR/metadata.json" 2>/dev/null || true
+          if [[ -d /tmp/adrs ]]; then
+            mkdir -p .azure/adrs
+            cp -r /tmp/adrs/* .azure/adrs/ 2>/dev/null || true
+          fi
 
           git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json"
+          git add .azure/adrs/ 2>/dev/null || true
           git diff --cached --quiet || git commit -m "git-ape: update state for ${{ matrix.deployment_id }} [$STATUS]"
           git push || echo "::warning::Could not push state update to main"
 

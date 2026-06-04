@@ -40,6 +40,12 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 | [Azure Drift Detector](./azure-drift-detector) | Detect configuration drift between deployed Azure resources and stored deployment state. Compare actual Azure configuration against desired state in .azure/deployments/, identify differences, and guide user through reconciliation options. Use when checking for manual changes, policy remediations, or unauthorized modifications. | ✅ |
 | [Git Ape Onboarding](./git-ape-onboarding) | Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets. | ✅ |
 
+## General Skills
+
+| Skill | Description | Invocable |
+|-------|-------------|:---------:|
+| [Adr Generator](./adr-generator) | Generate and manage Architecture Decision Records (ADRs) for deployments. Auto-creates ADRs after successful deployment, maintains an index, and amends records when deployments are updated or destroyed. | ✅ |
+
 ## Skill Invocation in Deployment Flow
 
 ```mermaid
