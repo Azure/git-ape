@@ -1,0 +1,384 @@
+name: "Git-Ape: Workshop Deck Build"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workshops/track-*/*_deck.md'
+      - 'workshops/shared/img/**'
+      - '.github/agents/**'
+      - '.github/skills/**'
+      - '.github/workflows/git-ape-plan.yml'
+      - '.github/workflows/git-ape-deploy.yml'
+      - '.github/workflows/git-ape-destroy.yml'
+      - '.github/workflows/git-ape-verify.yml'
+      - 'scripts/render-workshop-decks.js'
+      - 'scripts/verify-workshop-decks.js'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated track IDs to rebuild (e.g. T1,T2). Leave blank for all.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: workshop-deck-build
+  cancel-in-progress: false
+
+env:
+  AUTO_BRANCH: auto/deck-rebuild
+  PR_MARKER: '<!-- workshop-deck-build:auto-pr -->'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Loop guard: never react to the bot's own auto-commits.
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip deck-build]')
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Detect affected tracks
+        id: affected
+        env:
+          # Use the push-event range (covers multi-commit pushes), with a
+          # safe fallback for the initial-push case where 'before' is all
+          # zeros.
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Manual dispatch: trust the operator-supplied filter.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ONLY="${{ github.event.inputs.only }}"
+            echo "only=${ONLY}" >> "$GITHUB_OUTPUT"
+            echo "rebuild_all=$([[ -z "$ONLY" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "reason=manual workflow_dispatch" >> "$GITHUB_OUTPUT"
+            echo "✅ Manual dispatch, only=${ONLY:-<all>}"
+            exit 0
+          fi
+
+          # Resolve the diff range. github.event.before is all-zeros on the
+          # first push to a branch; fall back to HEAD~1 in that case.
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            DIFF_RANGE="HEAD~1..HEAD"
+          else
+            git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null || true
+            DIFF_RANGE="${BEFORE_SHA}..${AFTER_SHA}"
+          fi
+          echo "Diff range: $DIFF_RANGE"
+
+          CHANGED=$(git diff --name-only "$DIFF_RANGE" 2>/dev/null || git diff --name-only HEAD~1)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          REASONS=()
+          REBUILD_ALL=false
+
+          # Script changes → rebuild all tracks (toolchain change affects every deck)
+          if echo "$CHANGED" | grep -qE '^scripts/(render|verify)-workshop-decks\.js$'; then
+            REBUILD_ALL=true
+            REASONS+=("script change: render/verify-workshop-decks.js")
+          fi
+
+          # Direct deck.md edits → track-specific rebuild
+          DECK_TRACKS=()
+          while read -r f; do
+            [[ -z "$f" ]] && continue
+            if [[ "$f" =~ ^workshops/track-([1-9])-[^/]+/[1-9]_[^/]+_deck\.md$ ]]; then
+              DECK_TRACKS+=("T${BASH_REMATCH[1]}")
+              REASONS+=("$f")
+            fi
+          done <<< "$CHANGED"
+
+          # Shared SVG change → rebuild every track that references it
+          SHARED_SVG_CHANGED=$(echo "$CHANGED" | grep -E '^workshops/shared/img/.+\.svg$' || true)
+          if [[ -n "$SHARED_SVG_CHANGED" ]]; then
+            for svg in $SHARED_SVG_CHANGED; do
+              base=$(basename "$svg")
+              for deck in workshops/track-*/*_deck.md; do
+                if grep -Fq "$base" "$deck" 2>/dev/null; then
+                  tnum=$(basename "$(dirname "$deck")" | sed -E 's/^track-([1-9])-.*/\1/')
+                  DECK_TRACKS+=("T${tnum}")
+                  REASONS+=("$svg (referenced by $deck)")
+                fi
+              done
+            done
+          fi
+
+          # Source-file changes (agents/skills/core workflows) — Phase 1 runs
+          # the workflow as a render-smoke-test but does NOT update deck.md
+          # content. If no rendered file diff results, no PR is opened.
+          # In Phase 2, the LLM updater will rewrite deck.md from source changes.
+          SOURCE_CHANGED=$(echo "$CHANGED" | grep -E '^(\.github/(agents|skills|workflows/git-ape-(plan|deploy|destroy|verify)\.yml))' || true)
+          if [[ -n "$SOURCE_CHANGED" ]]; then
+            REASONS+=("source-file change (Phase 1: render-smoke-test only, no content update): $(echo "$SOURCE_CHANGED" | tr '\n' ' ')")
+            REBUILD_ALL=true  # we don't know which tracks are affected without parsing
+          fi
+
+          # Idempotency hardening: if an auto-PR already exists, rebuild ALL
+          # tracks so prior pending changes aren't lost when this run only
+          # rebuilds a subset.
+          if [[ ${#DECK_TRACKS[@]} -gt 0 ]] && [[ "$REBUILD_ALL" == "false" ]]; then
+            EXISTING=$(GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh pr list --head "$AUTO_BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+            if [[ -n "$EXISTING" && "$EXISTING" != "null" ]]; then
+              REBUILD_ALL=true
+              REASONS+=("auto-PR #${EXISTING} already open; rebuilding all tracks to preserve pending changes")
+            fi
+          fi
+
+          if [[ "$REBUILD_ALL" == "true" ]]; then
+            ONLY=""
+          elif [[ ${#DECK_TRACKS[@]} -gt 0 ]]; then
+            ONLY=$(printf '%s\n' "${DECK_TRACKS[@]}" | sort -u | tr '\n' ',' | sed 's/,$//')
+          else
+            ONLY=""
+          fi
+
+          if [[ "$REBUILD_ALL" == "false" && -z "$ONLY" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No relevant changes; nothing to rebuild."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "✅ Will rebuild: ${ONLY:-all tracks}"
+          fi
+          echo "only=${ONLY}" >> "$GITHUB_OUTPUT"
+          echo "rebuild_all=${REBUILD_ALL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "reason<<EOF"
+            printf '%s\n' "${REASONS[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.affected.outputs.skip != 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install ImageMagick, Ghostscript, LibreOffice
+        if: steps.affected.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            imagemagick ghostscript libreoffice-impress
+          # ImageMagick on Ubuntu 24.04 blocks PDF reads by default. Allow them.
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' \
+            /etc/ImageMagick-6/policy.xml || true
+          sudo sed -i 's|<policy domain="coder" rights="none" pattern="PDF"/>|<policy domain="coder" rights="read\|write" pattern="PDF"/>|' \
+            /etc/ImageMagick-7/policy.xml 2>/dev/null || true
+          magick -version | head -1 || convert -version | head -1
+          soffice --version
+
+      - name: Render decks
+        if: steps.affected.outputs.skip != 'true'
+        env:
+          ONLY: ${{ steps.affected.outputs.only }}
+        run: |
+          if [[ -n "${ONLY}" ]]; then
+            node scripts/render-workshop-decks.js --only "${ONLY}" --verbose
+          else
+            node scripts/render-workshop-decks.js --verbose
+          fi
+
+      - name: Detect rendered file changes
+        if: steps.affected.outputs.skip != 'true'
+        id: diff
+        run: |
+          set -euo pipefail
+          # Use git status --porcelain on the deck output files explicitly so
+          # missing files / unexpanded globs do not break the check.
+          CHANGED_OUTPUTS=$(git status --porcelain -- \
+            'workshops/track-*/*_deck.html' \
+            'workshops/track-*/*_deck.pdf' \
+            'workshops/track-*/*_deck.pptx' 2>/dev/null || true)
+          if [[ -z "$CHANGED_OUTPUTS" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No rendered file changes; nothing to commit."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Rendered files differ from main; will open auto-PR."
+            echo "$CHANGED_OUTPUTS"
+          fi
+
+      - name: Verify decks (rasterize for visual review)
+        if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
+        env:
+          ONLY: ${{ steps.affected.outputs.only }}
+        run: |
+          if [[ -n "${ONLY}" ]]; then
+            node scripts/verify-workshop-decks.js --only "${ONLY}" --verbose
+          else
+            node scripts/verify-workshop-decks.js --verbose
+          fi
+
+      - name: Upload screenshots as artifact
+        if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: workshop-deck-screenshots-${{ github.run_id }}
+          path: .deck-screenshots/
+          retention-days: 14
+
+      - name: Find open workshop-sync Issue
+        if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
+        id: sync_issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NUM=$(gh issue list --label workshop-sync --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [[ -n "$NUM" && "$NUM" != "null" ]]; then
+            echo "number=$NUM" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ Will reference workshop-sync Issue #$NUM (auto-close on merge)."
+          else
+            echo "number=" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No open workshop-sync Issue."
+          fi
+
+      - name: Push to auto branch and open/update PR
+        if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REASON: ${{ steps.affected.outputs.reason }}
+          ONLY: ${{ steps.affected.outputs.only }}
+          SYNC_ISSUE: ${{ steps.sync_issue.outputs.number }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          TRIGGER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # Configure committer
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Fetch the auto branch (if any) so --force-with-lease has a known
+          # remote ref to compare against. Tolerate the case where the branch
+          # doesn't exist yet (first run).
+          git fetch origin "$AUTO_BRANCH" --depth=1 2>/dev/null || true
+
+          # Re-create the branch from current HEAD with the rendered files staged
+          git checkout -B "$AUTO_BRANCH"
+          git add workshops/track-*/*_deck.html workshops/track-*/*_deck.pdf workshops/track-*/*_deck.pptx
+          # Screenshots are committed under .deck-screenshots/ so they render
+          # inline in the PR body via GitHub blob URLs. They're gitignored on
+          # main so they only ever exist on this branch.
+          git add -f .deck-screenshots/
+
+          COMMIT_MSG="auto: rebuild workshop decks (${ONLY:-all}) [skip deck-build]
+
+          Triggered by: ${TRIGGER_SHA}
+          Reason:
+          ${REASON}
+
+          Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+
+          git commit -m "$COMMIT_MSG" || {
+            echo "Nothing staged after add. Exiting clean."
+            exit 0
+          }
+
+          # Force-push so re-runs update the same branch (idempotent). Using
+          # the explicit refspec form so the lease check works even if the
+          # remote tracking ref wasn't fetched.
+          if git ls-remote --exit-code origin "refs/heads/$AUTO_BRANCH" >/dev/null 2>&1; then
+            REMOTE_SHA=$(git ls-remote origin "refs/heads/$AUTO_BRANCH" | cut -f1)
+            git push --force-with-lease="$AUTO_BRANCH:$REMOTE_SHA" origin "HEAD:refs/heads/$AUTO_BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$AUTO_BRANCH"
+          fi
+
+          # Ensure the label exists so PR creation doesn't fail on a fresh repo
+          gh label create auto-deck-rebuild --color "FBCA04" --description "Auto-rebuilt workshop decks" 2>/dev/null || true
+
+          # Build PR body. Embed first 3 slides per track as a quality
+          # spot-check; link to the workflow artifact for the full set. This
+          # keeps the body well under GitHub's PR comment size cap and is
+          # robust to private-repo image-rendering uncertainty.
+          BODY_FILE=$(mktemp)
+          ARTIFACT_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+          {
+            echo "$PR_MARKER"
+            echo ""
+            echo "## Auto-rebuilt workshop decks"
+            echo ""
+            echo "**Triggered by:** [\`${TRIGGER_SHA:0:8}\`](https://github.com/${REPO}/commit/${TRIGGER_SHA})"
+            echo "**Affected:** ${ONLY:-all tracks}"
+            echo ""
+            echo "**Reason:**"
+            echo '```'
+            echo "$REASON"
+            echo '```'
+            echo ""
+            if [[ -n "$SYNC_ISSUE" ]]; then
+              echo "Closes #${SYNC_ISSUE}"
+              echo ""
+            fi
+            echo "---"
+            echo ""
+            echo "### Visual verification"
+            echo ""
+            echo "Below are the **first 3 slides** of each affected track from both PDF and PPTX renders, as a quality spot-check."
+            echo ""
+            echo "The **complete screenshot set** (every slide × PDF and PPTX) is attached as workflow artifact \`workshop-deck-screenshots-${RUN_ID}\`. [Download from the workflow run]($ARTIFACT_URL)."
+            echo ""
+            if [[ -f .deck-screenshots/manifest.json ]]; then
+              for track in $(jq -r '.decks[].trackId' .deck-screenshots/manifest.json); do
+                echo "#### ${track}"
+                echo ""
+                echo "| | Slide 1 | Slide 2 | Slide 3 |"
+                echo "|---|---|---|---|"
+                # PDF row (first 3 slides)
+                pdf_row="| **PDF** |"
+                while IFS= read -r p; do
+                  pdf_row="${pdf_row} [<img src=\"https://github.com/${REPO}/blob/${AUTO_BRANCH}/${p}?raw=1\" width=\"180\">](https://github.com/${REPO}/blob/${AUTO_BRANCH}/${p}?raw=1) |"
+                done < <(jq -r --arg t "$track" '.decks[] | select(.trackId == $t) | .pdf.slides[0:3][] | .path' .deck-screenshots/manifest.json)
+                echo "$pdf_row"
+                # PPTX row (first 3 slides)
+                pptx_row="| **PPTX** |"
+                while IFS= read -r p; do
+                  pptx_row="${pptx_row} [<img src=\"https://github.com/${REPO}/blob/${AUTO_BRANCH}/${p}?raw=1\" width=\"180\">](https://github.com/${REPO}/blob/${AUTO_BRANCH}/${p}?raw=1) |"
+                done < <(jq -r --arg t "$track" '.decks[] | select(.trackId == $t) | .pptx.slides[0:3][] | .path' .deck-screenshots/manifest.json)
+                echo "$pptx_row"
+                echo ""
+              done
+            fi
+            echo "---"
+            echo ""
+            echo "### Review checklist (per L9)"
+            echo ""
+            echo "- [ ] No contrast regressions (light text on light background)"
+            echo "- [ ] No content overflow off the slide edges"
+            echo "- [ ] No raw SVG XML visible as text (L1)"
+            echo "- [ ] Speaker notes present in PPTX (verify any one via \`unzip -p\`)"
+            echo "- [ ] PPTX and PDF match each other slide-for-slide"
+            echo ""
+            echo "_This PR was auto-generated by \`.github/workflows/git-ape-deck-build.yml\`. See \`workshops/AUTO-GENERATION.md\` for details._"
+          } > "$BODY_FILE"
+
+          # Open or update PR (idempotent)
+          EXISTING_PR=$(gh pr list --head "$AUTO_BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [[ -n "$EXISTING_PR" && "$EXISTING_PR" != "null" ]]; then
+            echo "Updating existing PR #${EXISTING_PR}"
+            gh pr edit "$EXISTING_PR" --body-file "$BODY_FILE"
+          else
+            echo "Opening new PR"
+            gh pr create \
+              --head "$AUTO_BRANCH" \
+              --base main \
+              --title "auto: rebuild workshop decks (${ONLY:-all})" \
+              --body-file "$BODY_FILE" \
+              --label "auto-deck-rebuild"
+          fi

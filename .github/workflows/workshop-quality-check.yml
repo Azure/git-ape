@@ -1,0 +1,90 @@
+name: Workshop Quality Check
+
+on:
+  pull_request:
+    paths:
+      - 'workshops/track-*/*_deck.md'
+      - 'workshops/track-*/lab-*.md'
+      - 'workshops/shared/**'
+      - 'scripts/render-workshop-decks.js'
+      - 'scripts/verify-workshop-decks.js'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: workshop-quality
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: github.head_ref != 'auto/deck-rebuild'
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Prereq script syntax check
+        run: |
+          set -e
+          for s in workshops/shared/check-track-*-prereqs.sh; do
+            bash -n "$s"
+          done
+          echo OK
+
+      - name: Lab transcript presence check
+        id: presence
+        run: |
+          set -e
+          OUT=$(mktemp)
+          MISSING=0
+          for lab in workshops/track-*/lab-*.md; do
+            base=$(basename "$lab" .md)
+            dir=$(dirname "$lab")
+            transcript="$dir/evidence/${base}-transcript.md"
+            if [[ -f "$transcript" ]]; then
+              echo "- ok: $transcript" >> "$OUT"
+            else
+              echo "- missing: $transcript" >> "$OUT"
+              MISSING=$((MISSING+1))
+            fi
+          done
+          echo "missing=$MISSING" >> "$GITHUB_OUTPUT"
+          cat "$OUT"
+
+      - name: Post advisory comment
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const marker = '<!-- workshop-quality-check -->';
+            const body = `${marker}\n## Workshop quality check (advisory)\n\nThis advisory checks: prereq script syntax, lab transcript presence, deck render scripts.\n\nSee \`workshops/CUSTOMER-READINESS-CHECKLIST.md\` for the full pre-customer checklist.\n\n_Non-blocking._`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => (c.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
