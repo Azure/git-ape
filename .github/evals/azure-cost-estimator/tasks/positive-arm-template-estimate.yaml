@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-arm-template-estimate
+name: Positive — Monthly cost estimate from an ARM template
+description: Skill should be invoked when the user asks for a monthly cost estimate of resources defined in an ARM template.
+# `mutable-by-skill` — score reflects SKILL.md (trigger + answer_quality
+# graders read from .github/skills/azure-cost-estimator/SKILL.md).
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "I have an ARM template at .azure/deployments/deploy-20260506-001/template.json that provisions a Standard_B1ls Linux VM with a 30 GB Standard_LRS OS disk and a static public IP in southeastasia. Roughly how much will this cost me per month?"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-cost-estimator/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg.
+  # IMPORTANT: `continue_session: true` is mandatory — without it the judge
+  # has zero access to the agent's response and scores oscillate.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked for a monthly cost estimate of an ARM template
+        that provisions a Standard_B1ls Linux VM, a 30 GB Standard_LRS
+        OS disk, and a static public IP in southeastasia.
+
+        PASS criteria — the response must contain ALL of:
+          1. Names the **Azure Retail Prices API**
+             (`https://prices.azure.com/api/retail/prices`) as the source
+             of pricing — NOT hardcoded numbers or the Pricing Calculator
+             web UI.
+          2. Mentions converting `1 Hour` unit prices to monthly by
+             multiplying by **730** (hours per month).
+          3. Calls out at least one of the free-tier / no-charge items
+             relevant to this template (e.g., VNet / NSG / NIC are free,
+             or notes bandwidth egress free tier).
+          4. Produces or commits to producing a per-resource cost
+             breakdown with a monthly total (table, list, or JSON) —
+             does NOT just hand-wave a single rough total.
+
+        If ALL four criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

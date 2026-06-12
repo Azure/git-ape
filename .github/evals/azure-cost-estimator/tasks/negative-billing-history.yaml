@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-billing-history
+name: Negative — Historical billing / Cost Management invoice query
+description: Querying actual billed usage from Azure Cost Management belongs to a billing/cost-analysis workflow, not the retail-prices-based estimator.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Pull my actual Azure spend for last month broken down by resource group from Cost Management — I need the real invoiced numbers, not an estimate."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-cost-estimator/SKILL.md
+      mode: negative
+      threshold: 0.5

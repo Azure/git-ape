@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-sku-compare
+name: Positive — Compare monthly cost of two VM SKUs
+description: Skill should be invoked when the user asks to compare retail monthly cost between two Azure SKUs in a specific region.
+# See positive-arm-template-estimate.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "How much more per month would a Standard_B2s Linux VM cost me compared to a Standard_B1ls in eastus, at retail pay-as-you-go pricing? Show your work."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-cost-estimator/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to compare the monthly retail cost of
+        `Standard_B2s` vs `Standard_B1ls` Linux VMs in `eastus`.
+
+        PASS criteria — the response must contain ALL of:
+          1. Names the **Azure Retail Prices API**
+             (`https://prices.azure.com/api/retail/prices`) as the
+             pricing source — NOT hardcoded numbers fabricated from
+             memory and NOT the Pricing Calculator web UI.
+          2. Constructs (or shows it would construct) an OData
+             `$filter` query that targets `serviceName eq 'Virtual Machines'`
+             with `armRegionName eq 'eastus'` and the relevant `armSkuName`
+             values, including `priceType eq 'Consumption'`.
+          3. Multiplies the per-hour unit price by **730** to derive a
+             monthly figure for each SKU.
+          4. Reports a per-SKU monthly cost AND the delta (B2s − B1ls)
+             between them — not just a single number.
+
+        If ALL four criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.
