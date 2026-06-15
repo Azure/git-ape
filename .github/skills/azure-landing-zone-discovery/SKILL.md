@@ -1,6 +1,6 @@
 ---
 name: azure-landing-zone-discovery
-description: "Auto-discover Azure landing zone topology including management groups, platform vs. application subscriptions, policy assignments, hub-spoke networking, and shared services. Use when deploying into enterprise environments, checking policy conflicts, or connecting to shared infrastructure."
+description: "Auto-discover enterprise Azure landing zone topology — management groups, platform vs. application subscriptions, policy assignments, hub-spoke networking, and shared services — and write .azure/landing-zone-context.json. USE FOR: discovering the landing zone, mapping management groups, choosing a target subscription, connecting to a hub VNet or shared services, or manually injecting context for air-gapped/cross-tenant tenants. NOT FOR: deploying individual resources, CAF name lookups, or per-template policy compliance checks."
 argument-hint: "Discovery scope or manual injection mode (e.g. 'full discovery', 'inject context', 'check policies for eastus')"
 user-invocable: true
 last_updated: "2026-06-15"
@@ -20,6 +20,16 @@ Enterprise Azure environments follow the [Cloud Adoption Framework landing zone 
 - Before first deployment in a new subscription (auto-detect enterprise topology)
 - User asks: "connect to hub VNet", "use shared Log Analytics", "which subscription for prod?"
 - User provides manual landing zone context for air-gapped or cross-tenant environments
+
+**Do NOT use for:**
+
+- Deploying or configuring individual resources → use `git-ape` / the deployment agents
+- CAF abbreviation or resource-name lookups → use `/azure-naming-research`
+- Policy compliance checks on a specific ARM template → use `/azure-policy-advisor`
+- Security analysis of a template or resource → use `/azure-security-analyzer`
+- Viewing or visualizing live resources in one resource group → use `/azure-resource-visualizer`
+
+This skill is about **tenant/landing-zone topology**, not single-resource actions.
 
 **Output:**
 
@@ -249,13 +259,13 @@ KEY_VAULTS=$(az graph query -q "
 
 ### 8. Generate Landing Zone Context File
 
-Assemble all discovery results into the context file:
+The discovery script assembles every section above — management-group hierarchy, subscription classification, networking topology, policy partitions, shared services, and the `landingZoneDetection` confidence block — into a single `.azure/landing-zone-context.json`. No manual assembly is needed.
+
+After discovery completes, **summarize the result back to the user**, explicitly covering: the management-group hierarchy, which subscriptions are platform vs. application landing zones, the network topology (hub-spoke vs. flat) and any hub VNet to peer, the policy constraints found (deny effects, allowed locations, required tags), the shared services available, and the detection `confidence`. If discovery was blocked by limited RBAC or a cross-tenant boundary, say so and point the user to the manual-injection path below.
 
 ```bash
-# The discover-lz.sh script outputs the full context
-# See .azure/landing-zone-context.json for the output format
-
-cat .azure/landing-zone-context.json | jq '.'
+# Inspect the assembled context
+jq '.' .azure/landing-zone-context.json
 ```
 
 **Output format (`landing-zone-context.json`):**
@@ -435,7 +445,7 @@ jq '.landingZoneDetection' .azure/landing-zone-context.json
 
 ## Manual Injection
 
-When discovery cannot reach the landing zone (cross-tenant, limited RBAC, air-gapped environments), users can inject context manually.
+When discovery cannot reach the landing zone (cross-tenant, limited RBAC, air-gapped environments), users can inject context manually. **Always drive this through the `inject-lz.sh` (or `inject-lz.ps1`) script with its canonical flags — `--hub-vnet-id`, `--log-analytics-id`, `--acr-id`, `--allowed-locations`, `--required-tags` — rather than hand-writing the JSON**, so the schema and `discoveryMethod` stay correct (Option B). Fall back to editing the file directly (Option A) or the interactive questionnaire (Option C) only when the script cannot be run.
 
 ### Option A: Provide the Context File Directly
 
