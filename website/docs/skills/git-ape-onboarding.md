@@ -18,7 +18,7 @@ description: "Onboard a repository, Azure subscription(s), and user identity for
 | **Skill Directory** | `.github/skills/git-ape-onboarding/` |
 | **Phase** | Operations |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/git-ape-onboarding GitHub repo URL, subscription target(s), and onboarding mode (single or multi-environment)` |
+| **Usage** | `/git-ape-onboarding` |
 
 
 ## Documentation

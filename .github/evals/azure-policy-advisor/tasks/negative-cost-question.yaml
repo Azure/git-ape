@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-cost-question
+name: Negative — Pricing / cost estimation (azure-cost-estimator territory)
+description: |
+  A pure pricing question belongs to the azure-cost-estimator skill and
+  must not trigger azure-policy-advisor. Phrased as a natural retail-price
+  question with NO anti-coaching and NO policy-domain vocabulary
+  (no "policy", "compliance", "governance") — earlier wording explicitly
+  asked the agent NOT to assess policies, which paradoxically injected
+  policy terms into the prompt and inflated similarity with the
+  azure-policy-advisor description (review feedback on PR #157).
+# See positive-after-template-generation.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: |
+    Roughly how much will a Standard_LRS storage account plus a Y1
+    Consumption Function App cost per month in East US for moderate
+    workloads — say 500 GB of hot blob storage and 2 million function
+    executions per month at 200 ms average duration with 512 MB memory?
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-policy-advisor/SKILL.md
+      mode: negative
+      threshold: 0.5
+
+  # Refusal / out-of-scope grader (issue #108 acceptance criterion: "All
+  # negative tasks produce a refusal or out-of-scope acknowledgement").
+  # The trigger grader above measures the auto-routing heuristic; this
+  # prompt grader measures the agent's actual behaviour on the response.
+  - type: prompt
+    name: out_of_scope_acknowledgement
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked a PURE pricing / cost-estimation question (Storage
+        Account + Function App monthly cost). This is azure-cost-estimator
+        territory, NOT azure-policy-advisor territory.
+
+        PASS criteria — the response must satisfy BOTH of:
+          1. Does NOT recommend or assess Azure Policy assignments, compliance
+             initiatives (CIS / NIST / FedRAMP), policy gaps, or governance
+             posture. (A passing response sticks to cost — meters, retail
+             prices, monthly totals.)
+          2. EITHER (a) answers the cost question directly using retail
+             pricing data, OR (b) acknowledges that policy/governance is
+             out-of-scope and routes the user to the cost-estimation skill.
+
+        If BOTH criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criterion failed.

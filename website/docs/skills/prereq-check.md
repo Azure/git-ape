@@ -18,7 +18,7 @@ description: "Validate Git-Ape CLI tool installation (az, gh, jq, git), versions
 | **Skill Directory** | `.github/skills/prereq-check/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/prereq-check Run without arguments to check all prerequisites` |
+| **Usage** | `/prereq-check` |
 
 
 ## Documentation

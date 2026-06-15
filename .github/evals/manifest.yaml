@@ -36,6 +36,8 @@ skills:
     tier: expanded
   - name: azure-landing-zone-discovery
     tier: expanded
+  - name: azure-policy-advisor
+    tier: expanded
 # Per-tier model fan-out. The matrix runs each selected skill against every
 # model in its tier. To compare additional models, add them here.
 #

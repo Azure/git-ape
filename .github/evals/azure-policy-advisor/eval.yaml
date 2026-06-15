@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Expanded-tier evaluation suite for the azure-policy-advisor skill.
+# Validates trigger precision via the heuristic `trigger` grader plus answer
+# quality on positive tasks via an LLM-as-judge prompt grader.
+#
+# Run: waza run .github/evals/azure-policy-advisor/eval.yaml -v
+#
+# Tier: expanded (lands here per /skill-onboard convention; promotion to
+# pilot is gated by /skill-promote after cross-model stability is proven).
+
+name: azure-policy-advisor-eval
+description: Trigger precision + answer quality for azure-policy-advisor.
+skill: azure-policy-advisor
+version: "0.1"
+
+config:
+  # 2 trials catches obvious LLM nondeterminism flakes (single trial = no
+  # flake signal). Pilot tier bumps to 3 via /skill-promote.
+  trials_per_task: 2
+  # 240s (vs prereq-check's 60s) because azure-policy-advisor is procedurally
+  # heavy: it fans out into Microsoft Learn web_fetch calls and optional
+  # `az policy` queries before composing the split-report response. Sanity
+  # runs at 180s consistently timed out with the model still in research
+  # mode (~15 web_fetch calls, no synthesis). At 240s with prompt-level
+  # "limit research" hints on positives, the model has room to synthesize.
+  # Stays below the budget grader's 300000ms cap so graders have headroom.
+  timeout_seconds: 240
+  parallel: false
+  # `copilot-sdk` runs against a real Copilot SDK and incurs premium-request
+  # spend. For cheap CI gating that only validates trigger / budget / lint
+  # scores without model behaviour, swap to `executor: mock` — waza ships a
+  # built-in mock executor that returns deterministic empty responses in 0ms
+  # with 0 premium requests, preserving the heuristic-only grader scores
+  # (trigger, budget, lint). The prompt graders below require a real model
+  # and are skipped under mock.
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Skill should activate on policy/compliance assessment prompts and stay quiet on cost, naming, or off-topic prompts.
+
+graders:
+  # Budget grader: azure-policy-advisor's full procedure can fan out across
+  # `az policy` queries + per-resource MS Learn lookups. Bumped to 300s
+  # (vs prereq-check's 240s) so the per-task `timeout_seconds: 240` config
+  # never exceeds the budget cap (would flag every run as over-budget).
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 300000
+
+  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks only.
+  # Keeps judge-model errors from zeroing out the negative-task trigger check
+  # in the same leg.
+  #
+  # NO eval-level `skill_invocation` grader. azure-policy-advisor is a
+  # self-contained procedure that calls `az policy` and `microsoft_docs_search`
+  # directly — it does not invoke sub-skills. Adding `required_skills:` here
+  # would produce a deterministic 0.0 across every task (including negatives)
+  # and contribute ~25% noise to every leg with zero model-quality signal.
+  # See issue #108 conventions.
+
+tasks:
+  - "tasks/*.yaml"

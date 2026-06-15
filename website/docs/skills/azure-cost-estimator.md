@@ -18,7 +18,7 @@ description: "Estimate monthly costs for Azure resources by querying the Azure R
 | **Skill Directory** | `.github/skills/azure-cost-estimator/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-cost-estimator ARM template JSON or list of resources with SKUs and region` |
+| **Usage** | `/azure-cost-estimator` |
 
 
 ## Documentation

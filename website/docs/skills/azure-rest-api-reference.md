@@ -18,7 +18,7 @@ description: "Look up Azure REST API and ARM template reference documentation fo
 | **Skill Directory** | `.github/skills/azure-rest-api-reference/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-rest-api-reference Resource type (e.g., Microsoft.Web/sites, Microsoft.Storage/storageAccounts)` |
+| **Usage** | `/azure-rest-api-reference` |
 
 
 ## Documentation

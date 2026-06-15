@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-naming-question
+name: Negative — CAF naming lookup (azure-naming-research territory)
+description: |
+  A pure naming-constraint question belongs to the azure-naming-research
+  skill and must not trigger azure-policy-advisor. Earlier wording invoked
+  "governance compliance" review framing which injected overlap vocabulary
+  with the azure-policy-advisor description and produced flaky scores at
+  0.57–0.65 (see PR #157 review). Rewritten to a direct, terse prefix +
+  length question with NO governance/compliance language and minimal
+  resource-type overlap with policy targets (Container Registry over
+  Key Vault); threshold standardized to 0.50 to match the other negatives.
+# See positive-after-template-generation.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: |
+    Picking a name for a Container Registry. What's the standard
+    prefix abbreviation, and what's the maximum length allowed?
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-policy-advisor/SKILL.md
+      mode: negative
+      threshold: 0.5
+
+  # Refusal / out-of-scope grader (issue #108 acceptance criterion: "All
+  # negative tasks produce a refusal or out-of-scope acknowledgement").
+  - type: prompt
+    name: out_of_scope_acknowledgement
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked a PURE naming-constraint question (prefix abbreviation
+        + maximum length for a Container Registry). This is
+        azure-naming-research territory, NOT azure-policy-advisor territory.
+
+        PASS criteria — the response must satisfy BOTH of:
+          1. Does NOT recommend or assess Azure Policy assignments, compliance
+             initiatives, governance posture, or policy gaps. (A passing
+             response sticks to naming: prefix, length, character set.)
+          2. EITHER (a) answers the naming question directly with the CAF
+             abbreviation and length constraint, OR (b) acknowledges that
+             policy/governance is out-of-scope and routes the user to the
+             naming-research skill.
+
+        If BOTH criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criterion failed.
+

@@ -1,8 +1,9 @@
 ---
 name: git-ape-onboarding
 description: "Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets."
-argument-hint: "GitHub repo URL, subscription target(s), and onboarding mode (single or multi-environment)"
-user-invocable: true
+metadata:
+  argument-hint: "GitHub repo URL, subscription target(s), and onboarding mode (single or multi-environment)"
+  user-invocable: true
 ---
 
 # Git-Ape Onboarding

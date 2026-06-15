@@ -1,0 +1,118 @@
+# Azure Policy Advisor — Classification & Prioritization Rules
+#
+# Used by Step 5 of SKILL.md to classify each recommended policy by severity,
+# determine the current status of the check (assigned / template-compliant /
+# gap / etc.), and resolve precedence when more than one source covers the
+# same control.
+#
+# Load this file when classifying recommendations after Steps 2–4 produce:
+#   - existing subscription assignments (Step 2)
+#   - available custom + built-in definitions (Step 3)
+#   - Microsoft Learn built-in recommendations (Step 4)
+# Apply `severity_tiers` to choose the audit/deny effect, `status_classifications`
+# to label each finding, and `precedence_rules` when the same control is
+# covered by multiple sources.
+
+severity_tiers:
+  - tier: Critical
+    icon: "🔴"
+    audit_effect: Audit
+    deny_effect: Deny
+    when_to_use: |
+      Prevents insecure deployments: public storage access, missing HTTPS,
+      no encryption at rest, anonymous endpoints.
+
+  - tier: High
+    icon: "🟠"
+    audit_effect: Audit
+    deny_effect: Deny
+    when_to_use: |
+      Strong security posture: managed identity required, TLS 1.2 minimum,
+      AAD-only auth, no shared-key access.
+
+  - tier: Medium
+    icon: "🟡"
+    audit_effect: Audit
+    deny_effect: Audit
+    when_to_use: |
+      Visibility and tracking: tag compliance, diagnostic settings
+      configured, allowed locations enforcement.
+
+  - tier: Low
+    icon: "🔵"
+    audit_effect: AuditIfNotExists
+    deny_effect: DeployIfNotExists
+    when_to_use: |
+      Auto-remediation: deploy diagnostic settings, enable monitoring,
+      backfill missing tags.
+
+status_classifications:
+  - status: already_assigned
+    icon: "✅"
+    name: Already assigned
+    condition: |
+      Policy is actively assigned in the subscription (from Step 2 inventory).
+    action: |
+      No action needed. Note enforcement mode (`Default` vs `DoNotEnforce`)
+      and scope (subscription vs management group) in the report.
+
+  - status: compliant_via_template
+    icon: "🔵"
+    name: Compliant via template
+    condition: |
+      ARM template already configures the property the policy would enforce,
+      but the policy itself is NOT assigned.
+    action: |
+      Report as compliant-by-construction. Optionally recommend assigning
+      the policy to prevent future regressions.
+
+  - status: unassigned_custom_available
+    icon: "🟣"
+    name: Unassigned custom policy available
+    condition: |
+      A custom policy definition exists in the subscription or management
+      group (from Step 3) that covers this check, but it is not assigned.
+    action: |
+      Recommend immediate assignment of the custom definition — it already
+      exists, so this is the lowest-friction fix.
+
+  - status: gap_not_covered
+    icon: "⚠️"
+    name: Gap — not covered
+    condition: |
+      Neither assigned nor available as a custom definition.
+    action: |
+      Recommend the built-in policy from Microsoft Learn (Step 4).
+
+  - status: complementary
+    icon: "🔄"
+    name: Complementary
+    condition: |
+      Policy would add enforcement on top of existing template config
+      and/or existing assignments.
+    action: |
+      Recommend as a defense-in-depth layer.
+
+precedence_rules:
+  # Apply in order — first match wins.
+  - rule: assigned_wins
+    when: A matching policy is already assigned.
+    then: |
+      Report as ✅ Already assigned. No new recommendation, UNLESS the
+      enforcement mode is `DoNotEnforce`, in which case flag for mode
+      upgrade to `Default`.
+
+  - rule: custom_over_builtin
+    when: |
+      A custom definition exists in the subscription/management group but
+      is unassigned, AND a built-in covers the same control.
+    then: |
+      Recommend assigning the custom definition (🟣). Do NOT also recommend
+      the built-in for the same control.
+
+  - rule: builtin_fallback
+    when: |
+      Only a built-in definition covers the control (no custom, no
+      existing assignment).
+    then: |
+      Recommend the built-in (⚠️ gap).

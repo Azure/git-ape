@@ -18,7 +18,7 @@ description: "Analyze Azure resource configurations against security best practi
 | **Skill Directory** | `.github/skills/azure-security-analyzer/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-security-analyzer Resource types and their configurations from the ARM template` |
+| **Usage** | `/azure-security-analyzer` |
 
 
 ## Documentation
