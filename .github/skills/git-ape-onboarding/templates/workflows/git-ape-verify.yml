@@ -13,7 +13,7 @@ permissions:
 jobs:
   verify:
     name: Verify Git-Ape configuration
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -138,6 +138,24 @@ jobs:
               echo "⚠️ $NAME ($FILE) — not found"
             fi
           done
+
+      - name: Check runner configuration
+        env:
+          RUNNER_LABEL: ${{ vars.GIT_APE_RUNNER_LABEL }}
+        run: |
+          echo "## Runner Configuration"
+          echo ""
+          # Git-Ape workflows resolve `runs-on` from the GIT_APE_RUNNER_LABEL
+          # variable, falling back to GitHub-hosted `ubuntu-latest` when unset.
+          if [[ -z "$RUNNER_LABEL" ]]; then
+            echo "ℹ️ GIT_APE_RUNNER_LABEL is unset — jobs run on GitHub-hosted runners (ubuntu-latest)."
+            echo "   To switch to private/self-hosted runners, provision them via"
+            echo "   @Git-Ape Onboarding and set the GIT_APE_RUNNER_LABEL variable."
+          else
+            echo "✅ GIT_APE_RUNNER_LABEL is set to '$RUNNER_LABEL' — jobs target self-hosted runners with this label."
+            echo "   Ensure at least one online runner is registered with the '$RUNNER_LABEL' label,"
+            echo "   otherwise deployment jobs will queue indefinitely."
+          fi
 
       - name: Print summary
         if: always()

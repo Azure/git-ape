@@ -44,8 +44,9 @@ This skill configures:
 2. OIDC federated credentials for GitHub Actions
 3. RBAC role assignment(s) on subscription scope
 4. GitHub environments (`azure-deploy*`, `azure-destroy`)
-5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable
+5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable, plus the optional `GIT_APE_RUNNER_LABEL` variable that selects private runners
 6. Scaffolded GitHub Actions workflow files (`git-ape-plan.yml`, `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.{md,lock.yml}`) and deployment standards (`.github/copilot-instructions.md`) into the user's working copy
+7. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default) or private self-hosted runners in your Azure subscription (ACI / ACA / AKS, optionally VNet-injected). On-demand IaC for private runners ships at `./templates/runners/`.
 
 ## Prerequisites
 
@@ -123,11 +124,12 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
    - `fc-azure-deploy`    subject `"$OIDC_PREFIX:environment:azure-deploy"` (one per environment in multi-env mode)
    - `fc-azure-destroy`   subject `"$OIDC_PREFIX:environment:azure-destroy"`
 6. Assign RBAC on each target subscription.
-7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable.
+7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable. (The `GIT_APE_RUNNER_LABEL` variable is set later in Step 11 only if private runners are chosen.)
 8. Create GitHub environments and branch policies when permissions allow.
 9. Scaffold workflow files and deployment standards into the user's working copy (see below).
 10. Capture compliance and Azure Policy preferences (see below).
-11. Verify federated credentials, role assignments, and secrets.
+11. Select the GitHub Actions runner type and, if private runners are chosen, provision them and set `GIT_APE_RUNNER_LABEL` (see below).
+12. Verify federated credentials, role assignments, and secrets.
 
 ### Step 9: Scaffold workflow files and deployment standards
 
@@ -202,6 +204,67 @@ After RBAC and environment setup, ask the user about compliance requirements and
      preferences and a suggested patch in chat so the user can apply it.
    - In all cases, leave changes unstaged and let the user commit them.
 
+### Step 11: Runner Selection & Provisioning (optional)
+
+Git-Ape workflows resolve their runner from a single variable:
+
+```yaml
+runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
+```
+
+Unset → public GitHub-hosted `ubuntu-latest` (the default; no infrastructure).
+Set to a label → private self-hosted runners registered with that label. This is
+the **bootstrap model: start public, switch to private later with one variable.**
+
+1. **Ask the runner type:**
+   ```
+   What runner should the Git-Ape workflows run on?
+   - Public GitHub-hosted (recommended to start — no infrastructure)
+   - Self-hosted in my Azure subscription
+   - VNet-injected (private connectivity, no public egress except to GitHub)
+   ```
+
+2. **If public (default):** do nothing. Leave `GIT_APE_RUNNER_LABEL` unset.
+   Onboarding is complete; the user can switch to private runners any time by
+   repeating this step.
+
+3. **If self-hosted or VNet-injected, ask the platform:**
+   ```
+   Which Azure platform should host the runners?
+   - ACI  — Azure Container Instances (simplest; a handful of runners)
+   - ACA  — Azure Container Apps (event-driven, ephemeral, scale-to-zero)
+   - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
+   ```
+
+4. **Point the user at the reference IaC** for the chosen type × platform under
+   `./templates/runners/` (`aci/` and `aca/` ship ARM `template.json` +
+   `parameters.json`; `aks/` ships an ARC Helm `values.yaml` + README). See
+   `./templates/runners/README.md` for the full matrix and security model.
+   - The GitHub registration credential is the only secret — source it from Key
+     Vault, never inline it. Azure access uses a user-assigned managed identity.
+   - For VNet-injected, set the subnet parameter (`subnetId` for ACI,
+     `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
+   - Provision with `az deployment group create -f template.json -p @parameters.json`
+     (ACI/ACA) or `helm install` (AKS). Do NOT add these templates to the
+     scaffold helper — they are on-demand only.
+
+5. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+   with the `git-ape-runner` label.
+
+6. **Set the variable** so workflows target it (repo-wide or per environment):
+   ```bash
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
+   # per environment instead:
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --env azure-deploy --body "git-ape-runner"
+   ```
+   Clean fallback to GitHub-hosted runners is `gh variable delete GIT_APE_RUNNER_LABEL`.
+
+7. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
+   workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
+   private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
+   and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
+   carries an integrity hash). The other four workflows need no recompile.
+
 ## Safe-Execution Rules
 
 1. Echo target repository and subscription(s) before execution.
@@ -226,7 +289,8 @@ After RBAC and environment setup, ask the user about compliance requirements and
 6. Scaffold workflow files and `copilot-instructions.md` via `./scripts/scaffold-repo.sh` on macOS/Linux/WSL, or `pwsh ./scripts/scaffold-repo.ps1` on Windows (Step 9 in playbook). Report which files were created vs skipped.
 7. Ask compliance framework and enforcement mode preferences (Step 10 in playbook).
 8. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-9. Summarize outcome (including scaffolded file counts) and suggest verification commands.
+9. Ask the runner type (and platform if private), and — if private runners are chosen — point the user at `./templates/runners/` and set `GIT_APE_RUNNER_LABEL` (Step 11 in playbook).
+10. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
 ## Known Gotchas
 

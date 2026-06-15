@@ -1,0 +1,222 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": "git-ape-onboarding",
+    "description": "Git-Ape self-hosted runner on Azure Container Apps (ACA). Provisions a managed environment and an event-driven Container Apps Job that scales ephemeral GitHub Actions runners on demand with the KEDA 'github-runner' scaler (scale-to-zero between jobs). Runners register with the label 'git-ape-runner' (override via parameter). Leave infrastructureSubnetId empty for a self-hosted (subscription) environment; set it for VNet injection (Consumption needs a /23 or larger). The GitHub credential is the only secret and must be sourced from Key Vault.\n\nDeploy:\n  az group create -n rg-git-ape-runners -l eastus\n  az deployment group create -g rg-git-ape-runners -f template.json -p @parameters.json"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region. Defaults to the resource group location."
+      }
+    },
+    "runnerName": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Base name for the managed environment and job."
+      }
+    },
+    "githubOwnerRepo": {
+      "type": "string",
+      "metadata": {
+        "description": "GitHub target in <owner>/<repo> form for repo-scoped runners, or the org/owner name for org-scoped runners."
+      }
+    },
+    "runnerScope": {
+      "type": "string",
+      "defaultValue": "repo",
+      "allowedValues": [
+        "repo",
+        "org"
+      ],
+      "metadata": {
+        "description": "Runner registration scope."
+      }
+    },
+    "runnerLabels": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Comma-separated runner labels. Must include the value used for the GIT_APE_RUNNER_LABEL workflow variable."
+      }
+    },
+    "githubAccessToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "GitHub credential used to register the runner and poll the queue: a fine-grained PAT or GitHub App token. Source from Key Vault - never commit it."
+      }
+    },
+    "runnerImage": {
+      "type": "string",
+      "defaultValue": "myoung34/github-runner:latest",
+      "metadata": {
+        "description": "Runner container image. Swap for a hardened internal image as needed."
+      }
+    },
+    "userAssignedIdentityId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of a user-assigned managed identity for the runner to access Azure. Leave empty for none."
+      }
+    },
+    "infrastructureSubnetId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of an infrastructure subnet for VNet injection. Leave empty for a non-VNet environment."
+      }
+    },
+    "maxRunners": {
+      "type": "int",
+      "defaultValue": 10,
+      "metadata": {
+        "description": "Maximum concurrent runner executions (KEDA maxExecutions)."
+      }
+    },
+    "cpuCores": {
+      "type": "string",
+      "defaultValue": "1.0",
+      "metadata": {
+        "description": "vCPU for the runner container."
+      }
+    },
+    "memorySize": {
+      "type": "string",
+      "defaultValue": "2Gi",
+      "metadata": {
+        "description": "Memory for the runner container (e.g. 2Gi)."
+      }
+    }
+  },
+  "variables": {
+    "isOrgScope": "[equals(parameters('runnerScope'), 'org')]",
+    "hasIdentity": "[not(empty(parameters('userAssignedIdentityId')))]",
+    "isVnet": "[not(empty(parameters('infrastructureSubnetId')))]",
+    "envName": "[format('{0}-env', parameters('runnerName'))]",
+    "ownerName": "[if(variables('isOrgScope'), parameters('githubOwnerRepo'), first(split(parameters('githubOwnerRepo'), '/')))]",
+    "repoName": "[if(variables('isOrgScope'), '', last(split(parameters('githubOwnerRepo'), '/')))]",
+    "scalerMetadataBase": {
+      "owner": "[variables('ownerName')]",
+      "runnerScope": "[parameters('runnerScope')]",
+      "labels": "[parameters('runnerLabels')]",
+      "targetWorkflowQueueLength": "1",
+      "applicationID": ""
+    },
+    "scalerMetadata": "[if(variables('isOrgScope'), variables('scalerMetadataBase'), union(variables('scalerMetadataBase'), createObject('repos', variables('repoName'))))]",
+    "scopeEnv": "[if(variables('isOrgScope'), createArray(createObject('name', 'ORG_NAME', 'value', parameters('githubOwnerRepo'))), createArray(createObject('name', 'REPO_URL', 'value', concat('https://github.com/', parameters('githubOwnerRepo')))))]",
+    "baseEnv": [
+      {
+        "name": "RUNNER_SCOPE",
+        "value": "[parameters('runnerScope')]"
+      },
+      {
+        "name": "RUNNER_NAME_PREFIX",
+        "value": "[parameters('runnerName')]"
+      },
+      {
+        "name": "LABELS",
+        "value": "[parameters('runnerLabels')]"
+      },
+      {
+        "name": "EPHEMERAL",
+        "value": "true"
+      },
+      {
+        "name": "DISABLE_AUTO_UPDATE",
+        "value": "true"
+      },
+      {
+        "name": "ACCESS_TOKEN",
+        "secretRef": "github-pat"
+      }
+    ],
+    "containerEnv": "[concat(variables('scopeEnv'), variables('baseEnv'))]",
+    "identityBlock": "[if(variables('hasIdentity'), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(parameters('userAssignedIdentityId'), createObject())), createObject('type', 'None'))]",
+    "vnetConfiguration": "[if(variables('isVnet'), createObject('infrastructureSubnetId', parameters('infrastructureSubnetId'), 'internal', false()), json('null'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('envName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "vnetConfiguration": "[variables('vnetConfiguration')]"
+      }
+    },
+    {
+      "type": "Microsoft.App/jobs",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('runnerName')]",
+      "location": "[parameters('location')]",
+      "identity": "[variables('identityBlock')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]"
+      ],
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]",
+        "configuration": {
+          "triggerType": "Event",
+          "replicaTimeout": 1800,
+          "replicaRetryLimit": 1,
+          "secrets": [
+            {
+              "name": "github-pat",
+              "value": "[parameters('githubAccessToken')]"
+            }
+          ],
+          "eventTriggerConfig": {
+            "parallelism": 1,
+            "replicaCompletionCount": 1,
+            "scale": {
+              "minExecutions": 0,
+              "maxExecutions": "[parameters('maxRunners')]",
+              "pollingInterval": 30,
+              "rules": [
+                {
+                  "name": "github-runner",
+                  "type": "github-runner",
+                  "metadata": "[variables('scalerMetadata')]",
+                  "auth": [
+                    {
+                      "secretRef": "github-pat",
+                      "triggerParameter": "personalAccessToken"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "[parameters('runnerName')]",
+              "image": "[parameters('runnerImage')]",
+              "env": "[variables('containerEnv')]",
+              "resources": {
+                "cpu": "[json(parameters('cpuCores'))]",
+                "memory": "[parameters('memorySize')]"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "runnerJobId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.App/jobs', parameters('runnerName'))]"
+    },
+    "runnerLabel": {
+      "type": "string",
+      "value": "[parameters('runnerLabels')]"
+    }
+  }
+}

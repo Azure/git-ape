@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "runnerName": {
+      "value": "git-ape-runner"
+    },
+    "githubOwnerRepo": {
+      "value": "your-org/your-repo"
+    },
+    "runnerScope": {
+      "value": "repo"
+    },
+    "runnerLabels": {
+      "value": "git-ape-runner"
+    },
+    "_comment_githubAccessToken": "Do NOT inline the token. Reference it from Key Vault as shown, or pass it at deploy time with -p githubAccessToken=$(az keyvault secret show ...).",
+    "githubAccessToken": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<sub-id>/resourceGroups/<kv-rg>/providers/Microsoft.KeyVault/vaults/<kv-name>"
+        },
+        "secretName": "github-runner-token"
+      }
+    },
+    "userAssignedIdentityId": {
+      "value": ""
+    },
+    "_comment_infrastructureSubnetId": "Leave empty for a self-hosted (subscription) environment. For VNet-injected, set a subnet resource ID (Consumption needs a /23 or larger).",
+    "infrastructureSubnetId": {
+      "value": ""
+    },
+    "maxRunners": {
+      "value": 10
+    }
+  }
+}

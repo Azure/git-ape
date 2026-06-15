@@ -1,0 +1,37 @@
+# Git-Ape runner scale set values for the ARC `gha-runner-scale-set` Helm chart.
+# Install:
+#   helm install git-ape-runner -n arc-runners -f values.yaml \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+#
+# The release name and `runnerScaleSetName` become the runs-on label. Keep them
+# equal to the value of the GIT_APE_RUNNER_LABEL workflow variable.
+
+# Repo-scoped runners: https://github.com/<org>/<repo>
+# Org-scoped runners:  https://github.com/<org>
+githubConfigUrl: "https://github.com/your-org/your-repo"
+
+# Reference the pre-created secret (see README) sourced from Key Vault.
+# For a GitHub App instead of a PAT, populate github_app_id /
+# github_app_installation_id / github_app_private_key in that secret.
+githubConfigSecret: git-ape-runner-secret
+
+# This name IS the runs-on label. Must match GIT_APE_RUNNER_LABEL.
+runnerScaleSetName: git-ape-runner
+
+minRunners: 0
+maxRunners: 10
+
+# Ephemeral runner pods (ARC default). "dind" enables Docker-in-Docker if your
+# deployment steps build images; use "kubernetes" for rootless pod-per-job.
+containerMode:
+  type: "dind"
+
+template:
+  spec:
+    # VNet-injected: pin runner pods to the node pool on your VNet subnet.
+    # nodeSelector:
+    #   agentpool: vnetpool
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
