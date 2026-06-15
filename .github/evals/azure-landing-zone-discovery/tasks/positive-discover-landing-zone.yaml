@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-discover-landing-zone
+name: Positive — Discover the landing zone
+description: Direct ask to discover the enterprise Azure landing zone topology.
+tags: [trigger, positive]
+inputs:
+  prompt: "Before I deploy anything to Azure, can you discover the landing zone topology for my current subscription? I want to know the management group hierarchy, which subscriptions are platform vs. application landing zones, and whether there's a hub VNet I should peer to."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-landing-zone-discovery/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to discover their Azure landing zone topology
+        (management groups, platform vs. application subscriptions, hub VNet).
+
+        PASS criteria — the response must contain ALL of:
+          1. References the `azure-landing-zone-discovery` skill or its
+             `discover-lz.sh` script (or equivalent: `az account management-group`
+             plus Resource Graph queries for hub VNets).
+          2. Mentions writing or producing `.azure/landing-zone-context.json`
+             as the output artifact.
+          3. Mentions at least TWO of: management group hierarchy,
+             subscription classification (platform / landing-zone),
+             hub-spoke networking detection, policy/deny-effect detection,
+             shared services (Log Analytics / ACR / Key Vault).
+          4. Acknowledges that discovery may have limited results when the
+             user lacks management-group read permissions OR mentions the
+             `inject-lz.sh` manual fallback for air-gapped / cross-tenant
+             scenarios.
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

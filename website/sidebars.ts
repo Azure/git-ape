@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
         'use-cases/security-analysis',
         'use-cases/waf-review',
         'use-cases/policy-compliance',
+        'use-cases/landing-zone-aware-deployment',
         'use-cases/drift-detection',
         'use-cases/import-existing-infra',
         'use-cases/cicd-pipeline',
@@ -85,6 +86,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'deployment/state',
         'deployment/drift-detection',
+        'deployment/landing-zone-context',
         'deployment/examples',
       ],
     },
