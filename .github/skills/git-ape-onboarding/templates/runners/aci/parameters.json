@@ -14,7 +14,7 @@
     "runnerLabels": {
       "value": "git-ape-runner"
     },
-    "_comment_githubAccessToken": "Do NOT inline the token. Reference it from Key Vault as shown below, or pass it at deploy time with -p githubAccessToken=$(az keyvault secret show ...).",
+    "_comment_githubAccessToken": "Requires a long-lived GitHub PAT (fine-grained with Actions + Administration R/W, or classic with repo scope). Do NOT use a short-lived registration token from the GitHub API — it expires in ~1h and breaks runner registration. Reference the PAT from Key Vault as shown below, or pass it at deploy time with -p githubAccessToken=<PAT>.",
     "githubAccessToken": {
       "reference": {
         "keyVault": {

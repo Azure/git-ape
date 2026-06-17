@@ -487,20 +487,54 @@ scaling, and networking.
    **Do NOT use ACR admin credentials** (`--admin-enabled true` + username/password).
    Managed identity is the secure, recommended approach.
 
-4. **Deploy the runner infrastructure** using the chosen platform template.
-   Pass the custom image, ACR server, and managed identity:
+4. **Collect a GitHub PAT from the user.** The ACA/ACI runner needs a
+   **long-lived GitHub Personal Access Token (PAT)** — NOT a short-lived
+   registration token from `POST /actions/runners/registration-token`.
+   Registration tokens expire in ~1 hour, but the KEDA `github-runner` scaler
+   continuously polls the Actions queue AND each ephemeral runner re-registers
+   on every scale-up, so a long-lived PAT is required.
+
+   **Ask the user to create a PAT** before deploying:
+   ```
+   The self-hosted runner needs a GitHub Personal Access Token (PAT) for
+   continuous queue polling and runner registration.
+
+   Please create a fine-grained PAT at:
+     https://github.com/settings/tokens?type=beta
+
+   Required permissions (scoped to the target repo):
+     - Actions: Read & Write
+     - Administration: Read & Write (for runner registration)
+
+   Alternatively, a classic PAT with the `repo` scope works.
+
+   Paste the token when prompted — it will only be passed to the deployment
+   and will not be stored or displayed.
+   ```
+
+   **Do NOT generate a registration token** via the GitHub API
+   (`POST repos/<org>/<repo>/actions/runners/registration-token`). These are
+   short-lived (~1 hour) and will cause the runner to fail with a 401 error
+   once expired. The KEDA scaler and ephemeral runner registration both need
+   a token that does not expire.
+
+   Never print the token value in chat output (see Safe-Execution Rules).
+
+5. **Deploy the runner infrastructure** using the chosen platform template.
+   Pass the custom image, ACR server, managed identity, and user-provided PAT:
    ```bash
    az deployment group create -g <rg> -f template.json \
      -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
         acrServer='<acr-name>.azurecr.io' \
         userAssignedIdentityId=$IDENTITY_ID \
         githubOwnerRepo='<org>/<repo>' \
-        githubAccessToken='<from-keyvault>'
+        githubAccessToken='<user-provided-PAT>'
    ```
    - The ACA template's `registries` block automatically uses identity-based
      auth when both `acrServer` and `userAssignedIdentityId` are set.
-   - The GitHub registration credential is the only secret — source it from Key
-     Vault, never inline it.
+   - The GitHub PAT is the only secret — for production, store it in Key Vault
+     and reference it; for initial setup, pass it directly at deploy time.
+     Never inline it in a committed `parameters.json`.
    - For private networking, set the subnet parameter (`subnetId` for ACI,
      `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
    - For AKS, use `helm install` instead of ARM.
@@ -509,7 +543,7 @@ scaling, and networking.
      environment's `provisioningState` to reach `Succeeded` before creating the
      job.
 
-5. **Set `minExecutions=1`** (recommended) so at least one runner is always
+6. **Set `minExecutions=1`** (recommended) so at least one runner is always
    warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
    take 1–3 minutes on cold start, during which GitHub shows "No runners
    configured":
@@ -519,11 +553,11 @@ scaling, and networking.
    Leave at `0` only if you prefer true scale-to-zero and can tolerate cold-start
    delays.
 
-6. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+7. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
    with the `git-ape-runner` label. (With `minExecutions=1`, a runner should
    appear within 30–60 seconds of deployment.)
 
-7. **Set the variable** so workflows target it (repo-wide or per environment):
+8. **Set the variable** so workflows target it (repo-wide or per environment):
    ```bash
    gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
    # per environment instead:
@@ -531,10 +565,10 @@ scaling, and networking.
    ```
    Clean fallback to GitHub-hosted runners is `gh variable delete GIT_APE_RUNNER_LABEL`.
 
-8. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
+9. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
     pass on the private runner (especially "Test OIDC login" which requires `az`).
 
-9. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
+10. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
     workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
     private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
     and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
@@ -568,11 +602,31 @@ scaling, and networking.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ask the user for a GitHub PAT (never generate a registration token) → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
 11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
 12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
 ## Known Gotchas
+
+### Self-hosted: registration tokens don't work for KEDA-based runners
+
+**Never use `POST repos/<org>/<repo>/actions/runners/registration-token`** to
+generate the `githubAccessToken` for ACA/ACI runners. Registration tokens are
+short-lived (~1 hour) and expire silently. Once expired:
+- The KEDA `github-runner` scaler can no longer poll the Actions queue
+- Each ephemeral runner fails to register on scale-up with a **401 Unauthorized**
+- Runners appear as `offline` in GitHub Settings
+
+The `githubAccessToken` parameter requires a **long-lived GitHub PAT** because:
+1. KEDA continuously polls the GitHub API every 30 seconds to detect queued jobs
+2. Each ephemeral runner re-registers itself on every scale-up event
+3. Both operations need a token that outlives any single job
+
+**Fix:** Always **ask the user** to create a fine-grained PAT
+(`https://github.com/settings/tokens?type=beta`) with **Actions (Read & Write)**
+and **Administration (Read & Write)** permissions scoped to the target repo. A
+classic PAT with the `repo` scope also works. Never generate a registration
+token programmatically — it will always fail after ~1 hour.
 
 ### Hosted compute: `network_settings_ids` expects the GitHubId tag, not the Azure resource ID
 

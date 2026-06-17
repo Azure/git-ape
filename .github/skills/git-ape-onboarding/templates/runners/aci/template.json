@@ -47,7 +47,7 @@
     "githubAccessToken": {
       "type": "securestring",
       "metadata": {
-        "description": "GitHub credential used to register the runner: a fine-grained PAT (administration:write) or GitHub App token. Source from Key Vault - never commit it."
+        "description": "Long-lived GitHub PAT used to register the runner. Requires a fine-grained PAT with Actions + Administration (Read & Write) permissions, or a classic PAT with repo scope. Do NOT use a short-lived registration token — it expires in ~1h. Source from Key Vault - never commit it."
       }
     },
     "runnerImage": {
