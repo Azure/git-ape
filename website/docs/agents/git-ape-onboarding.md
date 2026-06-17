@@ -99,9 +99,9 @@ Treat this as a **non-negotiable contract** for the gated first reply: regardles
    - macOS / Linux / WSL: `./scripts/scaffold-repo.sh`
    - Windows (PowerShell 7+): `pwsh ./scripts/scaffold-repo.ps1`
    Both scripts produce byte-identical output. Report which files were created vs skipped.
-9. Ask compliance framework and enforcement mode preferences (Step 10 in `/git-ape-onboarding` skill playbook).
+9. Ask compliance framework and enforcement mode preferences (Step 11 in `/git-ape-onboarding` skill playbook).
 10. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices. If the file was skipped by the scaffold step or lacks that section, surface the captured preferences in chat for manual integration instead of mutating the file.
-11. Select the runner type (input #7). If private runners were chosen, point the user at `./templates/runners/<platform>/` for the reference IaC, have them provision it (sourcing the GitHub credential from Key Vault, never inlined), confirm the runner is online, and set the `GIT_APE_RUNNER_LABEL` variable. If public, leave the variable unset. (Step 11 in `/git-ape-onboarding` skill playbook.)
+11. Select the runner type (input #7). If private runners were chosen, point the user at `./templates/runners/<platform>/` for the reference IaC, have them provision it (sourcing the GitHub credential from Key Vault, never inlined), confirm the runner is online, and set the `GIT_APE_RUNNER_LABEL` variable. If public, leave the variable unset. (Step 12 in `/git-ape-onboarding` skill playbook.)
 12. Summarize created/updated artifacts and next checks.
 
 ## Output Requirements
