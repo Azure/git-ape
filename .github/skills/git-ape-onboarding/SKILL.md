@@ -1,6 +1,6 @@
 ---
 name: git-ape-onboarding
-description: "Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets."
+description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files. USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation."
 metadata:
   argument-hint: "GitHub repo URL, subscription target(s), and onboarding mode (single or multi-environment)"
   user-invocable: true
@@ -19,6 +19,8 @@ This skill is the source of truth for onboarding behavior. Do not depend on a st
 - Multi-environment onboarding (dev/staging/prod across different subscriptions)
 - New user handoff where OIDC, RBAC, and GitHub environments must be created
 
+**DO NOT USE FOR:** re-deploying an already-onboarded repo (use `git-ape`), rotating or updating an existing secret or federated credential, drift detection setup alone (that is an optional sub-step covered by Step 10), or general Azure resource deployment.
+
 ## What It Configures
 
 This skill configures:
@@ -29,7 +31,8 @@ This skill configures:
 4. GitHub environments (`azure-deploy*`, `azure-destroy`)
 5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable, plus the optional `GIT_APE_RUNNER_LABEL` variable that selects private runners
 6. Scaffolded GitHub Actions workflow files (`git-ape-plan.yml`, `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.{md,lock.yml}`) and deployment standards (`.github/copilot-instructions.md`) into the user's working copy
-7. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default), **hosted compute networking** (GitHub-managed runners with Azure private networking, requires GHEC), or self-hosted runners in your Azure subscription (ACI / ACA / AKS). On-demand IaC for private runners ships at `./templates/runners/`.
+7. *(Optional)* The `COPILOT_GITHUB_TOKEN` repository secret that powers the agentic drift-detection workflow (`git-ape-drift.lock.yml`) — only when the user opts into scheduled drift detection
+8. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default), **hosted compute networking** (GitHub-managed runners with Azure private networking, requires GHEC), or self-hosted runners in your Azure subscription (ACI / ACA / AKS). On-demand IaC for private runners ships at `./templates/runners/`.
 
 ## Prerequisites
 
@@ -107,12 +110,13 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
    - `fc-azure-deploy`    subject `"$OIDC_PREFIX:environment:azure-deploy"` (one per environment in multi-env mode)
    - `fc-azure-destroy`   subject `"$OIDC_PREFIX:environment:azure-destroy"`
 6. Assign RBAC on each target subscription.
-7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable. (The `GIT_APE_RUNNER_LABEL` variable is set later in Step 11 only if private runners are chosen.)
+7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable. (The `GIT_APE_RUNNER_LABEL` variable is set later in Step 12 only if private runners are chosen.)
 8. Create GitHub environments and branch policies when permissions allow.
 9. Scaffold workflow files and deployment standards into the user's working copy (see below).
-10. Capture compliance and Azure Policy preferences (see below).
-11. Select the GitHub Actions runner type (public / hosted compute networking / self-hosted) and, if private runners are chosen, provision them and set `GIT_APE_RUNNER_LABEL` (see below).
-12. Verify federated credentials, role assignments, and secrets.
+10. *(Optional)* Provision the drift detector engine credential (`COPILOT_GITHUB_TOKEN`) so the agentic drift workflow can run (see below).
+11. Capture compliance and Azure Policy preferences (see below).
+12. Select the GitHub Actions runner type (public / hosted compute networking / self-hosted) and, if private runners are chosen, provision them and set `GIT_APE_RUNNER_LABEL` (see below).
+13. Verify federated credentials, role assignments, and secrets.
 
 ### Step 9: Scaffold workflow files and deployment standards
 
@@ -152,9 +156,61 @@ The helper:
   canonical template so the user can reconcile manually.
 
 If the user already had a custom `.github/copilot-instructions.md`, the
-scaffold step skips it. Step 10 (below) handles that case explicitly.
+scaffold step skips it. Step 11 (below) handles that case explicitly.
 
-### Step 10: Compliance & Azure Policy Preferences
+### Step 10: (Optional) Onboard the drift detector workflow
+
+**This step is optional.** It is only needed if the user wants the scheduled
+**drift-detection** workflow (`git-ape-drift.lock.yml`) to run. The `plan`,
+`deploy`, `destroy`, and `verify` workflows do **not** depend on anything from
+this step — skip it entirely if the user is not enabling drift detection.
+
+Unlike the other scaffolded workflows, `git-ape-drift` is a **GitHub Agentic
+Workflow** (authored with [gh-aw](https://github.github.com/gh-aw/)) that runs
+on the **GitHub Copilot engine**. Its compiled `.lock.yml` opens with a hard
+preflight gate — *"Validate COPILOT_GITHUB_TOKEN secret"* — that fails the run
+immediately when the credential is missing. There is **no fallback**: the Azure
+OIDC secrets from Step 7 cover the workflow's deterministic pre-steps, but the
+agent itself needs its own engine token.
+
+To onboard it:
+
+1. **Confirm intent.** Ask the user whether they want scheduled drift
+   detection. If not, skip this step.
+
+2. **Provision `COPILOT_GITHUB_TOKEN`** as a **repository** secret — not an
+   environment secret, because the daily `schedule` runs from `main` with no
+   environment attached:
+   ```bash
+   gh secret set COPILOT_GITHUB_TOKEN --repo <org>/<repo>
+   # paste the token when prompted — never pass it on the command line
+   ```
+   Token requirements:
+   - A GitHub **PAT** (fine-grained or classic) belonging to an identity with
+     an **active GitHub Copilot seat**.
+   - The built-in `GITHUB_TOKEN` **cannot** drive the Copilot engine, so the
+     token must be supplied explicitly.
+   - The other gh-aw tokens (`GH_AW_GITHUB_TOKEN`,
+     `GH_AW_GITHUB_MCP_SERVER_TOKEN`) are **not** required — they fall back to
+     the auto-provided `GITHUB_TOKEN`.
+
+3. **(Only if recompiling.)** The scaffolded `.lock.yml` runs as-is. The
+   `gh-aw` CLI is needed **only** when the user edits `git-ape-drift.md` and
+   wants to regenerate the lock file:
+   ```bash
+   gh extension install github/gh-aw
+   gh aw compile
+   ```
+
+4. **Smoke-test** the workflow end to end:
+   ```bash
+   gh workflow run git-ape-drift.lock.yml --repo <org>/<repo>
+   gh run list --workflow git-ape-drift.lock.yml --repo <org>/<repo> --limit 1
+   ```
+
+Never print the token value in chat output (see Safe-Execution Rules).
+
+### Step 11: Compliance & Azure Policy Preferences
 
 After RBAC and environment setup, ask the user about compliance requirements and update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md`:
 
@@ -187,7 +243,7 @@ After RBAC and environment setup, ask the user about compliance requirements and
      preferences and a suggested patch in chat so the user can apply it.
    - In all cases, leave changes unstaged and let the user commit them.
 
-### Step 11: Runner Selection & Provisioning (optional)
+### Step 12: Runner Selection & Provisioning (optional)
 
 Git-Ape workflows resolve their runner from a single variable:
 
@@ -212,14 +268,14 @@ start public, switch to private later with one variable.**
    repeating this step.
 
 3. **If hosted compute networking:**
-   Follow the hosted compute sub-flow (Step 11a below).
+   Follow the hosted compute sub-flow (Step 12a below).
 
 4. **If self-hosted:**
-   Follow the self-hosted sub-flow (Step 11b below).
+   Follow the self-hosted sub-flow (Step 12b below).
 
 ---
 
-### Step 11a: Hosted Compute Networking (GitHub-managed, Azure private networking)
+### Step 12a: Hosted Compute Networking (GitHub-managed, Azure private networking)
 
 GitHub-hosted runners with Azure private networking. GitHub manages the compute
 (full Ubuntu images with `az`, `gh`, `jq`, `git` pre-installed), runners execute
@@ -372,7 +428,7 @@ Confirm all steps pass — no custom image needed, GitHub provides everything.
 
 ---
 
-### Step 11b: Self-Hosted Runners (ACI / ACA / AKS)
+### Step 12b: Self-Hosted Runners (ACI / ACA / AKS)
 
 Self-hosted runners run in your Azure subscription. You manage compute, image,
 scaling, and networking.
@@ -465,20 +521,24 @@ scaling, and networking.
 7. Never run `git add`, `git commit`, `git push`, or open a PR for the
    scaffolded files — leave them unstaged so the user decides how to land
    them.
+8. **Idempotency on re-run:** If the skill is re-invoked after a partial failure, re-run from the last failing step — not from scratch. The Entra app, federated credentials, role assignments, and GitHub environments created before the failure are safe to reuse; do not create duplicates. Surface each already-provisioned resource as `⊝ Already exists` rather than re-creating it.
 
 ## Suggested Agent Flow
 
-1. **Run `/prereq-check`** to validate tools and auth. Stop if it doesn't report ✅ READY.
-2. Confirm target repo URL, onboarding mode, and role model.
+**First-turn rule:** the very first response to any onboarding request must be a **gated handoff** — surface prereq results and collect required inputs. It must NOT be a walkthrough, a full set of CLI commands, or a completion report. The agent must not narrate or execute onboarding steps until: (a) prereq check confirms ✅ READY, and (b) all five required inputs from step 2 are in hand.
+
+1. **Run `/prereq-check`** to validate tools and auth. Surface the full results table — tool versions, Azure CLI auth status, GitHub CLI auth status, and a ✅/❌ per check. If CLI commands cannot execute in the current environment, present the required checklist items and ask the user to confirm each one passes manually (`az` ≥ 2.50 installed and authenticated, `gh` ≥ 2.0 installed and authenticated, `jq` ≥ 1.6, `git` installed). **Never advance to step 2 until prereq results are confirmed — this is a hard gate.**
+2. **Collect the required inputs.** Ask for — and wait for answers to — at minimum: (1) target GitHub repository URL, (2) Azure subscription ID (or one per environment for multi-env), (3) RBAC role to grant (`Contributor` or `Owner`), (4) onboarding mode (`single` or `multi-environment`), (5) default branch (confirm `main` or ask if non-standard). Do not proceed to step 3 without all five.
 3. Validate current Azure/GitHub auth context (subscription, tenant, GitHub org).
 4. Ask for final confirmation.
 5. Execute the required Azure CLI and GitHub CLI commands directly from this playbook.
 6. Scaffold workflow files and `copilot-instructions.md` via `./scripts/scaffold-repo.sh` on macOS/Linux/WSL, or `pwsh ./scripts/scaffold-repo.ps1` on Windows (Step 9 in playbook). Report which files were created vs skipped.
-7. Ask compliance framework and enforcement mode preferences (Step 10 in playbook).
-8. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-9. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 11a). For **self-hosted**: ACR + custom image + ACA/ACI deployment + `minExecutions=1` + registry credentials + `GIT_APE_RUNNER_LABEL` (Step 11b).
-10. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
-11. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
+7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
+8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
+9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ACR + custom image + ACA/ACI deployment + `minExecutions=1` + registry credentials + `GIT_APE_RUNNER_LABEL` (Step 12b).
+11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
+12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
 ## Known Gotchas
 
@@ -520,7 +580,7 @@ The hosted compute provisioning flow requires **5 distinct GitHub token scopes**
 `write:network_configurations`). If not collected upfront, each missing scope
 triggers a separate `gh auth refresh` device-code flow.
 
-**Fix:** Always consolidate auth at the start of Step 11a:
+**Fix:** Always consolidate auth at the start of Step 12a:
 ```bash
 gh auth refresh -h github.com -s admin:org,admin:enterprise,manage_runners:org,read:enterprise,write:network_configurations
 ```
@@ -638,4 +698,9 @@ gh api repos/<ORG>/<REPO> --jq '{repo_id: .id, owner_id: .owner.id}'
 
 # Validate role assignments for SP (replace principal object id)
 az role assignment list --assignee-object-id <SP_OBJECT_ID> --all -o table
+
+# (Optional, drift detector) Confirm the Copilot engine credential is set
+gh secret list --repo <ORG>/<REPO> | grep -q '^COPILOT_GITHUB_TOKEN' \
+  && echo "✅ COPILOT_GITHUB_TOKEN set" \
+  || echo "⚠️ COPILOT_GITHUB_TOKEN missing — drift workflow will fail its preflight"
 ```
