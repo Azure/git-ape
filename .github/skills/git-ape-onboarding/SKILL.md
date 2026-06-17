@@ -219,22 +219,58 @@ the **bootstrap model: start public, switch to private later with one variable.*
    - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
    ```
 
-4. **Point the user at the reference IaC** for the chosen type × platform under
-   `./templates/runners/` (`aci/` and `aca/` ship ARM `template.json` +
-   `parameters.json`; `aks/` ships an ARC Helm `values.yaml` + README). See
-   `./templates/runners/README.md` for the full matrix and security model.
+4. **Build the custom runner image.** The base `ghcr.io/actions/runner:latest`
+   (GitHub's official runner image) does **NOT** include `az`, `gh`, or `jq`.
+   Workflows will fail with `Unable to locate executable file: az` without a
+   custom image.
+   ```bash
+   # Create ACR (one-time)
+   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic --admin-enabled true
+
+   # Build and push image (runs in Azure, ~3 min, no local Docker needed)
+   az acr build --registry <acr-name> --image git-ape-runner:latest \
+     --file ./templates/runners/Dockerfile ./templates/runners/
+   ```
+   The `Dockerfile` at `./templates/runners/Dockerfile` extends the base runner
+   with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`).
+
+5. **Deploy the runner infrastructure** using the chosen platform template.
+   Pass the custom image via the `runnerImage` parameter:
+   ```bash
+   az deployment group create -g <rg> -f template.json \
+     -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
+        githubOwnerRepo='<org>/<repo>' \
+        githubAccessToken='<from-keyvault>'
+   ```
    - The GitHub registration credential is the only secret — source it from Key
      Vault, never inline it. Azure access uses a user-assigned managed identity.
    - For VNet-injected, set the subnet parameter (`subnetId` for ACI,
      `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
-   - Provision with `az deployment group create -f template.json -p @parameters.json`
-     (ACI/ACA) or `helm install` (AKS). Do NOT add these templates to the
-     scaffold helper — they are on-demand only.
+   - For AKS, use `helm install` instead of ARM.
+   - Do NOT add these templates to the scaffold helper — they are on-demand only.
 
-5. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
-   with the `git-ape-runner` label.
+6. **Configure ACR pull credentials** on the ACA/ACI job (if using ACR):
+   ```bash
+   az containerapp job registry set --name git-ape-runner --resource-group <rg> \
+     --server <acr-name>.azurecr.io --username <acr-name> \
+     --password $(az acr credential show -n <acr-name> --query "passwords[0].value" -o tsv)
+   ```
 
-6. **Set the variable** so workflows target it (repo-wide or per environment):
+7. **Set `minExecutions=1`** (recommended) so at least one runner is always
+   warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
+   take 1–3 minutes on cold start, during which GitHub shows "No runners
+   configured":
+   ```bash
+   az containerapp job update --name git-ape-runner --resource-group <rg> --min-executions 1
+   ```
+   Leave at `0` only if you prefer true scale-to-zero and can tolerate cold-start
+   delays.
+
+8. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+   with the `git-ape-runner` label. (With `minExecutions=1`, a runner should
+   appear within 30–60 seconds of deployment.)
+
+9. **Set the variable** so workflows target it (repo-wide or per environment):
    ```bash
    gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
    # per environment instead:
@@ -242,11 +278,14 @@ the **bootstrap model: start public, switch to private later with one variable.*
    ```
    Clean fallback to GitHub-hosted runners is `gh variable delete GIT_APE_RUNNER_LABEL`.
 
-7. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
-   workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
-   private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
-   and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
-   carries an integrity hash). The other four workflows need no recompile.
+10. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
+    pass on the private runner (especially "Test OIDC login" which requires `az`).
+
+11. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
+    workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
+    private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
+    and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
+    carries an integrity hash). The other four workflows need no recompile.
 
 ## Safe-Execution Rules
 
@@ -272,10 +311,55 @@ the **bootstrap model: start public, switch to private later with one variable.*
 6. Scaffold workflow files and `copilot-instructions.md` via `./scripts/scaffold-repo.sh` on macOS/Linux/WSL, or `pwsh ./scripts/scaffold-repo.ps1` on Windows (Step 9 in playbook). Report which files were created vs skipped.
 7. Ask compliance framework and enforcement mode preferences (Step 10 in playbook).
 8. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-9. Ask the runner type (and platform if private), and — if private runners are chosen — point the user at `./templates/runners/` and set `GIT_APE_RUNNER_LABEL` (Step 11 in playbook).
-10. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
+9. Ask the runner type (and platform if private), and — if private runners are chosen — provision the full stack: ACR + custom image + ACA/ACI deployment + `minExecutions=1` + registry credentials + `GIT_APE_RUNNER_LABEL` (Step 11 in playbook).
+10. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
+11. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
 ## Known Gotchas
+
+### Default runner image lacks required tools
+
+The base image `ghcr.io/actions/runner:latest` (GitHub's official runner) is a
+**minimal** self-hosted runner — it does NOT include `az`, `gh`, or `jq`. If you
+deploy without the custom image, workflows will fail with:
+
+```
+Error: Unable to locate executable file: az
+```
+
+**Fix:** Always build and use the custom image from `./templates/runners/Dockerfile`.
+The onboarding flow must:
+1. Create an ACR (`az acr create`)
+2. Build the image (`az acr build --image git-ape-runner:latest`)
+3. Configure pull credentials on the ACA/ACI job (`az containerapp job registry set`)
+4. Set the `runnerImage` parameter to the ACR image
+
+### KEDA scale-from-zero cold start
+
+With `minExecutions=0` (the default), KEDA's `github-runner` scaler polls the
+GitHub Actions queue every 30 seconds. On a fresh deployment or after long idle
+periods, the first job can wait 1–3 minutes before a runner spins up. During
+this time:
+- GitHub shows the job as "Waiting for a runner to pick up this job"
+- The Settings → Runners page shows "No runners configured" (ephemeral runners
+  only register while executing)
+
+**Fix:** Set `minExecutions=1` to keep one runner always warm. This costs
+~$30–50/month on the Consumption plan but eliminates cold-start delays and
+ensures a runner is always visible in GitHub Settings.
+
+### Stale workflow files in target repos
+
+If the target repo was onboarded before the `GIT_APE_RUNNER_LABEL` pattern was
+introduced, its workflow files may have hardcoded `runs-on: ubuntu-latest`. The
+private runner will never pick up jobs because workflows don't request its label.
+
+**Fix:** The scaffold helper (`scaffold-repo.sh` / `.ps1`) skips existing files.
+To update stale workflows, the agent must either:
+1. Detect the stale pattern (`grep 'runs-on: ubuntu-latest'`) and offer to
+   update all 4 workflow files with the dynamic pattern, OR
+2. Advise the user to manually replace `runs-on: ubuntu-latest` with
+   `runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` in each job.
 
 ### GitHub Org Custom OIDC Subject Template (e.g. Azure org)
 
