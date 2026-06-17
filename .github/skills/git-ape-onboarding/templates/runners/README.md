@@ -1,15 +1,17 @@
-# Git-Ape self-hosted runner templates
+# Git-Ape Private Runner Templates
 
-These are **reference Infrastructure-as-Code templates** for provisioning private
-GitHub Actions runners that execute the Git-Ape deployment workflows
-(`git-ape-plan`, `-deploy`, `-destroy`, `-verify`) inside **your** Azure
-subscription instead of on GitHub-hosted runners.
+These are **reference templates** for provisioning private GitHub Actions
+runners that execute the Git-Ape deployment workflows (`git-ape-plan`,
+`-deploy`, `-destroy`, `-verify`) with private network connectivity.
 
-They are **not** scaffolded into your repository automatically. The
-`/git-ape-onboarding` flow copies and customizes the template for the runner
-type and platform you choose, then provisions it. The bootstrap model is:
+Git-Ape supports two private runner strategies:
 
-> **Start on public runners, switch to private runners later — with one variable.**
+| Strategy | Who manages compute? | Infrastructure you manage | Best for |
+|----------|---------------------|--------------------------|----------|
+| **Hosted compute networking** | GitHub | Azure VNet + subnet only | Private connectivity with zero runner management |
+| **Self-hosted runners** | You | Full runner stack (ACI/ACA/AKS + image + scaling) | Custom images, air-gapped, compliance constraints |
+
+> **Bootstrap model: Start on public runners, switch to private later — with one variable.**
 
 ## The runner switch: `GIT_APE_RUNNER_LABEL`
 
@@ -22,15 +24,19 @@ runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
 | `GIT_APE_RUNNER_LABEL` | Effect |
 |------------------------|--------|
 | **unset** (default) | Jobs run on GitHub-hosted `ubuntu-latest`. No infrastructure. |
-| set to a label (default `git-ape-runner`) | Jobs target your self-hosted runners registered with that label. |
+| Set to a hosted runner name (e.g. `git-ape-vnet-4vcpu`) | Jobs run on GitHub-hosted compute with Azure private networking. |
+| Set to a self-hosted label (e.g. `git-ape-runner`) | Jobs target your self-hosted runners registered with that label. |
 
 Switching is a one-line change and is fully reversible:
 
 ```bash
-# Switch to private runners (after they are provisioned and online)
+# Switch to hosted compute networking runner
+gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-vnet-4vcpu"
+
+# Switch to self-hosted runners
 gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
 
-# Clean fallback to GitHub-hosted runners
+# Clean fallback to GitHub-hosted runners (public)
 gh variable delete GIT_APE_RUNNER_LABEL --repo <org>/<repo>
 ```
 
@@ -38,20 +44,188 @@ In multi-environment mode, set the variable per environment
 (`--env azure-deploy-prod`) so only the environments that need private runners
 use them.
 
-## Runner type × platform matrix
+---
+
+## Option 1: Hosted Compute Networking (recommended)
+
+**GitHub-hosted runners with Azure private networking.** GitHub manages the
+compute (Ubuntu VMs with all standard tools pre-installed), but the runners
+execute inside your Azure VNet for private connectivity to your resources.
+
+> **Requires:** GitHub Enterprise Cloud. No custom image, no ACR, no KEDA —
+> GitHub provides full Ubuntu images with `az`, `gh`, `jq`, `git` pre-installed.
+
+**Reference:**
+[About networking for hosted compute products](https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/configuring-private-networking-for-hosted-compute-products/about-networking-for-hosted-compute-products-in-your-enterprise)
+
+### Scope: Organization vs Enterprise
+
+Hosted compute network configurations can be created at two levels:
+
+| Scope | `businessId` value | API endpoint | UI location |
+|-------|-------------------|--------------|-------------|
+| **Enterprise** | Enterprise `databaseId` (from GraphQL) | `enterprises/{slug}/network-configurations` | Enterprise Settings → Hosted compute networking |
+| **Organization** | Org numeric ID (from REST API) | `orgs/{org}/settings/network-configurations` | Organization Settings → Hosted compute networking |
+
+Enterprise-scoped configs can be shared across all orgs in the enterprise.
+Organization-scoped configs are independent (requires enterprise policy to allow).
+
+### Provisioning flow
+
+```mermaid
+flowchart LR
+    A[Create Azure VNet<br/>+ /28 subnet] --> B[Delegate subnet to<br/>GitHub.Network/networkSettings]
+    B --> C[Register GitHub.Network<br/>resource provider]
+    C --> D[Create networkSettings<br/>Azure resource]
+    D --> E[Create network config<br/>via GitHub API]
+    E --> F[Create runner group<br/>linked to network config]
+    F --> G[Create hosted runner<br/>in runner group]
+    G --> H[Assign org/repo<br/>to runner group]
+    H --> I[Set GIT_APE_RUNNER_LABEL<br/>= runner name]
+```
+
+### Step-by-step
+
+1. **Create Azure VNet and subnet** (minimum `/28` — 16 IPs):
+   ```bash
+   az group create --name <rg> --location <region>
+   az network vnet create --name <vnet> --resource-group <rg> \
+     --address-prefix 10.0.0.0/16 --subnet-name snet-runners --subnet-prefix 10.0.0.0/28
+   ```
+
+2. **Delegate subnet** to `GitHub.Network/networkSettings`:
+   ```bash
+   az network vnet subnet update --name snet-runners --vnet-name <vnet> \
+     --resource-group <rg> --delegations GitHub.Network/networkSettings
+   ```
+
+3. **Register the `GitHub.Network` resource provider** on the subscription:
+   ```bash
+   az provider register --namespace GitHub.Network
+   az provider show --namespace GitHub.Network --query "registrationState" -o tsv
+   # Wait until "Registered"
+   ```
+
+4. **Create the `GitHub.Network/networkSettings` resource:**
+   ```bash
+   # businessId = enterprise databaseId (enterprise scope) or org numeric ID (org scope)
+   az rest --method PUT \
+     --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/GitHub.Network/networkSettings/<name>?api-version=2024-04-02" \
+     --body '{
+       "location": "<region>",
+       "properties": {
+         "businessId": "<enterprise-databaseId-or-org-id>",
+         "subnetId": "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/snet-runners"
+       }
+     }'
+   ```
+   ⚠️ **`businessId` is immutable** — if wrong, you must delete and recreate the resource.
+
+   The resource will have a `GitHubId` tag (a SHA-256 hash) — this is the ID
+   GitHub uses to reference the network settings.
+
+5. **Create the network configuration** on GitHub (use the `GitHubId` tag value,
+   NOT the Azure resource ID):
+   ```bash
+   # Enterprise scope:
+   gh api --method POST enterprises/<slug>/network-configurations \
+     -f name="<config-name>" \
+     -f compute_service="actions" \
+     -f network_settings_ids[]="<GitHubId-tag-value>"
+
+   # Organization scope:
+   gh api --method POST orgs/<org>/settings/network-configurations \
+     -f name="<config-name>" \
+     -f compute_service="actions" \
+     -f network_settings_ids[]="<GitHubId-tag-value>"
+   ```
+
+6. **Create a runner group** linked to the network configuration:
+   ```bash
+   # Enterprise scope:
+   gh api --method POST enterprises/<slug>/actions/runner-groups \
+     -f name="<group-name>" -f visibility="selected" \
+     -F allows_public_repositories=false \
+     -f network_configuration_id="<network-config-id-from-step-5>"
+
+   # Organization scope:
+   gh api --method POST orgs/<org>/actions/runner-groups \
+     -f name="<group-name>" -f visibility="selected" \
+     -F allows_public_repositories=false \
+     -f network_configuration_id="<network-config-id-from-step-5>"
+   ```
+
+7. **Assign org/repo to the runner group:**
+   ```bash
+   # Enterprise: assign org
+   gh api --method PUT enterprises/<slug>/actions/runner-groups/<group-id>/organizations/<org-id>
+   # Org: assign repo (for inherited enterprise groups, use the inherited group ID at org level)
+   gh api --method PUT orgs/<org>/actions/runner-groups/<group-id>/repositories/<repo-id>
+   ```
+
+8. **Create a hosted runner** in the group:
+   ```bash
+   # Query available images and sizes first:
+   gh api orgs/<org>/actions/hosted-runners/images/github-owned
+   gh api orgs/<org>/actions/hosted-runners/machine-sizes
+
+   # Create runner (image IDs are NUMERIC, sizes are like "4-core"):
+   echo '{"name":"<runner-name>","runner_group_id":<group-id>,"platform":"linux-x64","image":{"id":"<numeric-image-id>","source":"github"},"size":"4-core","maximum_runners":5}' | \
+     gh api --method POST enterprises/<slug>/actions/hosted-runners --input -
+   ```
+
+9. **Set the variable:**
+   ```bash
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "<runner-name>"
+   ```
+
+10. **Verify** by triggering `Git-Ape: Verify Setup`.
+
+### Key facts
+
+- **No custom image needed** — GitHub's hosted compute uses full Ubuntu images
+  with all standard tools (`az`, `gh`, `jq`, `git`, Docker, etc.)
+- **No KEDA, no cold start** — runners are always available (status: "Ready")
+- **`network_settings_ids`** expects the `GitHubId` tag value (SHA-256 hash
+  from the Azure resource), NOT the Azure resource ID
+- **Image IDs are numeric** (e.g., `"2295"` for Ubuntu 24.04) — query them via
+  `GET orgs/{org}/actions/hosted-runners/images/github-owned`
+- **Size IDs** are GitHub-specific (e.g., `"4-core"`, `"8-core"`) — query via
+  `GET orgs/{org}/actions/hosted-runners/machine-sizes`
+- **`businessId` is immutable** on the Azure resource — getting it wrong means
+  delete + recreate
+
+### Required GitHub token scopes
+
+All scopes must be present **before** starting provisioning to avoid repeated
+auth prompts:
+
+| Scope | Purpose |
+|-------|---------|
+| `admin:org` | Create runner groups, assign repos |
+| `admin:enterprise` | Enterprise-level runner groups and hosted runners |
+| `manage_runners:org` | Create/manage hosted runners |
+| `read:enterprise` | Query enterprise metadata (databaseId) |
+| `write:network_configurations` | Create network configurations |
+
+```bash
+# Authenticate once with all required scopes:
+gh auth refresh -h github.com -s admin:org,admin:enterprise,manage_runners:org,read:enterprise,write:network_configurations
+```
+
+---
+
+## Option 2: Self-Hosted Runners (ACI / ACA / AKS)
+
+Self-hosted runners run in **your** Azure subscription. You manage the compute,
+image, scaling, and networking.
+
+### Platform matrix
 
 | | **Azure Container Instances (ACI)** | **Azure Container Apps (ACA)** | **Azure Kubernetes Service (AKS)** |
 |---|---|---|---|
-| **Self-hosted (subscription)** | [`aci/`](./aci) — single container group, simplest | [`aca/`](./aca) — KEDA-scaled ephemeral jobs | [`aks/`](./aks) — Actions Runner Controller (ARC) |
-| **VNet-injected** | [`aci/`](./aci) with `subnetId` set | [`aca/`](./aca) with `infrastructureSubnetId` set | [`aks/`](./aks) — runners on cluster node subnet |
-
-- **Self-hosted (subscription)** — runners are Azure resources in your
-  subscription with outbound internet. Gives you control over image, region,
-  and identity without managing a VNet.
-- **VNet-injected** — runners run inside a subnet of a VNet you manage, for
-  workloads that need private connectivity to Azure resources (private
-  endpoints, no public egress except to GitHub). Choose this when deployments
-  must reach VNet-isolated targets or when policy forbids public runners.
+| **Basic** | [`aci/`](./aci) — single container group, simplest | [`aca/`](./aca) — KEDA-scaled ephemeral jobs | [`aks/`](./aks) — Actions Runner Controller (ARC) |
+| **With private networking** | [`aci/`](./aci) with `subnetId` set | [`aca/`](./aca) with `infrastructureSubnetId` set | [`aks/`](./aks) — runners on cluster node subnet |
 
 ### Which platform?
 
