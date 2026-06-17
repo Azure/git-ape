@@ -237,12 +237,15 @@ image, scaling, and networking.
 
 ## Custom runner image (required)
 
-> **⚠️ The base `ghcr.io/actions/runner:latest` (GitHub's official runner image)
-> does NOT include `az`, `gh`, or `jq`.** Git-Ape workflows will fail with
-> `Unable to locate executable file: az` if you use it directly.
+> **⚠️ The base `ghcr.io/actions/actions-runner:latest` (GitHub's official runner
+> image) does NOT include `az`, `gh`, or `jq`, and ships no registration
+> entrypoint.** Git-Ape workflows will fail with
+> `Unable to locate executable file: az` — and on ACI/ACA the runner never even
+> registers — if you use it directly.
 
 You **must** build and use the custom image from the [`Dockerfile`](./Dockerfile)
-in this directory. It extends the base runner with all Git-Ape prerequisites.
+in this directory. It extends the base runner with all Git-Ape prerequisites and
+an [`entrypoint.sh`](./entrypoint.sh) that self-registers the runner on ACI/ACA.
 
 ### Build with ACR Tasks (recommended — no local Docker required)
 

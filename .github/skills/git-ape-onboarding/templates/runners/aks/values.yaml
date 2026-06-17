@@ -28,10 +28,22 @@ containerMode:
 
 template:
   spec:
+    # Pull the custom image from a private ACR. Create the secret once:
+    #   kubectl create secret docker-registry acr-pull -n arc-runners \
+    #     --docker-server=<acr-name>.azurecr.io \
+    #     --docker-username=<acr-name> \
+    #     --docker-password="$(az acr credential show -n <acr-name> --query passwords[0].value -o tsv)"
+    imagePullSecrets:
+      - name: acr-pull
     # VNet-injected: pin runner pods to the node pool on your VNet subnet.
     # nodeSelector:
     #   agentpool: vnetpool
     containers:
       - name: runner
-        image: ghcr.io/actions/actions-runner:latest
+        # MUST be the Git-Ape custom image (az/gh/jq). The stock
+        # ghcr.io/actions/actions-runner image lacks those tools and every
+        # deployment step calling az/gh/jq will fail. Build it per the README
+        # ("Custom runner image") and push to your ACR. ARC overrides the
+        # command below, so the image's self-register entrypoint is unused here.
+        image: <acr-name>.azurecr.io/git-ape-runner:latest
         command: ["/home/runner/run.sh"]

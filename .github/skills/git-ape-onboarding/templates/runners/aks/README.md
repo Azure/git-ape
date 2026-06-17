@@ -23,6 +23,25 @@ The runner scale set's name **is** the `runs-on` label. Set
 - `kubectl` context pointing at the cluster and `helm` installed.
 - A GitHub credential (GitHub App recommended, or a fine-grained PAT) stored in
   Key Vault. Do not commit it.
+- A **custom runner image** (see below) pushed to a registry the cluster can pull.
+
+## Custom runner image (required)
+
+Like the ACI/ACA paths, AKS runner pods need `az`, `gh`, and `jq` — the stock
+`ghcr.io/actions/actions-runner` image has none of them, so Git-Ape steps fail
+with `Unable to locate executable file: az`. Build the custom image from the
+shared [`Dockerfile`](../Dockerfile) and push it to your ACR:
+
+```bash
+az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic --admin-enabled true
+az acr build --registry <acr-name> --image git-ape-runner:latest \
+  --file ../Dockerfile ..
+```
+
+Set `template.spec.containers[0].image` in `values.yaml` to
+`<acr-name>.azurecr.io/git-ape-runner:latest`. ARC overrides the container
+command with `run.sh`, so the image's self-register entrypoint is unused on AKS
+(the controller registers pods) — but the tools are still required.
 
 ## Install
 
@@ -41,15 +60,23 @@ kubectl create secret generic git-ape-runner-secret \
   --namespace arc-runners \
   --from-literal=github_token="$GH_TOKEN"
 
-# 3. Install the runner scale set with the Git-Ape values
+# 3. Create the ACR pull secret so pods can pull the custom image
+kubectl create secret docker-registry acr-pull \
+  --namespace arc-runners \
+  --docker-server=<acr-name>.azurecr.io \
+  --docker-username=<acr-name> \
+  --docker-password="$(az acr credential show -n <acr-name> --query passwords[0].value -o tsv)"
+
+# 4. Install the runner scale set with the Git-Ape values
 helm install git-ape-runner \
   --namespace arc-runners \
   -f values.yaml \
   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 ```
 
-Edit `values.yaml` first: set `githubConfigUrl` to your repo (or org) URL and,
-for VNet-injected clusters, schedule runner pods onto the VNet node pool via
+Edit `values.yaml` first: set `githubConfigUrl` to your repo (or org) URL, set
+`template.spec.containers[0].image` to your custom ACR image, and, for
+VNet-injected clusters, schedule runner pods onto the VNet node pool via
 `template.spec.nodeSelector`.
 
 ## Verify

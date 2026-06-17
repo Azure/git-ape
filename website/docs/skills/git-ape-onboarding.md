@@ -458,9 +458,10 @@ scaling, and networking.
    - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
    ```
 
-2. **Build the custom runner image.** The base `ghcr.io/actions/runner:latest`
-   (GitHub's official runner image) does **NOT** include `az`, `gh`, or `jq`.
-   Workflows will fail with `Unable to locate executable file: az` without a
+2. **Build the custom runner image.** The base `ghcr.io/actions/actions-runner:latest`
+   (GitHub's official runner image) does **NOT** include `az`, `gh`, or `jq`, and
+   ships no registration entrypoint. Workflows fail with `Unable to locate
+   executable file: az` — and on ACI/ACA the runner never registers — without a
    custom image.
    ```bash
    # Create ACR (one-time)
@@ -471,7 +472,8 @@ scaling, and networking.
      --file ./templates/runners/Dockerfile ./templates/runners/
    ```
    The `Dockerfile` at `./templates/runners/Dockerfile` extends the base runner
-   with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`).
+   with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`) and an `entrypoint.sh`
+   that self-registers the runner on ACI/ACA (on AKS, ARC handles registration).
 
 3. **Deploy the runner infrastructure** using the chosen platform template.
    Pass the custom image via the `runnerImage` parameter:
@@ -616,9 +618,10 @@ gh api orgs/<org>/actions/hosted-runners/machine-sizes --jq '.machine_specs[:10]
 
 ### Default runner image lacks required tools (self-hosted only)
 
-The base image `ghcr.io/actions/runner:latest` (GitHub's official runner) is a
-**minimal** self-hosted runner — it does NOT include `az`, `gh`, or `jq`. If you
-deploy without the custom image, workflows will fail with:
+The base image `ghcr.io/actions/actions-runner:latest` (GitHub's official runner)
+is a **minimal** self-hosted runner — it does NOT include `az`, `gh`, or `jq`, and
+ships no registration entrypoint. If you deploy without the custom image, the
+runner never registers on ACI/ACA and workflows fail with:
 
 ```
 Error: Unable to locate executable file: az

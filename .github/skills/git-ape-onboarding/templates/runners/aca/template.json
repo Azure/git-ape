@@ -52,9 +52,9 @@
     },
     "runnerImage": {
       "type": "string",
-      "defaultValue": "ghcr.io/actions/runner:latest",
+      "defaultValue": "ghcr.io/actions/actions-runner:latest",
       "metadata": {
-        "description": "Runner container image. IMPORTANT: The default image does NOT include az, gh, or jq. Build the custom image from ../Dockerfile and push to your ACR, then set this parameter to '<acr-name>.azurecr.io/git-ape-runner:latest'."
+        "description": "Runner container image. IMPORTANT: the stock image shown here neither includes az/gh/jq nor self-registers a runner. Build the custom image from ../Dockerfile (which adds those tools and a registration entrypoint) and push it to your ACR, then set this parameter to '<acr-name>.azurecr.io/git-ape-runner:latest'."
       }
     },
     "userAssignedIdentityId": {
