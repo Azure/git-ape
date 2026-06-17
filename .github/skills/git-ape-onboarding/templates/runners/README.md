@@ -247,34 +247,74 @@ You **must** build and use the custom image from the [`Dockerfile`](./Dockerfile
 in this directory. It extends the base runner with all Git-Ape prerequisites and
 an [`entrypoint.sh`](./entrypoint.sh) that self-registers the runner on ACI/ACA.
 
-### Build with ACR Tasks (recommended — no local Docker required)
+### Build with ACR Tasks (recommended — cloud build, no local Docker)
+
+Always build the image in Azure using ACR Tasks. This avoids:
+- Needing Docker installed locally
+- **Windows CRLF line-ending corruption** — when the build context is uploaded
+  from a Windows checkout (`git autocrlf`), `entrypoint.sh` may have `\r\n`
+  endings. The Dockerfile includes a `sed` safety net, but cloud builds on ACR
+  Tasks run in Linux and handle this cleanly.
 
 ```bash
-# Create an ACR (one-time)
-az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic --admin-enabled true
+# Create an ACR (one-time) — admin-enabled false; use managed identity for pulls
+az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic
 
 # Build and push the image (runs in Azure, ~3 min)
 az acr build --registry <acr-name> --image git-ape-runner:latest \
   --file .github/skills/git-ape-onboarding/templates/runners/Dockerfile \
   .github/skills/git-ape-onboarding/templates/runners/
-
-# Configure ACR pull credentials on the ACA job
-az containerapp job registry set --name git-ape-runner --resource-group <rg> \
-  --server <acr-name>.azurecr.io \
-  --username <acr-name> --password $(az acr credential show -n <acr-name> --query "passwords[0].value" -o tsv)
-
-# Update the job to use the custom image
-az containerapp job update --name git-ape-runner --resource-group <rg> \
-  --image <acr-name>.azurecr.io/git-ape-runner:latest
 ```
 
-### Or pass it at deploy time
+> **Windows note:** `az acr build` may crash with a `charmap` codec error while
+> streaming build logs (Unicode characters in `apt-get` output). Add `--no-logs`
+> to skip log streaming — the build still runs in Azure:
+> ```bash
+> az acr build --registry <acr-name> --image git-ape-runner:latest \
+>   --file ... ... --no-logs
+> ```
+> Check the result with `az acr repository list --name <acr-name>`.
+
+### ACR pull authentication (managed identity — recommended)
+
+Use a **user-assigned managed identity** with the `AcrPull` role to pull images
+from your ACR. This eliminates admin credentials entirely.
 
 ```bash
+# Create a managed identity (one-time)
+az identity create --name id-git-ape-runner --resource-group <rg> --location <region>
+
+# Get the identity's principal ID and resource ID
+IDENTITY_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query id -o tsv)
+PRINCIPAL_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query principalId -o tsv)
+ACR_ID=$(az acr show --name <acr-name> --query id -o tsv)
+
+# Assign AcrPull role
+az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal \
+  --role AcrPull --scope $ACR_ID
+
+# Deploy the ACA template with managed identity + ACR server
 az deployment group create -g <rg> -f template.json \
   -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
+     acrServer='<acr-name>.azurecr.io' \
+     userAssignedIdentityId=$IDENTITY_ID \
      githubOwnerRepo='org/repo' \
-     githubAccessToken='...'
+     githubAccessToken='<from-keyvault>'
+```
+
+The ACA template's `registries` block automatically uses identity-based auth
+when both `acrServer` and `userAssignedIdentityId` are set — no username/password.
+
+### Legacy: ACR admin credentials (not recommended)
+
+If you cannot use managed identity, enable admin access and configure pull
+credentials manually:
+
+```bash
+az acr update --name <acr-name> --admin-enabled true
+az containerapp job registry set --name git-ape-runner --resource-group <rg> \
+  --server <acr-name>.azurecr.io --username <acr-name> \
+  --password $(az acr credential show -n <acr-name> --query "passwords[0].value" -o tsv)
 ```
 
 ### Tools included in the custom image
@@ -316,6 +356,11 @@ queued jobs and spins up a runner. During this window, GitHub shows the job as
   still use **OIDC federation** for `az` actions, so the managed identity only
   needs what the runtime requires. Do not put subscription keys or connection
   strings on the runner.
+- **ACR image pull uses managed identity, not admin credentials.** The managed
+  identity assigned to the runner should have the `AcrPull` role on the ACR.
+  The ACA template supports identity-based registry auth natively via the
+  `acrServer` + `userAssignedIdentityId` parameters — no username/password.
+  ACR admin credentials are a legacy fallback and should be avoided.
 - **The GitHub registration credential is the one unavoidable secret.** GitHub
   requires a credential to register a runner. Order of preference:
   1. **GitHub App** installation token (recommended for org-scale; ARC supports
@@ -335,19 +380,23 @@ queued jobs and spins up a runner. During this window, GitHub shows the job as
 
 ```mermaid
 flowchart LR
-    A[Choose type + platform] --> B[Create ACR +<br/>build custom image]
-    B --> C[Copy template into<br/>.azure/runners/]
-    C --> D[Provide GitHub creds<br/>via Key Vault]
-    D --> E[Deploy IaC<br/>az deployment / helm]
-    E --> F[Set minExecutions=1<br/>+ registry creds]
-    F --> G[Runner registers<br/>with label git-ape-runner]
-    G --> H[Set GIT_APE_RUNNER_LABEL<br/>variable]
-    H --> I[Workflows now run<br/>on private runners]
-    I -.clean fallback.-> J[Unset variable →<br/>back to ubuntu-latest]
+    A[Choose type + platform] --> B[Create ACR +<br/>build custom image<br/>via ACR Tasks]
+    B --> C[Create managed identity<br/>+ AcrPull role]
+    C --> D[Copy template into<br/>.azure/runners/]
+    D --> E[Provide GitHub creds<br/>via Key Vault]
+    E --> F[Deploy IaC<br/>az deployment / helm]
+    F --> G[Set minExecutions=1<br/>runner registers]
+    G --> H[Runner registers<br/>with label git-ape-runner]
+    H --> I[Set GIT_APE_RUNNER_LABEL<br/>variable]
+    I --> J[Workflows now run<br/>on private runners]
+    J -.clean fallback.-> K[Unset variable →<br/>back to ubuntu-latest]
 ```
 
 1. **Choose** the runner type and platform (the `/git-ape-onboarding` flow asks).
-2. **Create an ACR** and build the custom runner image (see above).
+2. **Create an ACR** and build the custom runner image using ACR Tasks (cloud
+   build — avoids CRLF issues and requires no local Docker). Create a
+   **user-assigned managed identity** with `AcrPull` role for image pulls — do
+   not use ACR admin credentials.
 3. **Copy** the chosen platform folder into your repo under
    `.azure/runners/<platform>/` and edit parameters for your repo/org, region,
    labels, image, and (for VNet-injected) the target `subnetId`.

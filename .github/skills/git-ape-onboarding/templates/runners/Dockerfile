@@ -47,7 +47,11 @@ RUN apt-get update \
 # Registration entrypoint (self-registers the runner on ACI/ACA; bypassed on
 # AKS, where ARC overrides the container command).
 COPY entrypoint.sh /home/runner/entrypoint.sh
-RUN chmod +x /home/runner/entrypoint.sh
+# Strip Windows CRLF line endings if present. When the build context is
+# uploaded from a Windows checkout (git autocrlf) or via `az acr build` from a
+# Windows host, the shebang becomes "#!/usr/bin/env bash\r" and Linux returns
+# "bash\r: No such file or directory". This sed is a no-op on clean LF files.
+RUN sed -i 's/\r$//' /home/runner/entrypoint.sh && chmod +x /home/runner/entrypoint.sh
 
 # Switch back to the runner user
 USER runner

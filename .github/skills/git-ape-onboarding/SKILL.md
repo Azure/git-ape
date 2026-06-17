@@ -441,43 +441,73 @@ scaling, and networking.
    - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
    ```
 
-2. **Build the custom runner image.** The base `ghcr.io/actions/actions-runner:latest`
-   (GitHub's official runner image) does **NOT** include `az`, `gh`, or `jq`, and
-   ships no registration entrypoint. Workflows fail with `Unable to locate
-   executable file: az` — and on ACI/ACA the runner never registers — without a
-   custom image.
+2. **Build the custom runner image using ACR Tasks (cloud build).** The base
+   `ghcr.io/actions/actions-runner:latest` (GitHub's official runner image) does
+   **NOT** include `az`, `gh`, or `jq`, and ships no registration entrypoint.
+   Workflows fail with `Unable to locate executable file: az` — and on ACI/ACA
+   the runner never registers — without a custom image.
+
+   Always build via **ACR Tasks** (cloud build) — never local Docker. This
+   avoids Windows CRLF line-ending corruption of `entrypoint.sh` and eliminates
+   the need for a local Docker install.
    ```bash
-   # Create ACR (one-time)
-   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic --admin-enabled true
+   # Create ACR (one-time) — no --admin-enabled; use managed identity for pulls
+   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic
 
    # Build and push image (runs in Azure, ~3 min, no local Docker needed)
+   # On Windows, add --no-logs to avoid a Unicode encoding crash in log streaming
    az acr build --registry <acr-name> --image git-ape-runner:latest \
-     --file ./templates/runners/Dockerfile ./templates/runners/
+     --file ./templates/runners/Dockerfile ./templates/runners/ --no-logs
    ```
    The `Dockerfile` at `./templates/runners/Dockerfile` extends the base runner
    with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`) and an `entrypoint.sh`
    that self-registers the runner on ACI/ACA (on AKS, ARC handles registration).
+   It includes a `sed` safety net that strips CRLF line endings from
+   `entrypoint.sh` at build time.
 
-3. **Deploy the runner infrastructure** using the chosen platform template.
-   Pass the custom image via the `runnerImage` parameter:
+   After the build, verify the image exists:
+   ```bash
+   az acr repository list --name <acr-name> -o table
+   ```
+
+3. **Create a managed identity and assign `AcrPull` role** for image pulls:
+   ```bash
+   # Create identity
+   az identity create --name id-git-ape-runner --resource-group <rg> --location <region>
+
+   # Get IDs
+   IDENTITY_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query id -o tsv)
+   PRINCIPAL_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query principalId -o tsv)
+   ACR_ID=$(az acr show --name <acr-name> --query id -o tsv)
+
+   # Assign AcrPull role (may take 30–60s to propagate)
+   az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal \
+     --role AcrPull --scope $ACR_ID
+   ```
+   **Do NOT use ACR admin credentials** (`--admin-enabled true` + username/password).
+   Managed identity is the secure, recommended approach.
+
+4. **Deploy the runner infrastructure** using the chosen platform template.
+   Pass the custom image, ACR server, and managed identity:
    ```bash
    az deployment group create -g <rg> -f template.json \
      -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
+        acrServer='<acr-name>.azurecr.io' \
+        userAssignedIdentityId=$IDENTITY_ID \
         githubOwnerRepo='<org>/<repo>' \
         githubAccessToken='<from-keyvault>'
    ```
+   - The ACA template's `registries` block automatically uses identity-based
+     auth when both `acrServer` and `userAssignedIdentityId` are set.
    - The GitHub registration credential is the only secret — source it from Key
-     Vault, never inline it. Azure access uses a user-assigned managed identity.
+     Vault, never inline it.
    - For private networking, set the subnet parameter (`subnetId` for ACI,
      `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
    - For AKS, use `helm install` instead of ARM.
-
-4. **Configure ACR pull credentials** on the ACA/ACI job (if using ACR):
-   ```bash
-   az containerapp job registry set --name git-ape-runner --resource-group <rg> \
-     --server <acr-name>.azurecr.io --username <acr-name> \
-     --password $(az acr credential show -n <acr-name> --query "passwords[0].value" -o tsv)
-   ```
+   - **Note:** The ACA managed environment may take 1–2 minutes to fully
+     provision. If deploying step-by-step (not via ARM template), wait for the
+     environment's `provisioningState` to reach `Succeeded` before creating the
+     job.
 
 5. **Set `minExecutions=1`** (recommended) so at least one runner is always
    warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
@@ -538,7 +568,7 @@ scaling, and networking.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ACR + custom image + ACA/ACI deployment + `minExecutions=1` + registry credentials + `GIT_APE_RUNNER_LABEL` (Step 12b).
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
 11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
 12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
@@ -612,10 +642,10 @@ Error: Unable to locate executable file: az
 
 **Fix:** Always build and use the custom image from `./templates/runners/Dockerfile`.
 The onboarding flow must:
-1. Create an ACR (`az acr create`)
-2. Build the image (`az acr build --image git-ape-runner:latest`)
-3. Configure pull credentials on the ACA/ACI job (`az containerapp job registry set`)
-4. Set the `runnerImage` parameter to the ACR image
+1. Create an ACR (`az acr create` — no `--admin-enabled`)
+2. Build the image via ACR Tasks (`az acr build --no-logs` on Windows)
+3. Create a managed identity with `AcrPull` role on the ACR
+4. Deploy the template with `acrServer`, `userAssignedIdentityId`, and `runnerImage`
 
 ### KEDA scale-from-zero cold start
 
@@ -630,6 +660,64 @@ this time:
 **Fix:** Set `minExecutions=1` to keep one runner always warm. This costs
 ~$30–50/month on the Consumption plan but eliminates cold-start delays and
 ensures a runner is always visible in GitHub Settings.
+
+### Windows CRLF corrupts `entrypoint.sh` (self-hosted only)
+
+When the `Dockerfile` build context is uploaded from a Windows checkout (where
+`git autocrlf` converts LF to CRLF), `entrypoint.sh` gets `\r\n` line endings.
+Linux interprets the shebang as `#!/usr/bin/env bash\r`, failing with:
+
+```
+'bash\r': No such file or directory
+```
+
+The runner container starts but never registers, and all executions fail
+immediately.
+
+**Fix (belt-and-suspenders):**
+1. The `Dockerfile` includes a `sed -i 's/\r$//'` line after `COPY entrypoint.sh`
+   that strips CRLF at build time — this is always safe and is a no-op on clean
+   LF files.
+2. Prefer **ACR Tasks** (cloud build) over local `docker build` — ACR Tasks run
+   in Linux and handle the context correctly.
+3. If building locally on Windows, ensure `.gitattributes` marks `*.sh` as
+   `text eol=lf`, or run `dos2unix entrypoint.sh` before building.
+
+### `az acr build` crashes on Windows (Unicode encoding)
+
+On Windows, `az acr build` may crash while streaming build logs with:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192'
+```
+
+This is a known Azure CLI bug — the `colorama` library on Windows can't encode
+Unicode characters (like `→`) in `apt-get` output. The build itself may or may
+not have completed in Azure before the crash.
+
+**Fix:** Always use `--no-logs` when running `az acr build` on Windows:
+```bash
+az acr build --registry <acr-name> --image git-ape-runner:latest \
+  --file ... ... --no-logs
+```
+The build runs in Azure regardless; `--no-logs` just skips the local log
+streaming. Verify success with `az acr repository list --name <acr-name>`.
+
+### ACA managed environment provisioning delay
+
+The `Microsoft.App/managedEnvironments` resource can take 1–2 minutes to
+provision. If you create the ACA job immediately after the environment, the
+deployment may fail with `ManagedEnvironmentNotProvisioned`.
+
+**Fix:** When deploying via ARM template (`az deployment group create`), the
+`dependsOn` in the template handles ordering automatically. When deploying
+step-by-step (e.g., `az containerapp env create` followed by
+`az containerapp job create`), poll the environment status first:
+```bash
+az containerapp env show --name <env-name> --resource-group <rg> \
+  --query "properties.provisioningState" -o tsv
+# Wait until "Succeeded" before creating the job
+```
 
 ### Stale workflow files in target repos
 

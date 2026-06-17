@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": "git-ape-onboarding",
-    "description": "Git-Ape self-hosted runner on Azure Container Apps (ACA). Provisions a managed environment and an event-driven Container Apps Job that scales ephemeral GitHub Actions runners on demand with the KEDA 'github-runner' scaler (scale-to-zero between jobs). Runners register with the label 'git-ape-runner' (override via parameter). Leave infrastructureSubnetId empty for a self-hosted (subscription) environment; set it for VNet injection (Consumption needs a /23 or larger). The GitHub credential is the only secret and must be sourced from Key Vault.\n\nDeploy:\n  az group create -n rg-git-ape-runners -l eastus\n  az deployment group create -g rg-git-ape-runners -f template.json -p @parameters.json"
+    "description": "Git-Ape self-hosted runner on Azure Container Apps (ACA). Provisions a managed environment and an event-driven Container Apps Job that scales ephemeral GitHub Actions runners on demand with the KEDA 'github-runner' scaler (scale-to-zero between jobs). Runners register with the label 'git-ape-runner' (override via parameter). Leave infrastructureSubnetId empty for a self-hosted (subscription) environment; set it for VNet injection (Consumption needs a /23 or larger). The GitHub credential is the only secret and must be sourced from Key Vault. ACR image pull uses managed identity (AcrPull role) when both acrServer and userAssignedIdentityId are set — no admin credentials needed.\n\nDeploy:\n  az group create -n rg-git-ape-runners -l eastus\n  az deployment group create -g rg-git-ape-runners -f template.json -p @parameters.json"
   },
   "parameters": {
     "location": {
@@ -91,11 +91,19 @@
       "metadata": {
         "description": "Memory for the runner container (e.g. 2Gi)."
       }
+    },
+    "acrServer": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "ACR login server (e.g. myacr.azurecr.io). When set together with userAssignedIdentityId, the job pulls images via managed identity (AcrPull role required) — no admin credentials needed. Leave empty if using a public image or configuring registry credentials out-of-band."
+      }
     }
   },
   "variables": {
     "isOrgScope": "[equals(parameters('runnerScope'), 'org')]",
     "hasIdentity": "[not(empty(parameters('userAssignedIdentityId')))]",
+    "hasAcr": "[not(empty(parameters('acrServer')))]",
     "isVnet": "[not(empty(parameters('infrastructureSubnetId')))]",
     "envName": "[format('{0}-env', parameters('runnerName'))]",
     "ownerName": "[if(variables('isOrgScope'), parameters('githubOwnerRepo'), first(split(parameters('githubOwnerRepo'), '/')))]",
@@ -137,6 +145,7 @@
     ],
     "containerEnv": "[concat(variables('scopeEnv'), variables('baseEnv'))]",
     "identityBlock": "[if(variables('hasIdentity'), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(parameters('userAssignedIdentityId'), createObject())), createObject('type', 'None'))]",
+    "registriesBlock": "[if(and(variables('hasAcr'), variables('hasIdentity')), createArray(createObject('server', parameters('acrServer'), 'identity', parameters('userAssignedIdentityId'))), if(variables('hasAcr'), createArray(createObject('server', parameters('acrServer'))), createArray()))]",
     "vnetConfiguration": "[if(variables('isVnet'), createObject('infrastructureSubnetId', parameters('infrastructureSubnetId'), 'internal', false()), json('null'))]"
   },
   "resources": [
@@ -164,6 +173,7 @@
           "triggerType": "Event",
           "replicaTimeout": 1800,
           "replicaRetryLimit": 1,
+          "registries": "[if(empty(variables('registriesBlock')), json('null'), variables('registriesBlock'))]",
           "secrets": [
             {
               "name": "github-pat",

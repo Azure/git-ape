@@ -32,6 +32,10 @@
     },
     "maxRunners": {
       "value": 10
+    },
+    "_comment_acrServer": "Set to your ACR login server (e.g. myacr.azurecr.io) when using a custom runner image. When combined with userAssignedIdentityId, the job authenticates to ACR via managed identity (AcrPull role required) — no admin credentials needed.",
+    "acrServer": {
+      "value": ""
     }
   }
 }
