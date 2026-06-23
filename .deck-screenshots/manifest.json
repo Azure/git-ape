@@ -1,0 +1,346 @@
+{
+  "generated_at": "2026-06-23T09:02:07.186Z",
+  "pdf_density": 110,
+  "decks": [
+    {
+      "trackId": "T1",
+      "trackSlug": "zero-to-deploy",
+      "deckBaseName": "1_zero-to-deploy_deck",
+      "pdf": {
+        "source": "workshops/track-1-zero-to-deploy/1_zero-to-deploy_deck.pdf",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T1/pdf/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T1/pdf/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T1/pdf/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T1/pdf/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T1/pdf/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T1/pdf/slide-05.png"
+          }
+        ]
+      },
+      "pptx": {
+        "source": "workshops/track-1-zero-to-deploy/1_zero-to-deploy_deck.pptx",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T1/pptx/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T1/pptx/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T1/pptx/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T1/pptx/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T1/pptx/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T1/pptx/slide-05.png"
+          }
+        ]
+      }
+    },
+    {
+      "trackId": "T2",
+      "trackSlug": "deploy-like-a-pro",
+      "deckBaseName": "2_deploy-like-a-pro_deck",
+      "pdf": {
+        "source": "workshops/track-2-deploy-like-a-pro/2_deploy-like-a-pro_deck.pdf",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T2/pdf/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T2/pdf/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T2/pdf/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T2/pdf/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T2/pdf/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T2/pdf/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T2/pdf/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T2/pdf/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T2/pdf/slide-08.png"
+          }
+        ]
+      },
+      "pptx": {
+        "source": "workshops/track-2-deploy-like-a-pro/2_deploy-like-a-pro_deck.pptx",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T2/pptx/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T2/pptx/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T2/pptx/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T2/pptx/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T2/pptx/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T2/pptx/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T2/pptx/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T2/pptx/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T2/pptx/slide-08.png"
+          }
+        ]
+      }
+    },
+    {
+      "trackId": "T3",
+      "trackSlug": "platform-engineering",
+      "deckBaseName": "3_platform-engineering_deck",
+      "pdf": {
+        "source": "workshops/track-3-platform-engineering/3_platform-engineering_deck.pdf",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T3/pdf/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T3/pdf/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T3/pdf/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T3/pdf/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T3/pdf/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T3/pdf/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T3/pdf/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T3/pdf/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T3/pdf/slide-08.png"
+          }
+        ]
+      },
+      "pptx": {
+        "source": "workshops/track-3-platform-engineering/3_platform-engineering_deck.pptx",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T3/pptx/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T3/pptx/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T3/pptx/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T3/pptx/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T3/pptx/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T3/pptx/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T3/pptx/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T3/pptx/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T3/pptx/slide-08.png"
+          }
+        ]
+      }
+    },
+    {
+      "trackId": "T4",
+      "trackSlug": "executive-briefing",
+      "deckBaseName": "4_executive-briefing_deck",
+      "pdf": {
+        "source": "workshops/track-4-executive-briefing/4_executive-briefing_deck.pdf",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T4/pdf/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T4/pdf/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T4/pdf/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T4/pdf/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T4/pdf/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T4/pdf/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T4/pdf/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T4/pdf/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T4/pdf/slide-08.png"
+          },
+          {
+            "index": 9,
+            "path": ".deck-screenshots/T4/pdf/slide-09.png"
+          },
+          {
+            "index": 10,
+            "path": ".deck-screenshots/T4/pdf/slide-10.png"
+          }
+        ]
+      },
+      "pptx": {
+        "source": "workshops/track-4-executive-briefing/4_executive-briefing_deck.pptx",
+        "slides": [
+          {
+            "index": 0,
+            "path": ".deck-screenshots/T4/pptx/slide-00.png"
+          },
+          {
+            "index": 1,
+            "path": ".deck-screenshots/T4/pptx/slide-01.png"
+          },
+          {
+            "index": 2,
+            "path": ".deck-screenshots/T4/pptx/slide-02.png"
+          },
+          {
+            "index": 3,
+            "path": ".deck-screenshots/T4/pptx/slide-03.png"
+          },
+          {
+            "index": 4,
+            "path": ".deck-screenshots/T4/pptx/slide-04.png"
+          },
+          {
+            "index": 5,
+            "path": ".deck-screenshots/T4/pptx/slide-05.png"
+          },
+          {
+            "index": 6,
+            "path": ".deck-screenshots/T4/pptx/slide-06.png"
+          },
+          {
+            "index": 7,
+            "path": ".deck-screenshots/T4/pptx/slide-07.png"
+          },
+          {
+            "index": 8,
+            "path": ".deck-screenshots/T4/pptx/slide-08.png"
+          },
+          {
+            "index": 9,
+            "path": ".deck-screenshots/T4/pptx/slide-09.png"
+          },
+          {
+            "index": 10,
+            "path": ".deck-screenshots/T4/pptx/slide-10.png"
+          }
+        ]
+      }
+    }
+  ]
+}
