@@ -124,7 +124,7 @@ function Get-ResourceClassification {
     }
 }
 
-function Build-ManagedResources {
+function Build-ManagedResource {
     param([string[]]$ResourceIds)
     $list = @()
     foreach ($id in $ResourceIds) {
@@ -272,7 +272,7 @@ if ($DeployMethod -eq 'stack' -and $StackId) {
     $resourceIds = if ($opsTsv) { $opsTsv -split "`n" | Where-Object { $_ } } else { @() }
 }
 
-$ManagedResources = Build-ManagedResources -ResourceIds $resourceIds
+$ManagedResources = Build-ManagedResource -ResourceIds $resourceIds
 $ResourceGroups   = @($ManagedResources | ForEach-Object {
     if ($_.id -match '/resourceGroups/([^/]+)') { $matches[1] }
 } | Sort-Object -Unique)

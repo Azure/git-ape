@@ -134,6 +134,13 @@ site. Decision rationale for the harness choice lives in
    - Cross-references (slash-commands `/skill-name`) map to existing skill directories
    - Relative markdown links resolve to real file paths
    - Markdown passes linting (markdownlint)
+
+   If your PR touches a skill's shell or PowerShell scripts, the separate
+   **Script Lint** workflow (`git-ape-script-lint.yml`) also runs:
+   - Shell scripts (`.sh`) must pass `shellcheck` (severity ≥ warning) and `bash -n`
+   - PowerShell scripts (`.ps1`) must pass `PSScriptAnalyzer` (Error/Warning, per
+     [`.github/linters/PSScriptAnalyzerSettings.psd1`](.github/linters/PSScriptAnalyzerSettings.psd1))
+     and the PowerShell language parser
 6. **Review** — Maintainers will review your PR and provide feedback.
 
 ## Development Setup
@@ -151,6 +158,20 @@ node scripts/validate-structure.js
 
 # Generate documentation (optional)
 node scripts/generate-docs.js
+```
+
+If you edit a skill's embedded scripts, reproduce the **Script Lint** checks
+locally before pushing:
+
+```bash
+# Shell: static analysis + syntax (needs shellcheck + bash)
+find .github/skills -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+find .github/skills -name '*.sh' -exec bash -n {} \;
+
+# PowerShell: static analysis + parser (needs pwsh + PSScriptAnalyzer)
+pwsh -NoProfile -Command "Install-Module PSScriptAnalyzer -Scope CurrentUser -Force"
+pwsh -NoProfile -Command "Get-ChildItem -Recurse .github/skills -Filter *.ps1 |
+  ForEach-Object { Invoke-ScriptAnalyzer -Path \$_.FullName -Settings .github/linters/PSScriptAnalyzerSettings.psd1 }"
 ```
 
 ## Reporting Issues

@@ -17,12 +17,12 @@ The marketplace manifest configures how Git-Ape appears in the Copilot CLI plugi
 |-------|-------|
 | **Name** | git-ape |
 | **Owner** | Microsoft |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Description** | Git-Ape — Intelligent Azure deployment agent and skill suite for GitHub Copilot. Onboard any repository with guided ARM template generation, security analysis, cost estimation, drift detection, and automated CI/CD pipelines. |
 
 ## Plugins
 
-- **git-ape** v0.2.0: Intelligent Azure deployment agent system for GitHub Copilot. Provides guided, safe, and validated Azure resource deployments using ARM templates, with built-in security analysis, cost estimation, drift detection, and CI/CD pipeline integration.
+- **git-ape** v0.3.0: Intelligent Azure deployment agent system for GitHub Copilot. Provides guided, safe, and validated Azure resource deployments using ARM templates, with built-in security analysis, cost estimation, drift detection, and CI/CD pipeline integration.
 - **ape-context** v1.0.0: Extension for git-ape that provides enhanced context management, allowing platform teams to set up a baseline for Engineering context, tools use & intent
 
 ## Full Source
@@ -36,13 +36,13 @@ The marketplace manifest configures how Git-Ape appears in the Copilot CLI plugi
   },
   "metadata": {
     "description": "Git-Ape — Intelligent Azure deployment agent and skill suite for GitHub Copilot. Onboard any repository with guided ARM template generation, security analysis, cost estimation, drift detection, and automated CI/CD pipelines.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "git-ape",
       "description": "Intelligent Azure deployment agent system for GitHub Copilot. Provides guided, safe, and validated Azure resource deployments using ARM templates, with built-in security analysis, cost estimation, drift detection, and CI/CD pipeline integration.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "source": "."
     },
     {

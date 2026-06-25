@@ -27,24 +27,24 @@ function Test-VersionAtLeast {
     }
 }
 
-function Emit-Row {
+function Write-Row {
     param([string]$Tool, [string]$Status, [string]$Found)
     "{0}`t{1}`t{2}`t{3}" -f $Tool, $Status, $Found, $min[$Tool]
 }
 
-function Check-Tool {
+function Test-Tool {
     param([string]$Tool, [scriptblock]$Extract)
     if (-not (Get-Command $Tool -ErrorAction SilentlyContinue)) {
-        Emit-Row $Tool 'MISSING' '-'
+        Write-Row $Tool 'MISSING' '-'
         return
     }
     $found = ''
     try { $found = (& $Extract) } catch { $found = '' }
     if (-not $found) { $found = 'unknown' }
     if ($min[$Tool] -ne '0' -and -not (Test-VersionAtLeast $found $min[$Tool])) {
-        Emit-Row $Tool 'OUTDATED' $found
+        Write-Row $Tool 'OUTDATED' $found
     } else {
-        Emit-Row $Tool 'OK' $found
+        Write-Row $Tool 'OK' $found
     }
 }
 
@@ -56,22 +56,22 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE) {
 }
 "Platform: $os / $arch"
 
-Check-Tool 'az' {
+Test-Tool 'az' {
     # Avoid `--query '"azure-cli"'` — PowerShell's native-command parser strips
     # the inner double-quotes, leaving JMESPath with an unquoted hyphenated
     # identifier (`azure-cli`) that fails to parse. Parse JSON instead.
     $v = az version -o json 2>$null | ConvertFrom-Json
     if ($v) { $v.'azure-cli' } else { '' }
 }
-Check-Tool 'gh' {
+Test-Tool 'gh' {
     $line = (gh --version 2>$null | Select-Object -First 1)
     if ($line -match '\d+\.\d+\.\d+') { $matches[0] } else { '' }
 }
-Check-Tool 'jq' {
+Test-Tool 'jq' {
     $v = (jq --version 2>$null)
     if ($v -match '\d+\.\d+[a-z]*') { $matches[0] } else { '' }
 }
-Check-Tool 'git' {
+Test-Tool 'git' {
     $v = (git --version 2>$null)
     if ($v -match '\d+\.\d+\.\d+') { $matches[0] } else { '' }
 }

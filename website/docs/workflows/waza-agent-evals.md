@@ -144,7 +144,7 @@ concurrency:
 # `releases/latest` endpoint returns whichever was published last, which has
 # bitten PR #109 with a 404 on the wrong asset.
 env:
-  WAZA_VERSION: 'v0.33.0'
+  WAZA_VERSION: 'v0.37.0'
 
 jobs:
   # ---------------------------------------------------------------------------
