@@ -464,6 +464,8 @@ jq '.landingZoneDetection' .azure/landing-zone-context.json
 
 When discovery cannot reach the landing zone (cross-tenant, limited RBAC, air-gapped environments), users can inject context manually. **Always drive this through the `inject-lz.sh` (or `inject-lz.ps1`) script with its canonical flags — `--hub-vnet-id`, `--log-analytics-id`, `--acr-id`, `--allowed-locations`, `--required-tags` — rather than hand-writing the JSON**, so the schema and `discoveryMethod` stay correct (Option B). Fall back to editing the file directly (Option A) or the interactive questionnaire (Option C) only when the script cannot be run.
 
+Manual injection is an explicit assertion that the tenant *is* landing-zone managed, so the script writes a `landingZoneDetection` block with `source: "manual"` and `confidence: high` by default (the auto-scorer is bypassed — there is nothing to score when discovery couldn't run). Control this with `--confidence <high|medium|low|none>`, or use `--not-landing-zone` to assert the opposite. When combined with `--merge`, an explicit `--confidence` overrides the stored detection; without it, injection only ever *raises* confidence, never silently downgrades a real discovery result.
+
 ### Option A: Provide the Context File Directly
 
 Create or edit `.azure/landing-zone-context.json` with your landing zone topology. Set `"discoveryMethod": "manual"`.
@@ -490,6 +492,17 @@ The injection script ships in both shells (bash and PowerShell parity ports). Bo
   -AcrId "/subscriptions/.../resourceGroups/.../providers/Microsoft.ContainerRegistry/registries/crshared" `
   -AllowedLocations "eastus,westus2" `
   -RequiredTags "Environment,Project,CostCenter"
+```
+
+To simply assert "I know my tenant is ALZ-managed" when discovery scored too low (or could not run) — without supplying topology — call the script with a confidence flag only:
+
+```bash
+# Assert landing-zone managed (writes confidence: high, source: manual)
+.github/skills/azure-landing-zone-discovery/scripts/inject-lz.sh --confidence high
+
+# Merge an asserted hub onto an existing low-confidence discovery and raise it
+.github/skills/azure-landing-zone-discovery/scripts/inject-lz.sh --merge --confidence high \
+  --hub-vnet-id "/subscriptions/.../providers/Microsoft.Network/virtualNetworks/vnet-hub"
 ```
 
 ### Option C: Interactive Questionnaire

@@ -18,6 +18,9 @@ param(
     [switch]$DenyPublicStorage,
     [string]$OutputFile = ".azure/landing-zone-context.json",
     [switch]$Merge,
+    [ValidateSet("", "high", "medium", "low", "none")]
+    [string]$Confidence = "",
+    [switch]$NotLandingZone,
     [switch]$Help
 )
 
@@ -43,6 +46,10 @@ Options:
   -DenyPublicStorage        Flag: public storage access is denied by policy
   -OutputFile <path>        Output file path (default: .azure/landing-zone-context.json)
   -Merge                    Merge with existing context file instead of replacing
+  -Confidence <level>       Assert landing zone confidence: high|medium|low|none
+                            (default: high — manual injection is an explicit
+                            assertion that this tenant is landing-zone managed)
+  -NotLandingZone           Shorthand for -Confidence none (assert NOT a landing zone)
   -Help                     Show this help message
 
 Examples:
@@ -54,6 +61,9 @@ Examples:
   ./inject-lz.ps1 -AllowedLocations "eastus,westus2,westeurope" `
      -RequiredTags "Environment,Project,CostCenter" -DenyPublicIp
 
+  # Declare "I know my tenant is ALZ-managed" with no other data
+  ./inject-lz.ps1 -Confidence high
+
   # Merge with existing discovery
   ./inject-lz.ps1 -Merge -AcrId "/subscriptions/.../providers/Microsoft.ContainerRegistry/registries/crshared"
 "@ | Write-Host
@@ -62,14 +72,40 @@ Examples:
 
 if ($Help) { Show-Usage }
 
+$ConfidenceExplicit = $PSBoundParameters.ContainsKey('Confidence') -or $NotLandingZone
+
 # Check if at least one value was provided
 if (-not $HubVnetId -and -not $LogAnalyticsId -and -not $AcrId -and `
     -not $KeyVaultId -and -not $AllowedLocations -and -not $RequiredTags -and `
-    -not $DenyPublicIp -and -not $DenyPublicStorage) {
+    -not $DenyPublicIp -and -not $DenyPublicStorage -and -not $ConfidenceExplicit) {
     Write-Host "Error: At least one landing zone parameter must be provided" -ForegroundColor Red
     Write-Host ""
     Show-Usage
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resolve landing zone detection.
+#
+# Manual injection is an explicit assertion that this tenant is landing-zone
+# managed, so unless the caller says otherwise we record a high-confidence,
+# source="manual" detection. This is what allows the manual fallback to flip
+# LZ-aware behaviour in downstream agents (the auto-scorer is bypassed here).
+# ─────────────────────────────────────────────────────────────────────────────
+if ($NotLandingZone) { $Confidence = "none" }
+if (-not $Confidence) { $Confidence = "high" }
+$Confidence = $Confidence.ToLower()
+switch ($Confidence) {
+    "high"   { $ConfScore = 90 }
+    "medium" { $ConfScore = 50 }
+    "low"    { $ConfScore = 20 }
+    "none"   { $ConfScore = 0 }
+    default {
+        Write-Host "Error: -Confidence must be one of: high, medium, low, none" -ForegroundColor Red
+        exit 1
+    }
+}
+# isLandingZone threshold matches discover-lz.ps1 (score >= 40)
+$IsLandingZone = ($ConfScore -ge 40)
 
 $InjectionTimestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
@@ -224,6 +260,21 @@ Write-Host ""
 $NewContext = [ordered]@{
     discoveredAt     = $InjectionTimestamp
     discoveryMethod  = "manual"
+    landingZoneDetection = [ordered]@{
+        isLandingZone   = $IsLandingZone
+        confidence      = $Confidence
+        confidenceScore = $ConfScore
+        source          = "manual"
+        reference       = "https://azure.github.io/Azure-Landing-Zones/accelerator/"
+        matchedSignals  = @(
+            [ordered]@{
+                signal   = "manual-injection"
+                points   = $ConfScore
+                evidence = "Landing zone context asserted via inject-lz.ps1 (-Confidence $Confidence)"
+            }
+        )
+        missingSignals  = @()
+    }
     managementGroups = [ordered]@{ root = ""; hasManagementGroups = $false; hierarchy = @() }
     subscriptions    = [ordered]@{ platform = @(); landingZones = @() }
     sharedServices   = $SharedServices
@@ -286,9 +337,24 @@ if ($Merge -and (Test-Path $OutputFile)) {
         requiredTags     = @($finalTags)
     }
 
+    # Reconcile detection: an explicit -Confidence forces the injected value
+    # (so the caller can raise OR lower it); otherwise injection can only raise
+    # confidence, never silently downgrade a real discovery result.
+    $existingDetection = Get-Prop $existing 'landingZoneDetection'
+    $newDetection = $NewContext.landingZoneDetection
+    if ($ConfidenceExplicit -or (-not $existingDetection)) {
+        $mergedDetection = $newDetection
+    }
+    else {
+        $existingScore = [int](Get-Prop $existingDetection 'confidenceScore' 0)
+        if ($ConfScore -ge $existingScore) { $mergedDetection = $newDetection }
+        else { $mergedDetection = $existingDetection }
+    }
+
     $FinalContext = [ordered]@{
         discoveredAt     = $InjectionTimestamp
         discoveryMethod  = "merged"
+        landingZoneDetection = $mergedDetection
         managementGroups = (Get-Prop $existing 'managementGroups' $NewContext.managementGroups)
         subscriptions    = (Get-Prop $existing 'subscriptions' $NewContext.subscriptions)
         sharedServices   = $mergedShared
@@ -296,9 +362,6 @@ if ($Merge -and (Test-Path $OutputFile)) {
         policies         = $mergedPolicies
         currentIdentity  = (Get-Prop $existing 'currentIdentity' $NewContext.currentIdentity)
     }
-    # Preserve landingZoneDetection from an existing auto-discovery if present
-    $existingDetection = Get-Prop $existing 'landingZoneDetection'
-    if ($existingDetection) { $FinalContext['landingZoneDetection'] = $existingDetection }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

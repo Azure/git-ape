@@ -192,6 +192,12 @@ if [[ "$MG_LIST" != "[]" ]] && [[ -n "$MG_LIST" ]]; then
                 elif ($n | test("landing.?zone|workload|application")) then "landing-zones"
                 elif ($n | test("sandbox|dev.?test")) then "sandbox"
                 elif ($n | test("decommission|deprecated|retired")) then "decommissioned"
+                # corp/online matched last so the more specific archetypes win first.
+                # The ALZ accelerator prefixes MG names (e.g. "alz-corp"), so the
+                # exact-name checks above never fire — these substring tests are what
+                # actually classify Corp/Online landing-zone archetypes in practice.
+                elif ($n | test("corp")) then "corp"
+                elif ($n | test("online")) then "online"
                 else "other"
                 end
             ),
@@ -328,8 +334,29 @@ if [[ "$SKIP_POLICIES" != "true" ]]; then
         --query "[?enforcementMode=='Default']" \
         --output json 2>/dev/null || echo "[]")
 
+    # Canonical ALZ policies are assigned at management-group scope (e.g. the
+    # "alz" and "alz-platform" MGs), not the subscription — so a sub-scope-only
+    # query misses them entirely. Enumerate each discovered MG scope and merge.
+    # NOTE: use the default atScope() filter (a bare --scope). The
+    # --disable-scope-strict-match (atScopeAndBelow) flag is unsupported at MG
+    # scope and errors out, so we query each MG explicitly instead.
+    if [[ "$HAS_MANAGEMENT_GROUPS" == "true" ]]; then
+        for MG_SCOPE in $(echo "$MG_LIST" | jq -r '.[].id'); do
+            MG_POLICY_ASSIGNMENTS=$(az policy assignment list \
+                --scope "$MG_SCOPE" \
+                --query "[?enforcementMode=='Default']" \
+                --output json 2>/dev/null || echo "[]")
+            POLICY_ASSIGNMENTS=$(jq -n \
+                --argjson a "$POLICY_ASSIGNMENTS" \
+                --argjson b "$MG_POLICY_ASSIGNMENTS" \
+                '$a + $b')
+        done
+        # Deduplicate by assignment id (a given assignment lives at exactly one scope)
+        POLICY_ASSIGNMENTS=$(echo "$POLICY_ASSIGNMENTS" | jq 'unique_by(.id)')
+    fi
+
     POLICY_COUNT=$(echo "$POLICY_ASSIGNMENTS" | jq 'length')
-    echo -e "  Found ${GREEN}$POLICY_COUNT${NC} enforced policy assignments"
+    echo -e "  Found ${GREEN}$POLICY_COUNT${NC} enforced policy assignments (subscription + management-group scopes)"
 
     if [[ "$POLICY_COUNT" -gt 0 ]]; then
         # Resolve each assignment's effect from the parameters block. Initiatives
@@ -403,13 +430,19 @@ if [[ "$SKIP_POLICIES" != "true" ]]; then
         # Match against canonical ALZ accelerator policy assignment names.
         # Reference: https://github.com/Azure/Enterprise-Scale/wiki/ALZ-Policies
         # These names are deployed by the ALZ accelerator and are a high-precision
-        # ALZ signature regardless of effect.
+        # ALZ signature regardless of effect. The accelerator periodically renames
+        # assignments (e.g. Deploy-AzActivity-Log -> Deploy-AzActivityLog), so the
+        # pattern tolerates both old and new spellings.
         ALZ_CANONICAL=$(echo "$POLICY_ASSIGNMENTS" | jq '[
             .[] |
             select(.displayName != null or .name != null) |
-            ((.displayName // .name) | tostring) as $n |
-            select($n | test("Deploy-MDFC-Config|Deploy-AzActivity-Log|Deploy-Diag-LogsCat-LAW|Deploy-Diagnostics-LogAnalytics|Enforce-Encryption-CMK|Enforce-EncryptTransit|Enforce-TLS-SSL|Deny-PublicIP|Deny-RDP-From-Internet|Deny-Subnet-Without-Nsg|Deny-Storage-http|Deploy-Resource-Diag|Deploy-VM-Backup|Deploy-Private-DNS-Zones|Audit-UnusedResources"; "i")) |
-            $n
+            # The canonical token (e.g. "Deploy-VM-Monitoring") lives in the
+            # assignment .name; .displayName is a long human description that
+            # rarely contains it. Test BOTH fields, emit the .name as the label.
+            (((.name // "") + " " + (.displayName // "")) | tostring) as $hay |
+            ((.name // .displayName) | tostring) as $label |
+            select($hay | test("Deploy-MDFC-Config|Deploy-MDEndpoints|Deploy-AzActivity-?Log|Deploy-Diag-LogsCat-LAW|Deploy-Diagnostics-LogAnalytics|Deploy-VM-Monitoring|Deploy-VMSS-Monitoring|Deploy-VM-Backup|Enforce-Encryption-CMK|Enforce-EncryptTransit|Enforce-TLS-SSL|Enforce-ACSB|Deny-Classic-Resources|Deny-PublicIP|Deny-Public-Endpoints|Deny-RDP-From-Internet|Deny-MgmtPorts-From-Internet|Deny-Subnet-Without-Nsg|Deny-Storage-http|Deploy-Resource-Diag|Deploy-Private-DNS-Zones|Audit-UnusedResources"; "i")) |
+            $label
         ] | unique' 2>/dev/null || echo "[]")
 
         if [[ "$VERBOSE" == "true" ]] && [[ $(echo "$ALZ_CANONICAL" | jq 'length') -gt 0 ]]; then

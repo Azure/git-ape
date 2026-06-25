@@ -169,6 +169,12 @@ function Get-MgRole {
     if ($n -match 'landing.?zone|workload|application') { return "landing-zones" }
     if ($n -match 'sandbox|dev.?test')               { return "sandbox" }
     if ($n -match 'decommission|deprecated|retired') { return "decommissioned" }
+    # corp/online matched last so the more specific archetypes win first.
+    # The ALZ accelerator prefixes MG names (e.g. "alz-corp"), so the
+    # exact-name checks above never fire — these substring tests are what
+    # actually classify Corp/Online landing-zone archetypes in practice.
+    if ($n -match 'corp')                            { return "corp" }
+    if ($n -match 'online')                          { return "online" }
     return "other"
 }
 
@@ -304,7 +310,33 @@ if (-not $SkipPolicies) {
     Write-Host "[4/7] Discovering policy assignments..." -ForegroundColor Cyan
 
     $assignments = ConvertTo-Array (Invoke-AzJson @("policy", "assignment", "list", "--query", "[?enforcementMode=='Default']"))
-    Write-Host "  Found " -NoNewline; Write-Host "$($assignments.Count)" -ForegroundColor Green -NoNewline; Write-Host " enforced policy assignments"
+
+    # Canonical ALZ policies are assigned at management-group scope (e.g. the
+    # "alz" and "alz-platform" MGs), not the subscription — so a sub-scope-only
+    # query misses them entirely. Enumerate each discovered MG scope and merge,
+    # deduplicating by assignment id (a given assignment lives at one scope).
+    # NOTE: use the default atScope() filter (a bare --scope). The
+    # --disable-scope-strict-match (atScopeAndBelow) flag is unsupported at MG
+    # scope and errors out, so we query each MG explicitly instead.
+    if ($HasManagementGroups) {
+        $seenAssignmentIds = @{}
+        $combinedAssignments = [System.Collections.ArrayList]::new()
+        foreach ($a in $assignments) {
+            $aid = Get-Prop $a 'id'
+            if ($aid -and -not $seenAssignmentIds.ContainsKey($aid)) { $seenAssignmentIds[$aid] = $true; [void]$combinedAssignments.Add($a) }
+        }
+        foreach ($mg in $MgList) {
+            $mgScope = Get-Prop $mg 'id'
+            if (-not $mgScope) { continue }
+            $mgAssignments = ConvertTo-Array (Invoke-AzJson @("policy", "assignment", "list", "--scope", $mgScope, "--query", "[?enforcementMode=='Default']"))
+            foreach ($a in $mgAssignments) {
+                $aid = Get-Prop $a 'id'
+                if ($aid -and -not $seenAssignmentIds.ContainsKey($aid)) { $seenAssignmentIds[$aid] = $true; [void]$combinedAssignments.Add($a) }
+            }
+        }
+        $assignments = @($combinedAssignments)
+    }
+    Write-Host "  Found " -NoNewline; Write-Host "$($assignments.Count)" -ForegroundColor Green -NoNewline; Write-Host " enforced policy assignments (subscription + management-group scopes)"
 
     $denyPolicies = [System.Collections.ArrayList]::new()
     $auditPolicies = [System.Collections.ArrayList]::new()
@@ -312,7 +344,7 @@ if (-not $SkipPolicies) {
     $requiredTags = [System.Collections.ArrayList]::new()
     $alzCanonical = [System.Collections.ArrayList]::new()
 
-    $alzPattern = 'Deploy-MDFC-Config|Deploy-AzActivity-Log|Deploy-Diag-LogsCat-LAW|Deploy-Diagnostics-LogAnalytics|Enforce-Encryption-CMK|Enforce-EncryptTransit|Enforce-TLS-SSL|Deny-PublicIP|Deny-RDP-From-Internet|Deny-Subnet-Without-Nsg|Deny-Storage-http|Deploy-Resource-Diag|Deploy-VM-Backup|Deploy-Private-DNS-Zones|Audit-UnusedResources'
+    $alzPattern = 'Deploy-MDFC-Config|Deploy-MDEndpoints|Deploy-AzActivity-?Log|Deploy-Diag-LogsCat-LAW|Deploy-Diagnostics-LogAnalytics|Deploy-VM-Monitoring|Deploy-VMSS-Monitoring|Deploy-VM-Backup|Enforce-Encryption-CMK|Enforce-EncryptTransit|Enforce-TLS-SSL|Enforce-ACSB|Deny-Classic-Resources|Deny-PublicIP|Deny-Public-Endpoints|Deny-RDP-From-Internet|Deny-MgmtPorts-From-Internet|Deny-Subnet-Without-Nsg|Deny-Storage-http|Deploy-Resource-Diag|Deploy-Private-DNS-Zones|Audit-UnusedResources'
 
     foreach ($a in $assignments) {
         $displayName = Get-Prop $a 'displayName'
@@ -366,10 +398,14 @@ if (-not $SkipPolicies) {
             }
         }
 
-        # Canonical ALZ accelerator policy assignment names
-        $matchName = if ($displayName) { $displayName } else { $name }
-        if ($matchName -and ($matchName -match "(?i)$alzPattern")) {
-            [void]$alzCanonical.Add($matchName)
+        # Canonical ALZ accelerator policy assignment names. The canonical token
+        # (e.g. "Deploy-VM-Monitoring") lives in the assignment .name;
+        # .displayName is a long human description that rarely contains it. Test
+        # BOTH fields and record the .name as the label.
+        $haystack = (("" + $name) + " " + ("" + $displayName))
+        if ($haystack -match "(?i)$alzPattern") {
+            $label = if ($name) { $name } else { $displayName }
+            [void]$alzCanonical.Add($label)
         }
     }
 

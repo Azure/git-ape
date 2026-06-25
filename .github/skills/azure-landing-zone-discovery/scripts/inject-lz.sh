@@ -23,6 +23,8 @@ DENY_PUBLIC_IP=false
 DENY_PUBLIC_STORAGE=false
 OUTPUT_FILE=".azure/landing-zone-context.json"
 MERGE_MODE=false
+CONFIDENCE=""
+CONFIDENCE_EXPLICIT=false
 
 usage() {
     cat <<EOF
@@ -44,6 +46,10 @@ Options:
   --deny-public-storage      Flag: public storage access is denied by policy
   --output-file <path>       Output file path (default: .azure/landing-zone-context.json)
   --merge                    Merge with existing context file instead of replacing
+  --confidence <level>       Assert landing zone confidence: high|medium|low|none
+                             (default: high — manual injection is an explicit
+                             assertion that this tenant is landing-zone managed)
+  --not-landing-zone         Shorthand for --confidence none (assert NOT a landing zone)
   -h, --help                 Show this help message
 
 Examples:
@@ -55,6 +61,9 @@ Examples:
   $0 --allowed-locations "eastus,westus2,westeurope" \\
      --required-tags "Environment,Project,CostCenter" \\
      --deny-public-ip
+
+  # Declare "I know my tenant is ALZ-managed" with no other data
+  $0 --confidence high
 
   # Merge with existing discovery
   $0 --merge --acr-id "/subscriptions/.../providers/Microsoft.ContainerRegistry/registries/crshared"
@@ -106,6 +115,16 @@ while [[ $# -gt 0 ]]; do
             MERGE_MODE=true
             shift
             ;;
+        --confidence)
+            CONFIDENCE="$2"
+            CONFIDENCE_EXPLICIT=true
+            shift 2
+            ;;
+        --not-landing-zone)
+            CONFIDENCE="none"
+            CONFIDENCE_EXPLICIT=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -119,10 +138,40 @@ done
 # Check if at least one value was provided
 if [[ -z "$HUB_VNET_ID" ]] && [[ -z "$LOG_ANALYTICS_ID" ]] && [[ -z "$ACR_ID" ]] && \
    [[ -z "$KEY_VAULT_ID" ]] && [[ -z "$ALLOWED_LOCATIONS" ]] && [[ -z "$REQUIRED_TAGS" ]] && \
-   [[ "$DENY_PUBLIC_IP" == "false" ]] && [[ "$DENY_PUBLIC_STORAGE" == "false" ]]; then
+   [[ "$DENY_PUBLIC_IP" == "false" ]] && [[ "$DENY_PUBLIC_STORAGE" == "false" ]] && \
+   [[ "$CONFIDENCE_EXPLICIT" == "false" ]]; then
     echo -e "${RED}Error: At least one landing zone parameter must be provided${NC}"
     echo ""
     usage
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resolve landing zone detection.
+#
+# Manual injection is an explicit assertion that this tenant is landing-zone
+# managed, so unless the caller says otherwise we record a high-confidence,
+# source="manual" detection. This is what allows the manual fallback to flip
+# LZ-aware behaviour in downstream agents (the auto-scorer is bypassed here).
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ -z "$CONFIDENCE" ]]; then
+    CONFIDENCE="high"
+fi
+CONFIDENCE=$(echo "$CONFIDENCE" | tr '[:upper:]' '[:lower:]')
+case "$CONFIDENCE" in
+    high)   CONF_SCORE=90 ;;
+    medium) CONF_SCORE=50 ;;
+    low)    CONF_SCORE=20 ;;
+    none)   CONF_SCORE=0 ;;
+    *)
+        echo -e "${RED}Error: --confidence must be one of: high, medium, low, none${NC}"
+        exit 1
+        ;;
+esac
+# isLandingZone threshold matches discover-lz.sh (score >= 40)
+if [[ "$CONF_SCORE" -ge 40 ]]; then
+    IS_LANDING_ZONE=true
+else
+    IS_LANDING_ZONE=false
 fi
 
 INJECTION_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -274,12 +323,27 @@ echo ""
 NEW_CONTEXT=$(jq -n \
     --arg discoveredAt "$INJECTION_TIMESTAMP" \
     --arg discoveryMethod "manual" \
+    --argjson isLandingZone "$IS_LANDING_ZONE" \
+    --arg confidence "$CONFIDENCE" \
+    --argjson confidenceScore "$CONF_SCORE" \
     --argjson sharedServices "$SHARED_SERVICES" \
     --argjson networking "$NETWORKING" \
     --argjson policies "$POLICIES_JSON" \
     '{
         discoveredAt: $discoveredAt,
         discoveryMethod: $discoveryMethod,
+        landingZoneDetection: {
+            isLandingZone: $isLandingZone,
+            confidence: $confidence,
+            confidenceScore: $confidenceScore,
+            source: "manual",
+            reference: "https://azure.github.io/Azure-Landing-Zones/accelerator/",
+            matchedSignals: [
+                { signal: "manual-injection", points: $confidenceScore,
+                  evidence: "Landing zone context asserted via inject-lz.sh (--confidence \($confidence))" }
+            ],
+            missingSignals: []
+        },
         managementGroups: { root: "", hasManagementGroups: false, hierarchy: [] },
         subscriptions: { platform: [], landingZones: [] },
         sharedServices: $sharedServices,
@@ -294,12 +358,23 @@ if [[ "$MERGE_MODE" == "true" ]] && [[ -f "$OUTPUT_FILE" ]]; then
     EXISTING=$(cat "$OUTPUT_FILE")
 
     # Deep merge: new values override existing, arrays are replaced
-    MERGED=$(echo "$EXISTING" "$NEW_CONTEXT" | jq -s '
+    MERGED=$(echo "$EXISTING" "$NEW_CONTEXT" | jq -s \
+        --argjson confExplicit "$CONFIDENCE_EXPLICIT" '
         .[0] as $existing |
         .[1] as $new |
+        ($existing.landingZoneDetection // null) as $existingLz |
+        ($new.landingZoneDetection) as $newLz |
+        # Reconcile detection: an explicit --confidence forces the injected value
+        # (so the caller can raise OR lower it); otherwise injection can only
+        # raise confidence, never silently downgrade a real discovery result.
+        (if $confExplicit then $newLz
+         elif ($existingLz == null) then $newLz
+         elif (($newLz.confidenceScore // 0) >= ($existingLz.confidenceScore // 0)) then $newLz
+         else $existingLz end) as $mergedLz |
         $existing * {
             discoveredAt: $new.discoveredAt,
             discoveryMethod: "merged",
+            landingZoneDetection: $mergedLz,
             sharedServices: ($existing.sharedServices * $new.sharedServices),
             networking: (
                 if ($new.networking.topology != "unknown") then $new.networking
