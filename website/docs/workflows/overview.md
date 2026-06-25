@@ -33,15 +33,20 @@ The user-facing workflows below are **shipped as templates** under `.github/skil
 | [Daily Repo Status](./daily-repo-status-lock) | `.github/workflows/daily-repo-status.lock.yml` | schedule, workflow_dispatch | activation, agent, conclusion, detection, safe_outputs |
 | [Git-Ape: Workflow Lint](./git-ape-actionlint) | `.github/workflows/git-ape-actionlint.yml` | pull_request | actionlint |
 | [Git-Ape: Extension Build](./git-ape-build) | `.github/workflows/git-ape-build.yml` | pull_request | build |
+| [Git-Ape: Workshop Deck Build](./git-ape-deck-build) | `.github/workflows/git-ape-deck-build.yml` | push, workflow_dispatch | build |
 | [Git-Ape: Docs Check](./git-ape-docs-check) | `.github/workflows/git-ape-docs-check.yml` | pull_request | check-docs |
 | [Git-Ape: Docs Deploy](./git-ape-docs) | `.github/workflows/git-ape-docs.yml` | push | build, deploy |
-| [Git-Ape: Onboarding Template Check](./git-ape-onboarding-template-check) | `.github/workflows/git-ape-onboarding-template-check.yml` | pull_request, workflow_dispatch | check-sync-bash, check-sync-pwsh, scaffold-parity-smoke |
+| [Git-Ape: Onboarding Template Check](./git-ape-onboarding-template-check) | `.github/workflows/git-ape-onboarding-template-check.yml` | pull_request, workflow_dispatch | check-sync-bash, check-sync-pwsh, scaffold-parity-smoke, scaffold-enterprise-parity-smoke |
 | [Git-Ape: Plugin Version Check](./git-ape-plugin-version-check) | `.github/workflows/git-ape-plugin-version-check.yml` | pull_request | check-version-drift |
 | [Git-Ape: Plugin Release](./git-ape-release) | `.github/workflows/git-ape-release.yml` | push, workflow_dispatch | release |
+| [Git-Ape: Script Lint](./git-ape-script-lint) | `.github/workflows/git-ape-script-lint.yml` | pull_request, workflow_dispatch | shell-lint, pwsh-lint |
+| [Workshop Content Auto-Updater](./git-ape-workshop-content-updater-lock) | `.github/workflows/git-ape-workshop-content-updater.lock.yml` | schedule, workflow_dispatch | activation, agent, conclusion, detection, safe_outputs, update_cache_memory |
+| [Git-Ape: Workshop Sync](./git-ape-workshop-sync) | `.github/workflows/git-ape-workshop-sync.yml` | push | detect-and-issue |
 | [Issue Triage Agent](./issue-triage-agent-lock) | `.github/workflows/issue-triage-agent.lock.yml` | schedule, workflow_dispatch | activation, agent, conclusion, detection, safe_outputs |
 | [PR Validation](./pr-validation) | `.github/workflows/pr-validation.yml` | pull_request | structure-check, markdownlint |
 | [Waza agent evals](./waza-agent-evals) | `.github/workflows/waza-agent-evals.yml` | pull_request, workflow_dispatch | preflight, prepare, tokens, eval, comment |
 | [Waza skill evals](./waza-evals) | `.github/workflows/waza-evals.yml` | pull_request, workflow_dispatch | preflight, prepare, tokens, eval, comment |
+| [Workshop Quality Check](./workshop-quality-check) | `.github/workflows/workshop-quality-check.yml` | pull_request | check |
 
 ## Pipeline Architecture
 

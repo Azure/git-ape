@@ -1,6 +1,6 @@
 ---
 name: git-ape-onboarding
-description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files. USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation."
+description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation."
 metadata:
   argument-hint: "GitHub repo URL, subscription target(s), and onboarding mode (single or multi-environment)"
   user-invocable: true
@@ -12,12 +12,34 @@ Use this skill to bootstrap a repository for Git-Ape deployments by executing th
 
 This skill is the source of truth for onboarding behavior. Do not depend on a standalone repository script for setup logic.
 
+## Onboarding Modes
+
+This skill operates in two independent modes:
+
+- **Repository CI/CD onboarding (default).** Configures one repository +
+  subscription(s) for Git-Ape deployments: OIDC, federated credentials, RBAC,
+  GitHub environments, secrets, and scaffolded workflows. This is the bulk of
+  the skill (see [Command Playbook](#command-playbook)).
+- **Enterprise distribution (`.github-private`).** Rolls Git-Ape out to every
+  user on your org/enterprise Copilot plan by scaffolding a `.github-private`
+  repo with `managed-settings.json` plugin standards (and an optional `agents/`
+  directory). See [Mode: Enterprise Distribution](#mode-enterprise-distribution-github-private).
+
+The two modes are complementary, not alternatives: enterprise distribution
+installs the **tooling** for everyone, while repository onboarding wires up
+**Azure access** for a specific repo. A fully onboarded user typically needs
+both.
+
 ## When to Use
 
 - First-time setup of a repository for Git-Ape
 - New subscription onboarding (single environment)
 - Multi-environment onboarding (dev/staging/prod across different subscriptions)
 - New user handoff where OIDC, RBAC, and GitHub environments must be created
+- **Enterprise-wide distribution:** rolling Git-Ape out to every user on your
+  org/enterprise Copilot plan via a `.github-private` repo, so the plugin
+  (agents + skills + `azure-mcp`) auto-installs on authentication — no per-user
+  `gh plugin install` required
 
 **DO NOT USE FOR:** re-deploying an already-onboarded repo (use `git-ape`), rotating or updating an existing secret or federated credential, drift detection setup alone (that is an optional sub-step covered by Step 10), or general Azure resource deployment.
 
@@ -77,6 +99,18 @@ Invoke the skill from chat and let the agent gather missing parameters:
 ```text
 /git-ape-onboarding onboard https://github.com/org/repo with dev on 11111111-1111-1111-1111-111111111111 as Contributor, staging on 22222222-2222-2222-2222-222222222222 as Contributor, prod on 33333333-3333-3333-3333-333333333333 as Contributor+UserAccessAdministrator
 ```
+
+### Enterprise distribution (`.github-private`)
+
+Invoke the skill in enterprise mode to scaffold the org/enterprise distribution
+repo instead of onboarding a single deployment repo:
+
+```text
+/git-ape-onboarding distribute git-ape to the <org> enterprise
+```
+
+This runs the [enterprise distribution playbook](#mode-enterprise-distribution-github-private)
+rather than the repository CI/CD playbook below.
 
 ## Command Playbook
 
@@ -574,6 +608,127 @@ scaling, and networking.
     and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
     carries an integrity hash). The other four workflows need no recompile.
 
+## Mode: Enterprise Distribution (`.github-private`)
+
+Use this mode to distribute Git-Ape to **everyone on an organization's or
+enterprise's Copilot plan** at once, instead of onboarding one deployment repo.
+It scaffolds a special `.github-private` repository that GitHub Copilot reads to
+apply **enterprise-managed plugin standards**.
+
+> [!IMPORTANT]
+> This mode configures **tooling distribution only**. It does **not** grant
+> Azure access. Each user/repo that actually deploys still needs `az login`/OIDC
+> and a per-repo run of the repository CI/CD playbook above.
+
+### Why the plugin route (not `agents/` alone)
+
+Git-Ape is a **plugin** that bundles agents **+** skills **+** the `azure-mcp`
+MCP server. The `.github-private` `agents/` directory distributes **standalone
+agents only** — copying Git-Ape's agents there would ship them without their
+skills and MCP server, so they would load but fail. Distribute Git-Ape through
+`managed-settings.json`, which auto-installs the **whole plugin**.
+
+> [!NOTE]
+> Standalone org/enterprise **skills** are "coming soon" per GitHub's docs.
+> Today, Git-Ape's skills reach users because they are bundled in the plugin —
+> already covered by the `managed-settings.json` route below.
+
+### What it configures
+
+Scaffolds, into a `.github-private` repository working copy:
+
+1. `.github/copilot/managed-settings.json` — registers the `Azure/git-ape`
+   marketplace and enables the `git-ape@git-ape` plugin for all members.
+2. `README.md` — governance, admin setup steps, and caveats for maintainers.
+3. `agents/.gitkeep` — placeholder for optional standalone custom agents.
+
+### Prerequisites (enterprise mode)
+
+- `gh` authenticated as a user with permission to **create a repo in the target
+  org** (`gh auth status`).
+- An **enterprise owner** to perform the AI-controls designation and ruleset
+  steps (these are GitHub UI actions — see the hand-off below).
+- The org that will own `.github-private` is part of the enterprise.
+
+### Enterprise distribution playbook
+
+The agent can automate steps 1–4 via CLI; steps 5–6 are **UI-only** and must be
+handed off to an enterprise owner.
+
+1. **Confirm the target org/enterprise and ownership**, then echo the plan and
+   require explicit confirmation before creating anything.
+
+2. **Create (or reuse) the `.github-private` repo** in the target org.
+   `--internal` gives every enterprise member read access; use `--private` to
+   grant access manually:
+   ```bash
+   gh repo create <org>/.github-private \
+     --internal \
+     --description "Copilot enterprise configuration (Git-Ape standards)"
+   gh repo clone <org>/.github-private /tmp/github-private
+   ```
+
+3. **Scaffold the canonical files** into the cloned repo root. Two parity
+   implementations ship — pick the one matching the user's shell, and pass the
+   cloned repo path as the target:
+   ```bash
+   # macOS / Linux / WSL
+   .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.sh /tmp/github-private
+   ```
+   ```powershell
+   # Windows (PowerShell 7+)
+   pwsh .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.ps1 C:\path\to\github-private
+   ```
+   Both scripts produce byte-identical output and follow the same
+   skip-with-notice / no-git rules as the repository scaffolder (Step 9 above).
+   The onboarding-template-check workflow enforces parity on every PR.
+
+4. **Review and publish.** Edit `managed-settings.json` if you want to also
+   enable the optional `ape-context@git-ape` companion plugin, then review the
+   `README.md` placeholders. The scaffolder leaves everything **unstaged** — let
+   the user (or a reviewed PR) commit and push to the default branch:
+   ```bash
+   cd /tmp/github-private
+   jq empty .github/copilot/managed-settings.json   # validate before publishing
+   git add .github/copilot/managed-settings.json README.md agents/.gitkeep
+   git commit -m "Add Git-Ape enterprise Copilot standards"
+   git push
+   ```
+
+5. **Hand off the enterprise designation (UI-only).** Instruct an enterprise
+   owner to open **Enterprise → AI controls → Custom agents → _Select
+   organization_** and choose the org that owns `.github-private`. This same
+   designation points the enterprise at the repo's `managed-settings.json`.
+   There is no stable CLI/API for this during public preview — the agent must
+   hand off with the link, not attempt to automate it.
+
+6. **(Recommended) Protect the files (UI-only).** On the same AI-controls page,
+   under _"Protect agent files using rulesets"_, create a ruleset so only
+   enterprise owners can merge changes.
+
+### Verification (enterprise mode)
+
+```bash
+# Confirm the standards landed on the default branch of the config repo
+gh api repos/<org>/.github-private/contents/.github/copilot/managed-settings.json --jq '.path'
+
+# Validate the published JSON is well-formed
+gh api repos/<org>/.github-private/contents/.github/copilot/managed-settings.json \
+  --jq '.content' | base64 --decode | jq empty && echo "✓ managed-settings.json is valid JSON"
+```
+
+Then, on a **supported client** (Copilot CLI, or VS Code 1.122+), a member of
+the designated org re-authenticates and confirms the `git-ape` plugin
+auto-installed. Users licensed by multiple billing entities must select this
+enterprise under _"Usage billed to"_ in their personal Copilot settings.
+
+### After distribution: still onboard repos for Azure
+
+Distribution installs the Git-Ape tooling everywhere, but deployments still need
+Azure identity. For each repository that will deploy, run the **repository
+CI/CD** playbook above (`/git-ape-onboarding onboard <repo> ...`) to wire up
+OIDC, RBAC, environments, and workflows.
+
 ## Safe-Execution Rules
 
 1. Echo target repository and subscription(s) before execution.
@@ -588,8 +743,16 @@ scaling, and networking.
    scaffolded files — leave them unstaged so the user decides how to land
    them.
 8. **Idempotency on re-run:** If the skill is re-invoked after a partial failure, re-run from the last failing step — not from scratch. The Entra app, federated credentials, role assignments, and GitHub environments created before the failure are safe to reuse; do not create duplicates. Surface each already-provisioned resource as `⊝ Already exists` rather than re-creating it.
+9. **Enterprise mode:** confirm the target org belongs to the enterprise and the
+   operator can create `.github-private` before running `gh repo create`. Never
+   force-push or overwrite an existing `.github-private` default branch.
+10. **Enterprise mode:** never claim to have automated the **AI-controls
+   designation** or **ruleset** — these are UI-only, enterprise-owner actions.
+   Hand them off with the exact navigation path and stop.
 
 ## Suggested Agent Flow
+
+### Repository CI/CD onboarding
 
 **First-turn rule:** the very first response to any onboarding request must be a **gated handoff** — surface prereq results and collect required inputs. It must NOT be a walkthrough, a full set of CLI commands, or a completion report. The agent must not narrate or execute onboarding steps until: (a) prereq check confirms ✅ READY, and (b) all five required inputs from step 2 are in hand.
 
@@ -605,6 +768,15 @@ scaling, and networking.
 10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ask the user for a GitHub PAT (never generate a registration token) → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
 11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
 12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
+
+### Enterprise distribution
+
+1. Confirm the target org/enterprise, ownership, and that `gh` is authenticated with repo-create permission.
+2. Echo the plan (create `<org>/.github-private`, scaffold standards) and ask for final confirmation.
+3. Create/clone `.github-private` and run `scaffold-enterprise.sh` / `scaffold-enterprise.ps1` against the clone (Steps 2–3 of the enterprise playbook).
+4. Review `managed-settings.json` (optionally enable `ape-context@git-ape`), validate the JSON, and have the user commit & push (Step 4).
+5. Hand off the UI-only steps to an enterprise owner: AI-controls designation + ruleset (Steps 5–6).
+6. Provide the verification commands and remind the user that each deploying repo still needs the repository CI/CD onboarding for Azure access.
 
 ## Known Gotchas
 

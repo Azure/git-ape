@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.3.0] - 2026-06-19
+
+Changes since [v0.2.0](https://github.com/Azure/git-ape/releases/tag/v0.2.0):
+
+### Features
+
+- **workshops:** 4-track workshop program (source) + Docusaurus pages (`052ead2`)
+- **workshops:** deterministic sync + deck-build automation (`856280d`)
+- **workshops:** agentic weekly workshop-content-updater (Phase 2) (`db5f7e7`)
+- **git-ape-onboarding:** harden prereq gate, input collection, and trigger precision (`aff5c52`)
+- **skill+evals:** bump Compliance Score Low->High and add refusal grader (`124f628`)
+- **skill:** extract classification rules and discovery script for azure-policy-advisor (`85a1e67`)
+- **skill:** trim and re-trigger azure-policy-advisor SKILL.md (`02c452f`)
+- **evals:** add azure-policy-advisor eval suite (`b95fe9c`)
+
+### Bug Fixes
+
+- **deploy:** stop --verbose output corrupting deploy JSON parsed by jq (`c1dd848`)
+- **workshops:** enable lockdown on agentic updater and address review nits (`582c24d`)
+- **workshops:** satisfy public CI gates (markdownlint + actionlint) (`60c3d21`)
+- **evals:** address PR #157 review on negative tests (`72464dd`)
+
+### Refactoring
+
+- **deploy:** use EXIT trap to clean up verbose log temp file (`6a137f3`)
+
+### Documentation
+
+- regenerate workflow docs for script-lint gate (`e6b9d10`)
+- regenerate onboarding skill pages to match final SKILL.md (`f2e8459`)
+- regenerate website docs for azure-policy-advisor and skill metadata (`abc3b82`)
+
+### Chores
+
+- **skills:** move argument-hint and user-invocable into metadata per agentskills.io spec (`fdbed0c`)
+- **waza:** align token-budget thresholds with agentskills.io spec (`c764536`)
+
+### Dependencies
+
+- **website:** bump dompurify from 3.4.10 to 3.4.11 (`5413e63`)
+- **website:** bump launch-editor (`d98ed1a`)
+- **website:** bump ws (`1c1fe76`)
+- **website:** bump dompurify from 3.4.0 to 3.4.10 (`836b671`)
+- **website:** bump shell-quote from 1.8.3 to 1.8.4 (`d42f4b1`)
+- **actions:** bump github/gh-aw-actions (`c1b9385`)
+- **actions:** bump github/gh-aw-actions (`50ac152`)
+
+### Other Changes
+
+- Add optional drift-detector onboarding to git-ape-onboarding (`0784bb0`)
+- Add lint + parse CI gate for skill shell/PowerShell scripts (`4aa2a71`)
+
 ## [0.2.0] - 2026-06-10
 
 Changes since [v0.1.1](https://github.com/Azure/git-ape/releases/tag/v0.1.1):

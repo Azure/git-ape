@@ -1,7 +1,7 @@
 ---
 title: "Git Ape Onboarding"
 sidebar_label: "Git Ape Onboarding"
-description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files. USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation."
+description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation."
 ---
 
 <!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/SKILL.md -->
@@ -9,7 +9,7 @@ description: "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registr
 
 # Git Ape Onboarding
 
-> Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files. USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation.
+> Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation.
 
 ## Details
 
@@ -29,12 +29,34 @@ Use this skill to bootstrap a repository for Git-Ape deployments by executing th
 
 This skill is the source of truth for onboarding behavior. Do not depend on a standalone repository script for setup logic.
 
+## Onboarding Modes
+
+This skill operates in two independent modes:
+
+- **Repository CI/CD onboarding (default).** Configures one repository +
+  subscription(s) for Git-Ape deployments: OIDC, federated credentials, RBAC,
+  GitHub environments, secrets, and scaffolded workflows. This is the bulk of
+  the skill (see [Command Playbook](#command-playbook)).
+- **Enterprise distribution (`.github-private`).** Rolls Git-Ape out to every
+  user on your org/enterprise Copilot plan by scaffolding a `.github-private`
+  repo with `managed-settings.json` plugin standards (and an optional `agents/`
+  directory). See [Mode: Enterprise Distribution](#mode-enterprise-distribution-github-private).
+
+The two modes are complementary, not alternatives: enterprise distribution
+installs the **tooling** for everyone, while repository onboarding wires up
+**Azure access** for a specific repo. A fully onboarded user typically needs
+both.
+
 ## When to Use
 
 - First-time setup of a repository for Git-Ape
 - New subscription onboarding (single environment)
 - Multi-environment onboarding (dev/staging/prod across different subscriptions)
 - New user handoff where OIDC, RBAC, and GitHub environments must be created
+- **Enterprise-wide distribution:** rolling Git-Ape out to every user on your
+  org/enterprise Copilot plan via a `.github-private` repo, so the plugin
+  (agents + skills + `azure-mcp`) auto-installs on authentication — no per-user
+  `gh plugin install` required
 
 **DO NOT USE FOR:** re-deploying an already-onboarded repo (use `git-ape`), rotating or updating an existing secret or federated credential, drift detection setup alone (that is an optional sub-step covered by Step 10), or general Azure resource deployment.
 
@@ -94,6 +116,18 @@ Invoke the skill from chat and let the agent gather missing parameters:
 ```text
 /git-ape-onboarding onboard https://github.com/org/repo with dev on 11111111-1111-1111-1111-111111111111 as Contributor, staging on 22222222-2222-2222-2222-222222222222 as Contributor, prod on 33333333-3333-3333-3333-333333333333 as Contributor+UserAccessAdministrator
 ```
+
+### Enterprise distribution (`.github-private`)
+
+Invoke the skill in enterprise mode to scaffold the org/enterprise distribution
+repo instead of onboarding a single deployment repo:
+
+```text
+/git-ape-onboarding distribute git-ape to the <org> enterprise
+```
+
+This runs the [enterprise distribution playbook](#mode-enterprise-distribution-github-private)
+rather than the repository CI/CD playbook below.
 
 ## Command Playbook
 
@@ -458,45 +492,109 @@ scaling, and networking.
    - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
    ```
 
-2. **Build the custom runner image.** The base `ghcr.io/actions/actions-runner:latest`
-   (GitHub's official runner image) does **NOT** include `az`, `gh`, or `jq`, and
-   ships no registration entrypoint. Workflows fail with `Unable to locate
-   executable file: az` — and on ACI/ACA the runner never registers — without a
-   custom image.
+2. **Build the custom runner image using ACR Tasks (cloud build).** The base
+   `ghcr.io/actions/actions-runner:latest` (GitHub's official runner image) does
+   **NOT** include `az`, `gh`, or `jq`, and ships no registration entrypoint.
+   Workflows fail with `Unable to locate executable file: az` — and on ACI/ACA
+   the runner never registers — without a custom image.
+
+   Always build via **ACR Tasks** (cloud build) — never local Docker. This
+   avoids Windows CRLF line-ending corruption of `entrypoint.sh` and eliminates
+   the need for a local Docker install.
    ```bash
-   # Create ACR (one-time)
-   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic --admin-enabled true
+   # Create ACR (one-time) — no --admin-enabled; use managed identity for pulls
+   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic
 
    # Build and push image (runs in Azure, ~3 min, no local Docker needed)
+   # On Windows, add --no-logs to avoid a Unicode encoding crash in log streaming
    az acr build --registry <acr-name> --image git-ape-runner:latest \
-     --file ./templates/runners/Dockerfile ./templates/runners/
+     --file ./templates/runners/Dockerfile ./templates/runners/ --no-logs
    ```
    The `Dockerfile` at `./templates/runners/Dockerfile` extends the base runner
    with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`) and an `entrypoint.sh`
    that self-registers the runner on ACI/ACA (on AKS, ARC handles registration).
+   It includes a `sed` safety net that strips CRLF line endings from
+   `entrypoint.sh` at build time.
 
-3. **Deploy the runner infrastructure** using the chosen platform template.
-   Pass the custom image via the `runnerImage` parameter:
+   After the build, verify the image exists:
+   ```bash
+   az acr repository list --name <acr-name> -o table
+   ```
+
+3. **Create a managed identity and assign `AcrPull` role** for image pulls:
+   ```bash
+   # Create identity
+   az identity create --name id-git-ape-runner --resource-group <rg> --location <region>
+
+   # Get IDs
+   IDENTITY_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query id -o tsv)
+   PRINCIPAL_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query principalId -o tsv)
+   ACR_ID=$(az acr show --name <acr-name> --query id -o tsv)
+
+   # Assign AcrPull role (may take 30–60s to propagate)
+   az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal \
+     --role AcrPull --scope $ACR_ID
+   ```
+   **Do NOT use ACR admin credentials** (`--admin-enabled true` + username/password).
+   Managed identity is the secure, recommended approach.
+
+4. **Collect a GitHub PAT from the user.** The ACA/ACI runner needs a
+   **long-lived GitHub Personal Access Token (PAT)** — NOT a short-lived
+   registration token from `POST /actions/runners/registration-token`.
+   Registration tokens expire in ~1 hour, but the KEDA `github-runner` scaler
+   continuously polls the Actions queue AND each ephemeral runner re-registers
+   on every scale-up, so a long-lived PAT is required.
+
+   **Ask the user to create a PAT** before deploying:
+   ```
+   The self-hosted runner needs a GitHub Personal Access Token (PAT) for
+   continuous queue polling and runner registration.
+
+   Please create a fine-grained PAT at:
+     https://github.com/settings/tokens?type=beta
+
+   Required permissions (scoped to the target repo):
+     - Actions: Read & Write
+     - Administration: Read & Write (for runner registration)
+
+   Alternatively, a classic PAT with the `repo` scope works.
+
+   Paste the token when prompted — it will only be passed to the deployment
+   and will not be stored or displayed.
+   ```
+
+   **Do NOT generate a registration token** via the GitHub API
+   (`POST repos/<org>/<repo>/actions/runners/registration-token`). These are
+   short-lived (~1 hour) and will cause the runner to fail with a 401 error
+   once expired. The KEDA scaler and ephemeral runner registration both need
+   a token that does not expire.
+
+   Never print the token value in chat output (see Safe-Execution Rules).
+
+5. **Deploy the runner infrastructure** using the chosen platform template.
+   Pass the custom image, ACR server, managed identity, and user-provided PAT:
    ```bash
    az deployment group create -g <rg> -f template.json \
      -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
+        acrServer='<acr-name>.azurecr.io' \
+        userAssignedIdentityId=$IDENTITY_ID \
         githubOwnerRepo='<org>/<repo>' \
-        githubAccessToken='<from-keyvault>'
+        githubAccessToken='<user-provided-PAT>'
    ```
-   - The GitHub registration credential is the only secret — source it from Key
-     Vault, never inline it. Azure access uses a user-assigned managed identity.
+   - The ACA template's `registries` block automatically uses identity-based
+     auth when both `acrServer` and `userAssignedIdentityId` are set.
+   - The GitHub PAT is the only secret — for production, store it in Key Vault
+     and reference it; for initial setup, pass it directly at deploy time.
+     Never inline it in a committed `parameters.json`.
    - For private networking, set the subnet parameter (`subnetId` for ACI,
      `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
    - For AKS, use `helm install` instead of ARM.
+   - **Note:** The ACA managed environment may take 1–2 minutes to fully
+     provision. If deploying step-by-step (not via ARM template), wait for the
+     environment's `provisioningState` to reach `Succeeded` before creating the
+     job.
 
-4. **Configure ACR pull credentials** on the ACA/ACI job (if using ACR):
-   ```bash
-   az containerapp job registry set --name git-ape-runner --resource-group <rg> \
-     --server <acr-name>.azurecr.io --username <acr-name> \
-     --password $(az acr credential show -n <acr-name> --query "passwords[0].value" -o tsv)
-   ```
-
-5. **Set `minExecutions=1`** (recommended) so at least one runner is always
+6. **Set `minExecutions=1`** (recommended) so at least one runner is always
    warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
    take 1–3 minutes on cold start, during which GitHub shows "No runners
    configured":
@@ -506,11 +604,11 @@ scaling, and networking.
    Leave at `0` only if you prefer true scale-to-zero and can tolerate cold-start
    delays.
 
-6. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+7. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
    with the `git-ape-runner` label. (With `minExecutions=1`, a runner should
    appear within 30–60 seconds of deployment.)
 
-7. **Set the variable** so workflows target it (repo-wide or per environment):
+8. **Set the variable** so workflows target it (repo-wide or per environment):
    ```bash
    gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
    # per environment instead:
@@ -518,14 +616,135 @@ scaling, and networking.
    ```
    Clean fallback to GitHub-hosted runners is `gh variable delete GIT_APE_RUNNER_LABEL`.
 
-8. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
+9. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
     pass on the private runner (especially "Test OIDC login" which requires `az`).
 
-9. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
+10. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
     workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
     private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
     and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
     carries an integrity hash). The other four workflows need no recompile.
+
+## Mode: Enterprise Distribution (`.github-private`)
+
+Use this mode to distribute Git-Ape to **everyone on an organization's or
+enterprise's Copilot plan** at once, instead of onboarding one deployment repo.
+It scaffolds a special `.github-private` repository that GitHub Copilot reads to
+apply **enterprise-managed plugin standards**.
+
+> [!IMPORTANT]
+> This mode configures **tooling distribution only**. It does **not** grant
+> Azure access. Each user/repo that actually deploys still needs `az login`/OIDC
+> and a per-repo run of the repository CI/CD playbook above.
+
+### Why the plugin route (not `agents/` alone)
+
+Git-Ape is a **plugin** that bundles agents **+** skills **+** the `azure-mcp`
+MCP server. The `.github-private` `agents/` directory distributes **standalone
+agents only** — copying Git-Ape's agents there would ship them without their
+skills and MCP server, so they would load but fail. Distribute Git-Ape through
+`managed-settings.json`, which auto-installs the **whole plugin**.
+
+> [!NOTE]
+> Standalone org/enterprise **skills** are "coming soon" per GitHub's docs.
+> Today, Git-Ape's skills reach users because they are bundled in the plugin —
+> already covered by the `managed-settings.json` route below.
+
+### What it configures
+
+Scaffolds, into a `.github-private` repository working copy:
+
+1. `.github/copilot/managed-settings.json` — registers the `Azure/git-ape`
+   marketplace and enables the `git-ape@git-ape` plugin for all members.
+2. `README.md` — governance, admin setup steps, and caveats for maintainers.
+3. `agents/.gitkeep` — placeholder for optional standalone custom agents.
+
+### Prerequisites (enterprise mode)
+
+- `gh` authenticated as a user with permission to **create a repo in the target
+  org** (`gh auth status`).
+- An **enterprise owner** to perform the AI-controls designation and ruleset
+  steps (these are GitHub UI actions — see the hand-off below).
+- The org that will own `.github-private` is part of the enterprise.
+
+### Enterprise distribution playbook
+
+The agent can automate steps 1–4 via CLI; steps 5–6 are **UI-only** and must be
+handed off to an enterprise owner.
+
+1. **Confirm the target org/enterprise and ownership**, then echo the plan and
+   require explicit confirmation before creating anything.
+
+2. **Create (or reuse) the `.github-private` repo** in the target org.
+   `--internal` gives every enterprise member read access; use `--private` to
+   grant access manually:
+   ```bash
+   gh repo create <org>/.github-private \
+     --internal \
+     --description "Copilot enterprise configuration (Git-Ape standards)"
+   gh repo clone <org>/.github-private /tmp/github-private
+   ```
+
+3. **Scaffold the canonical files** into the cloned repo root. Two parity
+   implementations ship — pick the one matching the user's shell, and pass the
+   cloned repo path as the target:
+   ```bash
+   # macOS / Linux / WSL
+   .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.sh /tmp/github-private
+   ```
+   ```powershell
+   # Windows (PowerShell 7+)
+   pwsh .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.ps1 C:\path\to\github-private
+   ```
+   Both scripts produce byte-identical output and follow the same
+   skip-with-notice / no-git rules as the repository scaffolder (Step 9 above).
+   The onboarding-template-check workflow enforces parity on every PR.
+
+4. **Review and publish.** Edit `managed-settings.json` if you want to also
+   enable the optional `ape-context@git-ape` companion plugin, then review the
+   `README.md` placeholders. The scaffolder leaves everything **unstaged** — let
+   the user (or a reviewed PR) commit and push to the default branch:
+   ```bash
+   cd /tmp/github-private
+   jq empty .github/copilot/managed-settings.json   # validate before publishing
+   git add .github/copilot/managed-settings.json README.md agents/.gitkeep
+   git commit -m "Add Git-Ape enterprise Copilot standards"
+   git push
+   ```
+
+5. **Hand off the enterprise designation (UI-only).** Instruct an enterprise
+   owner to open **Enterprise → AI controls → Custom agents → _Select
+   organization_** and choose the org that owns `.github-private`. This same
+   designation points the enterprise at the repo's `managed-settings.json`.
+   There is no stable CLI/API for this during public preview — the agent must
+   hand off with the link, not attempt to automate it.
+
+6. **(Recommended) Protect the files (UI-only).** On the same AI-controls page,
+   under _"Protect agent files using rulesets"_, create a ruleset so only
+   enterprise owners can merge changes.
+
+### Verification (enterprise mode)
+
+```bash
+# Confirm the standards landed on the default branch of the config repo
+gh api repos/<org>/.github-private/contents/.github/copilot/managed-settings.json --jq '.path'
+
+# Validate the published JSON is well-formed
+gh api repos/<org>/.github-private/contents/.github/copilot/managed-settings.json \
+  --jq '.content' | base64 --decode | jq empty && echo "✓ managed-settings.json is valid JSON"
+```
+
+Then, on a **supported client** (Copilot CLI, or VS Code 1.122+), a member of
+the designated org re-authenticates and confirms the `git-ape` plugin
+auto-installed. Users licensed by multiple billing entities must select this
+enterprise under _"Usage billed to"_ in their personal Copilot settings.
+
+### After distribution: still onboard repos for Azure
+
+Distribution installs the Git-Ape tooling everywhere, but deployments still need
+Azure identity. For each repository that will deploy, run the **repository
+CI/CD** playbook above (`/git-ape-onboarding onboard <repo> ...`) to wire up
+OIDC, RBAC, environments, and workflows.
 
 ## Safe-Execution Rules
 
@@ -541,8 +760,16 @@ scaling, and networking.
    scaffolded files — leave them unstaged so the user decides how to land
    them.
 8. **Idempotency on re-run:** If the skill is re-invoked after a partial failure, re-run from the last failing step — not from scratch. The Entra app, federated credentials, role assignments, and GitHub environments created before the failure are safe to reuse; do not create duplicates. Surface each already-provisioned resource as `⊝ Already exists` rather than re-creating it.
+9. **Enterprise mode:** confirm the target org belongs to the enterprise and the
+   operator can create `.github-private` before running `gh repo create`. Never
+   force-push or overwrite an existing `.github-private` default branch.
+10. **Enterprise mode:** never claim to have automated the **AI-controls
+   designation** or **ruleset** — these are UI-only, enterprise-owner actions.
+   Hand them off with the exact navigation path and stop.
 
 ## Suggested Agent Flow
+
+### Repository CI/CD onboarding
 
 **First-turn rule:** the very first response to any onboarding request must be a **gated handoff** — surface prereq results and collect required inputs. It must NOT be a walkthrough, a full set of CLI commands, or a completion report. The agent must not narrate or execute onboarding steps until: (a) prereq check confirms ✅ READY, and (b) all five required inputs from step 2 are in hand.
 
@@ -555,11 +782,40 @@ scaling, and networking.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ACR + custom image + ACA/ACI deployment + `minExecutions=1` + registry credentials + `GIT_APE_RUNNER_LABEL` (Step 12b).
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ask the user for a GitHub PAT (never generate a registration token) → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
 11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
 12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
+### Enterprise distribution
+
+1. Confirm the target org/enterprise, ownership, and that `gh` is authenticated with repo-create permission.
+2. Echo the plan (create `<org>/.github-private`, scaffold standards) and ask for final confirmation.
+3. Create/clone `.github-private` and run `scaffold-enterprise.sh` / `scaffold-enterprise.ps1` against the clone (Steps 2–3 of the enterprise playbook).
+4. Review `managed-settings.json` (optionally enable `ape-context@git-ape`), validate the JSON, and have the user commit & push (Step 4).
+5. Hand off the UI-only steps to an enterprise owner: AI-controls designation + ruleset (Steps 5–6).
+6. Provide the verification commands and remind the user that each deploying repo still needs the repository CI/CD onboarding for Azure access.
+
 ## Known Gotchas
+
+### Self-hosted: registration tokens don't work for KEDA-based runners
+
+**Never use `POST repos/<org>/<repo>/actions/runners/registration-token`** to
+generate the `githubAccessToken` for ACA/ACI runners. Registration tokens are
+short-lived (~1 hour) and expire silently. Once expired:
+- The KEDA `github-runner` scaler can no longer poll the Actions queue
+- Each ephemeral runner fails to register on scale-up with a **401 Unauthorized**
+- Runners appear as `offline` in GitHub Settings
+
+The `githubAccessToken` parameter requires a **long-lived GitHub PAT** because:
+1. KEDA continuously polls the GitHub API every 30 seconds to detect queued jobs
+2. Each ephemeral runner re-registers itself on every scale-up event
+3. Both operations need a token that outlives any single job
+
+**Fix:** Always **ask the user** to create a fine-grained PAT
+(`https://github.com/settings/tokens?type=beta`) with **Actions (Read & Write)**
+and **Administration (Read & Write)** permissions scoped to the target repo. A
+classic PAT with the `repo` scope also works. Never generate a registration
+token programmatically — it will always fail after ~1 hour.
 
 ### Hosted compute: `network_settings_ids` expects the GitHubId tag, not the Azure resource ID
 
@@ -629,10 +885,10 @@ Error: Unable to locate executable file: az
 
 **Fix:** Always build and use the custom image from `./templates/runners/Dockerfile`.
 The onboarding flow must:
-1. Create an ACR (`az acr create`)
-2. Build the image (`az acr build --image git-ape-runner:latest`)
-3. Configure pull credentials on the ACA/ACI job (`az containerapp job registry set`)
-4. Set the `runnerImage` parameter to the ACR image
+1. Create an ACR (`az acr create` — no `--admin-enabled`)
+2. Build the image via ACR Tasks (`az acr build --no-logs` on Windows)
+3. Create a managed identity with `AcrPull` role on the ACR
+4. Deploy the template with `acrServer`, `userAssignedIdentityId`, and `runnerImage`
 
 ### KEDA scale-from-zero cold start
 
@@ -647,6 +903,64 @@ this time:
 **Fix:** Set `minExecutions=1` to keep one runner always warm. This costs
 ~$30–50/month on the Consumption plan but eliminates cold-start delays and
 ensures a runner is always visible in GitHub Settings.
+
+### Windows CRLF corrupts `entrypoint.sh` (self-hosted only)
+
+When the `Dockerfile` build context is uploaded from a Windows checkout (where
+`git autocrlf` converts LF to CRLF), `entrypoint.sh` gets `\r\n` line endings.
+Linux interprets the shebang as `#!/usr/bin/env bash\r`, failing with:
+
+```
+'bash\r': No such file or directory
+```
+
+The runner container starts but never registers, and all executions fail
+immediately.
+
+**Fix (belt-and-suspenders):**
+1. The `Dockerfile` includes a `sed -i 's/\r$//'` line after `COPY entrypoint.sh`
+   that strips CRLF at build time — this is always safe and is a no-op on clean
+   LF files.
+2. Prefer **ACR Tasks** (cloud build) over local `docker build` — ACR Tasks run
+   in Linux and handle the context correctly.
+3. If building locally on Windows, ensure `.gitattributes` marks `*.sh` as
+   `text eol=lf`, or run `dos2unix entrypoint.sh` before building.
+
+### `az acr build` crashes on Windows (Unicode encoding)
+
+On Windows, `az acr build` may crash while streaming build logs with:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192'
+```
+
+This is a known Azure CLI bug — the `colorama` library on Windows can't encode
+Unicode characters (like `→`) in `apt-get` output. The build itself may or may
+not have completed in Azure before the crash.
+
+**Fix:** Always use `--no-logs` when running `az acr build` on Windows:
+```bash
+az acr build --registry <acr-name> --image git-ape-runner:latest \
+  --file ... ... --no-logs
+```
+The build runs in Azure regardless; `--no-logs` just skips the local log
+streaming. Verify success with `az acr repository list --name <acr-name>`.
+
+### ACA managed environment provisioning delay
+
+The `Microsoft.App/managedEnvironments` resource can take 1–2 minutes to
+provision. If you create the ACA job immediately after the environment, the
+deployment may fail with `ManagedEnvironmentNotProvisioned`.
+
+**Fix:** When deploying via ARM template (`az deployment group create`), the
+`dependsOn` in the template handles ordering automatically. When deploying
+step-by-step (e.g., `az containerapp env create` followed by
+`az containerapp job create`), poll the environment status first:
+```bash
+az containerapp env show --name <env-name> --resource-group <rg> \
+  --query "properties.provisioningState" -o tsv
+# Wait until "Succeeded" before creating the job
+```
 
 ### Stale workflow files in target repos
 
