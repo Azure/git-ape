@@ -524,8 +524,32 @@ runners and set one variable.
 | Platform | What it provisions |
 |----------|--------------------|
 | **ACI** | ARM `template.json` — a container group running an ephemeral runner. |
-| **ACA** | ARM `template.json` — a KEDA `github-runner`-scaled Container Apps Job (scale-to-zero). |
+| **ACA** (recommended) | Deployed as a **Git-Ape deployment** — see below. A KEDA `github-runner`-scaled Container Apps Job (scale-to-zero) with managed identity, ACR, and Key Vault. |
 | **AKS** | Actions Runner Controller (ARC) via Helm `values.yaml`. |
+
+#### Git-Ape deploying Git-Ape (ACA runners)
+
+The ACA runner path is itself a **first-class Git-Ape deployment**. Rather than an
+imperative `az deployment group create`, onboarding scaffolds a subscription-scoped
+deployment artifact to `.azure/deployments/git-ape-runners/`
+(source: [`templates/deployments/git-ape-runners/`](https://github.com/Azure/git-ape/tree/main/.github/skills/git-ape-onboarding/templates/deployments/git-ape-runners)).
+The runner infrastructure then flows through Git-Ape's own managed pipeline:
+
+- **Architecture diagram** — `architecture.md` (topology + bootstrap sequence).
+- **Cost estimate** — via the `azure-cost-estimator` skill on the template.
+- **Deploy** — `az stack sub create --action-on-unmanage deleteAll` (the same
+  Deployment Stack primitive every Git-Ape deployment uses), producing `state.json`.
+- **Destroy** — single-command teardown via the `azure-stack-destroy` skill.
+
+The PAT is never in git, ARM parameters, or deployment history — the stack creates
+an empty Key Vault and the token is set post-deploy with `az keyvault secret set`;
+the ACA Job reads it as a Key Vault secret reference.
+
+**Bootstrap ordering (the self-hosting loop):** the first `git-ape-runners` deploy
+runs on `ubuntu-latest` (or your local machine) because the private runner does not
+exist yet. Once it is online and `GIT_APE_RUNNER_LABEL` is set, every subsequent
+Git-Ape run — including updates to the runner stack itself — executes on the private
+runner. Git-Ape ends up deploying and maintaining the very runners that run Git-Ape.
 
 Once a runner is online (with the `git-ape-runner` label), flip the switch:
 

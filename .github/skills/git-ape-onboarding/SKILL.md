@@ -54,7 +54,7 @@ This skill configures:
 5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable, plus the optional `GIT_APE_RUNNER_LABEL` variable that selects private runners
 6. Scaffolded GitHub Actions workflow files (`git-ape-plan.yml`, `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.{md,lock.yml}`) and deployment standards (`.github/copilot-instructions.md`) into the user's working copy
 7. *(Optional)* The `COPILOT_GITHUB_TOKEN` repository secret that powers the agentic drift-detection workflow (`git-ape-drift.lock.yml`) — only when the user opts into scheduled drift detection
-8. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default), **hosted compute networking** (GitHub-managed runners with Azure private networking, requires GHEC), or self-hosted runners in your Azure subscription (ACI / ACA / AKS). On-demand IaC for private runners ships at `./templates/runners/`.
+8. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default), **hosted compute networking** (GitHub-managed runners with Azure private networking, requires GHEC), or self-hosted runners in your Azure subscription (ACI / ACA / AKS). On-demand IaC for private runners ships at `./templates/runners/`. ACA runners are deployed as a first-class **Git-Ape deployment** (`./templates/deployments/git-ape-runners/`) — Git-Ape deploying Git-Ape — so they get an architecture diagram, cost estimate, managed deploy, and single-command destroy.
 
 ## Prerequisites
 
@@ -470,12 +470,88 @@ scaling, and networking.
 1. **Ask the platform:**
    ```
    Which Azure platform should host the runners?
+   - ACA  — Azure Container Apps (event-driven, ephemeral, scale-to-zero) — RECOMMENDED
    - ACI  — Azure Container Instances (simplest; a handful of runners)
-   - ACA  — Azure Container Apps (event-driven, ephemeral, scale-to-zero)
    - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
    ```
 
-2. **Build the custom runner image using ACR Tasks (cloud build).** The base
+   **ACA is deployed as a Git-Ape deployment** (Git-Ape deploying Git-Ape), so the
+   runner infrastructure gets an architecture diagram, cost estimate, managed
+   deploy, and single-command destroy — see the ACA path directly below. **ACI**
+   and **AKS** use the imperative provisioning steps further down.
+
+#### ACA — deploy runners as a Git-Ape deployment (recommended)
+
+Instead of an imperative `az deployment group create`, scaffold the runner
+infrastructure as a first-class Git-Ape deployment and deploy it through the
+normal Git-Ape stack flow. The template is a subscription-scoped Deployment Stack,
+so destroy is a single idempotent command and the PAT lives in Key Vault (never in
+git or ARM parameters).
+
+1. **Scaffold the deployment artifact** into the working copy and set inputs:
+   ```bash
+   mkdir -p .azure/deployments/git-ape-runners
+   cp -R .github/skills/git-ape-onboarding/templates/deployments/git-ape-runners/. \
+     .azure/deployments/git-ape-runners/
+   # set githubOwnerRepo (+ any overrides) — NEVER put the PAT here:
+   $EDITOR .azure/deployments/git-ape-runners/parameters.json
+   ```
+   `template.json` creates, in one self-contained stack: the resource group, a
+   user-assigned identity, an ACR, an `AcrPull` role assignment, a Key Vault, a
+   `Key Vault Secrets User` role assignment, an ACA managed environment, and the
+   event-driven ACA Job.
+
+2. **Deploy the stack.** The first deploy runs on a public runner or locally,
+   because the private runner does not exist yet:
+   ```bash
+   /azure-stack-deploy git-ape-runners          # local (VS Code / terminal)
+   ```
+   In CI, open a PR that adds `.azure/deployments/git-ape-runners/`; the
+   `git-ape-deploy.yml` workflow deploys it on `ubuntu-latest` and writes
+   `state.json` plus the architecture/cost artifacts, exactly like any other
+   Git-Ape deployment.
+
+3. **Build & push the runner image** into the ACR the stack just created (the
+   stock `actions-runner` image lacks `az`/`gh`/`jq` and self-registration — see
+   the Dockerfile note in the imperative path below):
+   ```bash
+   ACR=$(jq -r '.acrLoginServer.value' .azure/deployments/git-ape-runners/state.json)
+   az acr build --registry "${ACR%%.*}" --image git-ape-runner:latest \
+     --file .github/skills/git-ape-onboarding/templates/runners/Dockerfile \
+     .github/skills/git-ape-onboarding/templates/runners/ --no-logs
+   ```
+
+4. **Write the GitHub PAT into Key Vault** — never in git, ARM params, or chat
+   output. Collect a long-lived fine-grained PAT exactly as in the imperative
+   "Collect a GitHub PAT" step below (never a short-lived registration token):
+   ```bash
+   KV=$(jq -r '.keyVaultName.value' .azure/deployments/git-ape-runners/state.json)
+   az keyvault secret set --vault-name "$KV" --name github-pat \
+     --value '<user-provided-PAT>' --output none
+   ```
+   The ACA Job reads it at runtime through a Key Vault secret reference
+   (`keyVaultUrl` + user-assigned `identity`), enabled by the in-template
+   `Key Vault Secrets User` role assignment.
+
+5. **Point workflows at the runner** — after this, re-deploys of this very stack
+   run on it (the self-hosting loop):
+   ```bash
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
+   ```
+
+6. **Destroy** with one command when no longer needed (tears down the whole stack
+   and purges the soft-deleted Key Vault):
+   ```bash
+   /azure-stack-destroy git-ape-runners
+   ```
+
+See `templates/deployments/git-ape-runners/README.md` for the full walkthrough and
+`templates/deployments/git-ape-runners/architecture.md` for the topology and
+bootstrap sequence.
+
+#### ACI / AKS — imperative provisioning
+
+1. **Build the custom runner image using ACR Tasks (cloud build).** The base
    `ghcr.io/actions/actions-runner:latest` (GitHub's official runner image) does
    **NOT** include `az`, `gh`, or `jq`, and ships no registration entrypoint.
    Workflows fail with `Unable to locate executable file: az` — and on ACI/ACA
@@ -504,7 +580,7 @@ scaling, and networking.
    az acr repository list --name <acr-name> -o table
    ```
 
-3. **Create a managed identity and assign `AcrPull` role** for image pulls:
+2. **Create a managed identity and assign `AcrPull` role** for image pulls:
    ```bash
    # Create identity
    az identity create --name id-git-ape-runner --resource-group <rg> --location <region>
@@ -521,7 +597,7 @@ scaling, and networking.
    **Do NOT use ACR admin credentials** (`--admin-enabled true` + username/password).
    Managed identity is the secure, recommended approach.
 
-4. **Collect a GitHub PAT from the user.** The ACA/ACI runner needs a
+3. **Collect a GitHub PAT from the user.** The ACA/ACI runner needs a
    **long-lived GitHub Personal Access Token (PAT)** — NOT a short-lived
    registration token from `POST /actions/runners/registration-token`.
    Registration tokens expire in ~1 hour, but the KEDA `github-runner` scaler
@@ -554,10 +630,12 @@ scaling, and networking.
 
    Never print the token value in chat output (see Safe-Execution Rules).
 
-5. **Deploy the runner infrastructure** using the chosen platform template.
-   Pass the custom image, ACR server, managed identity, and user-provided PAT:
+4. **Deploy the runner infrastructure (ACI).** Use the ACI template
+   (`templates/runners/aci/template.json`) — ACA is covered by the Git-Ape-managed
+   path above. Pass the custom image, ACR server, managed identity, and
+   user-provided PAT:
    ```bash
-   az deployment group create -g <rg> -f template.json \
+   az deployment group create -g <rg> -f ./templates/runners/aci/template.json \
      -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
         acrServer='<acr-name>.azurecr.io' \
         userAssignedIdentityId=$IDENTITY_ID \
@@ -577,7 +655,7 @@ scaling, and networking.
      environment's `provisioningState` to reach `Succeeded` before creating the
      job.
 
-6. **Set `minExecutions=1`** (recommended) so at least one runner is always
+5. **Set `minExecutions=1`** (recommended) so at least one runner is always
    warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
    take 1–3 minutes on cold start, during which GitHub shows "No runners
    configured":
@@ -587,11 +665,11 @@ scaling, and networking.
    Leave at `0` only if you prefer true scale-to-zero and can tolerate cold-start
    delays.
 
-7. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+6. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
    with the `git-ape-runner` label. (With `minExecutions=1`, a runner should
    appear within 30–60 seconds of deployment.)
 
-8. **Set the variable** so workflows target it (repo-wide or per environment):
+7. **Set the variable** so workflows target it (repo-wide or per environment):
    ```bash
    gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
    # per environment instead:
@@ -765,7 +843,7 @@ OIDC, RBAC, environments, and workflows.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted**: ask the user for a GitHub PAT (never generate a registration token) → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACA/ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b).
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted ACA (recommended)**: scaffold `.azure/deployments/git-ape-runners/` → deploy the subscription-scoped stack via `/azure-stack-deploy git-ape-runners` (first deploy on `ubuntu-latest`) → `az acr build` the runner image into the stack's ACR → `az keyvault secret set` the PAT (never a registration token) → set `GIT_APE_RUNNER_LABEL` (Step 12b, ACA path) — Git-Ape deploying Git-Ape. For **self-hosted ACI/AKS**: ask the user for a GitHub PAT → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b, imperative path).
 11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
 12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 

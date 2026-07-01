@@ -220,11 +220,22 @@ gh auth refresh -h github.com -s admin:org,admin:enterprise,manage_runners:org,r
 Self-hosted runners run in **your** Azure subscription. You manage the compute,
 image, scaling, and networking.
 
+> **⭐ ACA is deployed as a first-class Git-Ape deployment — Git-Ape deploying
+> Git-Ape.** Instead of an imperative `az deployment group create`, the ACA
+> runner stack ships as a subscription-scoped deployment artifact at
+> [`../deployments/git-ape-runners/`](../deployments/git-ape-runners). Onboarding
+> scaffolds it to your repo's `.azure/deployments/git-ape-runners/`, so the
+> runner infrastructure flows through Git-Ape's managed pipeline: **architecture
+> diagram, cost estimate, `az stack sub create` deploy, and single-command
+> destroy**. The raw `aca/` template below remains as the reference IaC that the
+> deployment artifact is built from. See that folder's `README.md` for the
+> deploy/destroy walkthrough and bootstrap ordering.
+
 ### Platform matrix
 
 | | **Azure Container Instances (ACI)** | **Azure Container Apps (ACA)** | **Azure Kubernetes Service (AKS)** |
 |---|---|---|---|
-| **Basic** | [`aci/`](./aci) — single container group, simplest | [`aca/`](./aca) — KEDA-scaled ephemeral jobs | [`aks/`](./aks) — Actions Runner Controller (ARC) |
+| **Basic** | [`aci/`](./aci) — single container group, simplest | [`aca/`](./aca) — KEDA-scaled ephemeral jobs · **deploy via [`deployments/git-ape-runners/`](../deployments/git-ape-runners)** | [`aks/`](./aks) — Actions Runner Controller (ARC) |
 | **With private networking** | [`aci/`](./aci) with `subnetId` set | [`aca/`](./aca) with `infrastructureSubnetId` set | [`aks/`](./aks) — runners on cluster node subnet |
 
 ### Which platform?
@@ -232,7 +243,7 @@ image, scaling, and networking.
 | Choose | When |
 |--------|------|
 | **ACI** | Fewest moving parts. A handful of runners, simple scaling, fast to stand up. |
-| **ACA** | You want **event-driven, ephemeral** runners that scale to zero between jobs (KEDA `github-runner` scaler). Best cost/utilization. |
+| **ACA** (recommended) | You want **event-driven, ephemeral** runners that scale to zero between jobs (KEDA `github-runner` scaler). Best cost/utilization — and it's deployed as a managed Git-Ape deployment (diagram/cost/deploy/destroy). |
 | **AKS** | You already run AKS, need large-scale autoscaling, or want ARC's ephemeral runner pods and fine-grained scheduling. |
 
 ## Custom runner image (required)
@@ -276,6 +287,13 @@ az acr build --registry <acr-name> --image git-ape-runner:latest \
 > Check the result with `az acr repository list --name <acr-name>`.
 
 ### ACR pull authentication (managed identity — recommended)
+
+> **For ACA, prefer the managed Git-Ape deployment** at
+> [`../deployments/git-ape-runners/`](../deployments/git-ape-runners), which
+> provisions the managed identity, `AcrPull` role assignment, Key Vault, and ACA
+> job for you inside one subscription-scoped stack (`az stack sub create`). The
+> manual `az` steps below are the imperative equivalent, kept for reference and
+> for the ACI path.
 
 Use a **user-assigned managed identity** with the `AcrPull` role to pull images
 from your ACR. This eliminates admin credentials entirely.

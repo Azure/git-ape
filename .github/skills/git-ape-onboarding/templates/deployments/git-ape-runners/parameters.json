@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "resourceGroupName": {
+      "value": "rg-git-ape-runners"
+    },
+    "runnerName": {
+      "value": "git-ape-runner"
+    },
+    "githubOwnerRepo": {
+      "value": "<owner>/<repo>"
+    },
+    "runnerScope": {
+      "value": "repo"
+    },
+    "runnerLabels": {
+      "value": "git-ape-runner"
+    },
+    "maxRunners": {
+      "value": 10
+    },
+    "minRunners": {
+      "value": 1
+    },
+    "cpuCores": {
+      "value": "1.0"
+    },
+    "memorySize": {
+      "value": "2Gi"
+    },
+    "infrastructureSubnetId": {
+      "value": ""
+    },
+    "tags": {
+      "value": {
+        "ManagedBy": "git-ape",
+        "Component": "git-ape-runners",
+        "Environment": "prod",
+        "Project": "git-ape"
+      }
+    }
+  }
+}
