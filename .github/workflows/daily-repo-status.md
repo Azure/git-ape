@@ -6,7 +6,9 @@ description: |
   and project recommendations.
 
 on:
-  schedule: daily
+  # 08:00 SGT (UTC+8) every day = 00:00 UTC
+  schedule:
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:

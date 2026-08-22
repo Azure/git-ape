@@ -24,8 +24,8 @@ Git-Ape can automate the entire setup for you, or you can run each step manually
 
 Both paths produce the same result: an Entra ID App Registration with OIDC federated credentials, RBAC role assignments, and GitHub environments with the required secrets.
 
-:::info[Workflow activation is part of onboarding]
-Git-Ape ships its CI/CD workflows as **`*.exampleyml`** files in `.github/workflows/` (`git-ape-plan.exampleyml`, `git-ape-deploy.exampleyml`, `git-ape-destroy.exampleyml`, `git-ape-verify.exampleyml`). These files are **inert** until the onboarding flow renames each one to `.yml`. The automated `/git-ape-onboarding` flow performs this rename only after you complete the experimental-status acknowledgments; the manual flow includes a final step to rename them yourself.
+:::info[Workflow scaffolding is part of onboarding]
+Git-Ape's CI/CD workflows ship as **canonical templates** inside the onboarding skill at `.github/skills/git-ape-onboarding/templates/workflows/`. After identity, secrets, and environments are configured, the `/git-ape-onboarding` flow runs the scaffold script (`scaffold-repo.sh` / `scaffold-repo.ps1`) to copy these templates into your repository's `.github/workflows/` directory as ready-to-run `.yml` files. The scaffold uses **skip-with-notice on collision** — it never overwrites a customized file. Alongside the workflows, the scaffold also drops a `.github/copilot-instructions.md` deployment-standards file.
 :::
 
 ## Choose single or multi-environment mode {#choose-mode}
@@ -352,18 +352,18 @@ az role assignment create \
 
 ### Step 4: Configure GitHub repository
 
-#### Set secrets
+#### Set secrets and variables
 
-These are identifiers, not actual credentials — OIDC means no secrets are stored.
+These are identifiers, not actual credentials — OIDC means no secrets are stored. `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` are stored as **secrets**; `AZURE_SUBSCRIPTION_ID` is a **variable** (the workflows read it via `vars.AZURE_SUBSCRIPTION_ID`).
 
 <details>
 <summary><strong>Single environment</strong></summary>
 
 ```bash
 REPO="your-org/your-repo"
-echo "$CLIENT_ID"       | gh secret set AZURE_CLIENT_ID -R "$REPO"
-echo "$TENANT_ID"       | gh secret set AZURE_TENANT_ID -R "$REPO"
-echo "$SUBSCRIPTION_ID" | gh secret set AZURE_SUBSCRIPTION_ID -R "$REPO"
+echo "$CLIENT_ID" | gh secret set AZURE_CLIENT_ID -R "$REPO"
+echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID -R "$REPO"
+gh variable set AZURE_SUBSCRIPTION_ID -R "$REPO" --body "$SUBSCRIPTION_ID"
 ```
 
 </details>
@@ -380,18 +380,39 @@ echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID -R "$REPO"
 
 for ENV in dev staging prod; do
   # Use the right subscription variable for each stage
-  gh secret set AZURE_CLIENT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$CLIENT_ID"
-  gh secret set AZURE_TENANT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$TENANT_ID"
-  gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-$ENV" --body "${ENV}_SUBSCRIPTION_ID_VALUE"
+  gh secret set   AZURE_CLIENT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$CLIENT_ID"
+  gh secret set   AZURE_TENANT_ID       --repo "$REPO" --env "azure-deploy-$ENV" --body "$TENANT_ID"
+  gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-deploy-$ENV" --body "${ENV}_SUBSCRIPTION_ID_VALUE"
 done
 
 # Destroy environment
-gh secret set AZURE_CLIENT_ID       --repo "$REPO" --env "azure-destroy" --body "$CLIENT_ID"
-gh secret set AZURE_TENANT_ID       --repo "$REPO" --env "azure-destroy" --body "$TENANT_ID"
-gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-destroy" --body "$DEV_SUBSCRIPTION_ID"
+gh secret set   AZURE_CLIENT_ID       --repo "$REPO" --env "azure-destroy" --body "$CLIENT_ID"
+gh secret set   AZURE_TENANT_ID       --repo "$REPO" --env "azure-destroy" --body "$TENANT_ID"
+gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-destroy" --body "$DEV_SUBSCRIPTION_ID"
 ```
 
 </details>
+
+#### (Optional) Enable drift detection
+
+The scaffolded **drift-detection** workflow (`git-ape-drift.lock.yml`) is a [GitHub Agentic Workflow](https://github.github.com/gh-aw/) that runs on the **GitHub Copilot engine**, so it needs one extra credential beyond the Azure OIDC values above: **`COPILOT_GITHUB_TOKEN`**. Its compiled workflow opens with a hard preflight gate that fails the run when the secret is missing — there is **no fallback** to the built-in `GITHUB_TOKEN`.
+
+Skip this step if you are not enabling scheduled drift detection — `plan`, `deploy`, `destroy`, and `verify` do not need it.
+
+```bash
+REPO="your-org/your-repo"
+# Paste a GitHub PAT (fine-grained or classic) from an identity with an active
+# GitHub Copilot seat. Store it as a REPOSITORY secret — the daily schedule
+# runs from main with no environment attached.
+gh secret set COPILOT_GITHUB_TOKEN -R "$REPO"
+```
+
+Confirm it end-to-end with a manual run:
+
+```bash
+gh workflow run git-ape-drift.lock.yml -R "$REPO"
+gh run list --workflow git-ape-drift.lock.yml -R "$REPO" --limit 1
+```
 
 #### Create GitHub environments
 
@@ -463,7 +484,7 @@ This adds four workflows:
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `git-ape-plan.yml` | PR with template changes | Validate, what-if, cost estimate |
-| `git-ape-deploy.yml` | Merge to main or `/deploy` comment | ARM deployment |
+| `git-ape-deploy.yml` | Merge to main | ARM deployment |
 | `git-ape-destroy.yml` | PR merge with `destroy-requested` status | Delete resource group |
 | `git-ape-verify.yml` | Manual dispatch | Verify OIDC and RBAC health |
 

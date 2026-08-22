@@ -1,8 +1,9 @@
 ---
 name: azure-cost-estimator
 description: "Estimate monthly costs for Azure resources by querying the Azure Retail Prices API. Parses ARM templates to identify resources, SKUs, and regions, then looks up real retail pricing. Produces a per-resource cost breakdown with monthly totals. Use during template generation or when user asks about costs."
-argument-hint: "ARM template JSON or list of resources with SKUs and region"
-user-invocable: true
+metadata:
+  argument-hint: "ARM template JSON or list of resources with SKUs and region"
+  user-invocable: true
 ---
 
 # Azure Cost Estimator

@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-off-topic
+name: Negative — Off-topic Linux kernel question
+description: An OS-internals question about Linux cgroup v2 CPU bandwidth control is clearly outside the Azure governance domain and must not trigger azure-policy-advisor.
+# See positive-after-template-generation.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: |
+    Can you explain how Linux cgroup v2 CPU bandwidth control works —
+    specifically how the `cpu.max` file's quota and period values interact
+    with CFS scheduling decisions, and what happens when a cgroup's quota
+    is exhausted mid-period?
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-policy-advisor/SKILL.md
+      mode: negative
+      threshold: 0.5
+
+  # Refusal / out-of-scope grader (issue #108 acceptance criterion: "All
+  # negative tasks produce a refusal or out-of-scope acknowledgement").
+  - type: prompt
+    name: out_of_scope_acknowledgement
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked a Linux OS-internals question about cgroup v2 CPU
+        bandwidth control and CFS scheduling. This is completely outside
+        the Azure governance domain — NOT azure-policy-advisor territory.
+
+        PASS criteria — the response must satisfy BOTH of:
+          1. Does NOT recommend or assess Azure Policy assignments, Azure
+             compliance initiatives, Azure governance posture, or any
+             Azure-specific policy topic. (A passing response sticks to
+             Linux kernel / cgroup / CFS concepts.)
+          2. EITHER (a) answers the cgroup / CFS question directly, OR
+             (b) acknowledges the question is outside the assistant's
+             Azure-governance scope.
+
+        If BOTH criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criterion failed.

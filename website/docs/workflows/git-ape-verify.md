@@ -4,15 +4,15 @@ sidebar_label: "Verify Setup"
 description: "GitHub Actions workflow: Git-Ape: Verify Setup"
 ---
 
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-verify.exampleyml -->
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/templates/workflows/git-ape-verify.yml -->
 
 
 # Git-Ape: Verify Setup
 
-**Workflow file:** `.github/workflows/git-ape-verify.exampleyml`
+**Workflow file:** `.github/skills/git-ape-onboarding/templates/workflows/git-ape-verify.yml`
 
-:::info[Activation required]
-This workflow ships as `git-ape-verify.exampleyml` and is **inert** until renamed to `git-ape-verify.yml`. The [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow renames every `.exampleyml` file in `.github/workflows/` to `.yml` after you complete the experimental-status acknowledgments.
+:::info[Scaffolded by `/git-ape-onboarding`]
+This workflow is **shipped as a template** under `.github/skills/git-ape-onboarding/templates/workflows/` and copied into your repository's `.github/workflows/` by the [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow. It does **not** run in the git-ape repo itself.
 :::
 
 ## Triggers
@@ -62,30 +62,48 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check required secrets
+      - name: Check required secrets and variables
         id: secrets
+        env:
+          # Route secret/variable presence through env booleans rather than inlining
+          # ${{ secrets.* }} into shell conditionals (GitHub Actions hardening).
+          HAS_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID != '' }}
+          HAS_TENANT_ID: ${{ secrets.AZURE_TENANT_ID != '' }}
+          HAS_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID != '' }}
+          HAS_COPILOT_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN != '' }}
         run: |
           MISSING=0
 
-          if [[ -z "${{ secrets.AZURE_CLIENT_ID }}" ]]; then
+          if [[ "$HAS_CLIENT_ID" != "true" ]]; then
             echo "::error::Missing secret: AZURE_CLIENT_ID"
             MISSING=$((MISSING + 1))
           else
             echo "✅ AZURE_CLIENT_ID is set"
           fi
 
-          if [[ -z "${{ secrets.AZURE_TENANT_ID }}" ]]; then
+          if [[ "$HAS_TENANT_ID" != "true" ]]; then
             echo "::error::Missing secret: AZURE_TENANT_ID"
             MISSING=$((MISSING + 1))
           else
             echo "✅ AZURE_TENANT_ID is set"
           fi
 
-          if [[ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]]; then
-            echo "::error::Missing secret: AZURE_SUBSCRIPTION_ID"
+          if [[ "$HAS_SUBSCRIPTION_ID" != "true" ]]; then
+            echo "::error::Missing variable: AZURE_SUBSCRIPTION_ID"
             MISSING=$((MISSING + 1))
           else
             echo "✅ AZURE_SUBSCRIPTION_ID is set"
+          fi
+
+          # COPILOT_GITHUB_TOKEN is OPTIONAL — only the agentic drift-detection
+          # workflow (git-ape-drift) needs it. Report as a warning and never
+          # count it toward MISSING, so plan/deploy/destroy verification still
+          # passes when drift detection is not enabled.
+          if [[ "$HAS_COPILOT_TOKEN" != "true" ]]; then
+            echo "::warning::COPILOT_GITHUB_TOKEN not set — optional, required only for the drift-detection workflow (git-ape-drift)"
+            echo "⚠️ COPILOT_GITHUB_TOKEN not set (optional — needed only for drift detection)"
+          else
+            echo "✅ COPILOT_GITHUB_TOKEN is set (drift detection enabled)"
           fi
 
           echo "missing=$MISSING" >> "$GITHUB_OUTPUT"
@@ -97,10 +115,12 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Verify Azure access
         if: steps.secrets.outputs.missing == '0'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
           echo "## Azure Connection"
           echo ""
@@ -118,7 +138,7 @@ jobs:
           # Check RBAC roles
           echo ""
           echo "## RBAC Roles"
-          SP_ID=$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv 2>/dev/null || echo "")
+          SP_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv 2>/dev/null || echo "")
           if [[ -n "$SP_ID" ]]; then
             az role assignment list --assignee "$SP_ID" \
               --query "[].{role:roleDefinitionName, scope:scope}" -o table
@@ -162,6 +182,8 @@ jobs:
             "git-ape-plan.yml:Git-Ape: Plan"
             "git-ape-deploy.yml:Git-Ape: Deploy"
             "git-ape-destroy.yml:Git-Ape: Destroy"
+            "git-ape-verify.yml:Git-Ape: Verify Setup"
+            "git-ape-drift.lock.yml:Git-Ape: Drift Detection"
           )
 
           for WF in "${WORKFLOWS[@]}"; do
@@ -182,7 +204,7 @@ jobs:
           echo ""
 
           if [[ "${{ steps.secrets.outputs.missing }}" != "0" ]]; then
-            echo "❌ Setup incomplete — ${{ steps.secrets.outputs.missing }} secret(s) missing"
+            echo "❌ Setup incomplete — ${{ steps.secrets.outputs.missing }} required value(s) missing"
             echo "   Run: @Git-Ape Onboarding or /git-ape-onboarding"
           else
             echo "✅ Git-Ape setup verified successfully!"
@@ -190,7 +212,7 @@ jobs:
             echo "Next steps:"
             echo "  1. Add a deployment under .azure/deployments/"
             echo "  2. Open a PR to trigger the plan workflow"
-            echo "  3. Merge or comment /deploy to deploy"
+            echo "  3. Merge to main to deploy"
           fi
 
 ```

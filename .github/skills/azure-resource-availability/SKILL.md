@@ -1,8 +1,9 @@
 ---
 name: azure-resource-availability
 description: "Query live Azure APIs to validate resource availability before template generation or deployment. Checks VM SKU restrictions, Kubernetes/runtime version support, API version compatibility, and subscription quota. Use during requirements gathering and preflight to catch deployment failures early."
-argument-hint: "Resource type, region, and SKU/version to validate"
-user-invocable: true
+metadata:
+  argument-hint: "Resource type, region, and SKU/version to validate"
+  user-invocable: true
 ---
 
 # Azure Resource Availability

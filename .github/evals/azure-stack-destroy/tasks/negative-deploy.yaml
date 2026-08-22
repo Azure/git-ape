@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-deploy
+name: Negative — Deploying a new stack (opposite operation)
+description: Deploy prompts belong to azure-stack-deploy, not azure-stack-destroy.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Deploy this ARM template to a new subscription-scoped Azure Deployment Stack named deploy-20260526-001 in East US."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-destroy/SKILL.md
+      mode: negative
+      threshold: 0.5

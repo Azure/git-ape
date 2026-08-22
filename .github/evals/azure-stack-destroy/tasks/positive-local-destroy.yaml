@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-local-destroy
+name: Positive — Local destroy of a Git-Ape deployment
+description: User asks to tear down a specific deploy-XXX deployment with soft-delete cleanup; skill should activate.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "I'm done with deploy-20260506-001. Tear down the deployment stack — delete the resources cleanly and purge any soft-deleted Key Vaults so I can re-use the name."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-destroy/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to tear down a specific Git-Ape deployment
+        (deploy-20260506-001), delete the resources, and purge soft-deleted
+        Key Vaults so the name can be re-used.
+
+        PASS criteria — the response must contain ALL of:
+          1. Recommends the `azure-stack-destroy` skill OR invokes the
+             `destroy-stack.sh` / `destroy-stack.ps1` script under
+             `.github/skills/azure-stack-destroy/scripts/` (NOT a raw
+             `az group delete`).
+          2. References `state.json` under
+             `.azure/deployments/deploy-20260506-001/` as the source of
+             truth for what to destroy (stackId, managedResources,
+             softDeletable, purgeProtected).
+          3. Names the actual stack-delete command or its semantics —
+             `az stack sub delete --action-on-unmanage deleteAll`
+             (single idempotent call that owns all resources across
+             resource groups).
+          4. Addresses the soft-delete purge sweep explicitly — mentions
+             `az keyvault purge` (or `az keyvault list-deleted` + purge),
+             OR explains that the skill's purge sweep deletes
+             non-purge-protected soft-deleted Key Vaults so the name is
+             immediately reusable.
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

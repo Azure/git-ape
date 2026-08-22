@@ -65,10 +65,6 @@ The Copilot Coding Agent:
 - You review the plan, approve the PR
 - On merge, `git-ape-deploy.yml` deploys to Azure
 
-### Step 4: Early Deploy (Optional)
-
-Comment `/deploy` on an **approved** PR to deploy without merging first.
-
 ## When to Use Headless Mode
 
 | Scenario | Why Headless |

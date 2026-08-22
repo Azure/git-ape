@@ -34,8 +34,6 @@ graph LR
     Merge --> Deploy["git-ape-deploy.yml"]
     Deploy --> |"ARM Deploy + Tests"| State["state.json committed"]
 
-    SlashDeploy["/deploy comment"] --> |"On approved PR"| Deploy
-
     DestroyPR["PR: metadata → destroy-requested"] --> DestroyMerge["Merge"]
     DestroyMerge --> Destroy["git-ape-destroy.yml"]
     Destroy --> |"az group delete"| Cleaned["Resources deleted"]
@@ -48,7 +46,7 @@ graph LR
     classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
     classDef verify fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
     class PR,Plan,Comment,Review plan
-    class Merge,Deploy,State,SlashDeploy deploy
+    class Merge,Deploy,State deploy
     class DestroyPR,DestroyMerge,Destroy,Cleaned destroy
     class Manual,Verify,VerifyResult verify
 ```
@@ -91,7 +89,7 @@ Use `@git-ape-onboarding` to configure OIDC, RBAC, GitHub environments, and secr
 
 ### git-ape-deploy.yml (Execution)
 
-**Triggers:** Push to `main` with deployment changes OR `/deploy` comment on approved PR
+**Triggers:** Push to `main` with deployment changes
 
 1. OIDC login
 2. Validate template

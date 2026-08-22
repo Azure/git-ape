@@ -1,6 +1,6 @@
 ![Git-Ape APE logo](APE.png)
 
-# Git-Ape
+# Git-Ape 🐒
 
 > [!WARNING]
 > EXPERIMENTAL PROJECT: Git-Ape is in active development and is not production-ready.
@@ -296,11 +296,11 @@ graph LR
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `git-ape-plan.yml` | PR with template changes | Validate, what-if, post plan as PR comment |
-| `git-ape-deploy.yml` | Merge to main or `/deploy` comment | Execute ARM deployment |
+| `git-ape-deploy.yml` | Merge to main | Execute ARM deployment |
 | `git-ape-destroy.yml` | Merge PR with `destroy-requested` | Delete resource group |
 | `git-ape-verify.yml` | Manual dispatch | Verify OIDC, RBAC, pipeline health |
 
-> **Note:** These workflows ship as `git-ape-*.exampleyml` files in `.github/workflows/` and are inert until the `/git-ape-onboarding` flow renames them to `.yml` after you complete the experimental-status acknowledgments.
+> **Note:** These workflows ship as canonical templates inside the onboarding skill at `.github/skills/git-ape-onboarding/templates/workflows/`. The `/git-ape-onboarding` flow scaffolds them into your repository's `.github/workflows/` directory as ready-to-run `.yml` files (skip-with-notice on collision — never overwrites a customized workflow).
 
 ## Included Components
 
@@ -319,7 +319,10 @@ plugin.json                          # Plugin manifest
 │   ├── azure-policy-advisor.agent.md
 │   └── azure-iac-exporter.agent.md
 ├── skills/
-│   ├── git-ape-onboarding/          # OIDC, RBAC, env setup
+│   ├── git-ape-onboarding/          # OIDC, RBAC, env setup + workflow templates
+│   │   └── templates/workflows/     # Canonical git-ape-{plan,deploy,destroy,verify}.yml
+│   │                                # + git-ape-drift.{md,lock.yml}
+│   │                                # Scaffolded into your repo by /git-ape-onboarding
 │   ├── azure-rest-api-reference/    # ARM property + API version lookup
 │   ├── azure-naming-research/       # CAF naming
 │   ├── azure-resource-availability/ # SKU & quota checks
@@ -332,11 +335,8 @@ plugin.json                          # Plugin manifest
 │   ├── azure-integration-tester/    # Post-deploy tests
 │   ├── azure-resource-visualizer/   # Architecture diagrams
 │   └── prereq-check/                # CLI tool + auth session verification
-└── workflows/
-    ├── git-ape-plan.exampleyml      # Activated to .yml by /git-ape-onboarding
-    ├── git-ape-deploy.exampleyml
-    ├── git-ape-destroy.exampleyml
-    └── git-ape-verify.exampleyml
+└── workflows/                       # CI workflows for the git-ape repo itself
+    └── git-ape-onboarding-template-check.yml  # Verifies scaffold parity
 ```
 
 See [plugin.json](plugin.json) and [.github/plugin/marketplace.json](.github/plugin/marketplace.json) for packaging details.

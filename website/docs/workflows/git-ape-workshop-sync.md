@@ -1,0 +1,196 @@
+---
+title: "Git-Ape: Workshop Sync"
+sidebar_label: "Workshop Sync"
+description: "GitHub Actions workflow: Git-Ape: Workshop Sync"
+---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-workshop-sync.yml -->
+
+
+# Git-Ape: Workshop Sync
+
+**Workflow file:** `.github/workflows/git-ape-workshop-sync.yml`
+
+## Triggers
+
+- **`push`** — branches: `["main"]` — paths: `.github/agents/**, .github/skills/**, .github/workflows/git-ape-plan.yml...`
+
+
+## Permissions
+
+- `contents: read`
+- `issues: write`
+
+## Jobs
+
+### `detect-and-issue`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | detect-and-issue |
+| **Runs On** | `ubuntu-latest` |
+| **Steps** | 5 |
+
+
+
+## Source
+
+<details>
+<summary>Click to view full workflow YAML</summary>
+
+```yaml
+name: "Git-Ape: Workshop Sync"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/agents/**'
+      - '.github/skills/**'
+      - '.github/workflows/git-ape-plan.yml'
+      - '.github/workflows/git-ape-deploy.yml'
+      - '.github/workflows/git-ape-destroy.yml'
+      - '.github/workflows/git-ape-verify.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  detect-and-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed feature files
+        id: changes
+        env:
+          # Use the push-event range so multi-commit pushes (and non-squash
+          # merges) are fully covered. github.event.before is all-zeros on the
+          # first push to a branch; fall back to HEAD~1 then. Mirrors
+          # git-ape-deck-build.yml.
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            DIFF_RANGE="HEAD~1..HEAD"
+          else
+            git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null || true
+            DIFF_RANGE="${BEFORE_SHA}..${AFTER_SHA}"
+          fi
+
+          PATHS=(
+            '.github/agents/'
+            '.github/skills/'
+            '.github/workflows/git-ape-plan.yml'
+            '.github/workflows/git-ape-deploy.yml'
+            '.github/workflows/git-ape-destroy.yml'
+            '.github/workflows/git-ape-verify.yml'
+          )
+          CHANGED=$(git diff --name-only "$DIFF_RANGE" -- "${PATHS[@]}" 2>/dev/null \
+            || git diff --name-only HEAD~1 -- "${PATHS[@]}")
+
+          if [[ -z "$CHANGED" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+          # Categorize changes
+          AGENTS_CHANGED=$(echo "$CHANGED" | grep -c '\.github/agents/' || true)
+          SKILLS_CHANGED=$(echo "$CHANGED" | grep -c '\.github/skills/' || true)
+          WORKFLOWS_CHANGED=$(echo "$CHANGED" | grep -c '\.github/workflows/' || true)
+
+          # Map to impacted tracks
+          TRACKS=""
+          if [[ "$AGENTS_CHANGED" -gt 0 ]]; then
+            TRACKS="Track 1 (Zero to Deploy), Track 2 (Deploy Like a Pro)"
+          fi
+          if [[ "$SKILLS_CHANGED" -gt 0 ]]; then
+            TRACKS="${TRACKS:+$TRACKS, }Track 2 (Deploy Like a Pro), Track 4 (Executive Briefing)"
+          fi
+          if [[ "$WORKFLOWS_CHANGED" -gt 0 ]]; then
+            TRACKS="${TRACKS:+$TRACKS, }Track 3 (Platform Engineering)"
+          fi
+
+          # Deduplicate track list
+          TRACKS=$(echo "$TRACKS" | tr ',' '\n' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/^,//')
+
+          {
+            echo "file_list<<EOF"
+            echo "$CHANGED"
+            echo "EOF"
+            echo "agents_changed=$AGENTS_CHANGED"
+            echo "skills_changed=$SKILLS_CHANGED"
+            echo "workflows_changed=$WORKFLOWS_CHANGED"
+            echo "tracks=$TRACKS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing open issue
+        if: steps.changes.outputs.skip != 'true'
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OPEN_COUNT=$(gh issue list --label workshop-sync --state open --json number --jq 'length')
+          echo "has_open=$([[ "$OPEN_COUNT" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Create workshop sync issue
+        if: steps.changes.outputs.skip != 'true' && steps.existing.outputs.has_open != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILE_LIST: ${{ steps.changes.outputs.file_list }}
+          AGENTS_CHANGED: ${{ steps.changes.outputs.agents_changed }}
+          SKILLS_CHANGED: ${{ steps.changes.outputs.skills_changed }}
+          WORKFLOWS_CHANGED: ${{ steps.changes.outputs.workflows_changed }}
+          TRACKS: ${{ steps.changes.outputs.tracks }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          # Build change summary
+          SUMMARY=""
+          if [[ "$AGENTS_CHANGED" -gt 0 ]]; then
+            SUMMARY="$AGENTS_CHANGED agent(s)"
+          fi
+          if [[ "$SKILLS_CHANGED" -gt 0 ]]; then
+            SUMMARY="${SUMMARY:+$SUMMARY, }$SKILLS_CHANGED skill(s)"
+          fi
+          if [[ "$WORKFLOWS_CHANGED" -gt 0 ]]; then
+            SUMMARY="${SUMMARY:+$SUMMARY, }$WORKFLOWS_CHANGED workflow(s)"
+          fi
+
+          # Read issue template and substitute variables
+          BODY=$(cat .github/workshop-sync-issue-template.md)
+          BODY="${BODY//\{\{SUMMARY\}\}/$SUMMARY}"
+          BODY="${BODY//\{\{FILE_LIST\}\}/$FILE_LIST}"
+          BODY="${BODY//\{\{TRACKS\}\}/$TRACKS}"
+          BODY="${BODY//\{\{COMMIT_SHA\}\}/$COMMIT_SHA}"
+
+          gh issue create \
+            --title "[Workshop Sync] Update workshops for: $SUMMARY" \
+            --body "$BODY" \
+            --label "workshop-sync"
+
+      - name: Append to existing issue
+        if: steps.changes.outputs.skip != 'true' && steps.existing.outputs.has_open == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILE_LIST: ${{ steps.changes.outputs.file_list }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          ISSUE_NUM=$(gh issue list --label workshop-sync --state open --json number --jq '.[0].number')
+          gh issue comment "$ISSUE_NUM" \
+            --body "**Additional changes detected** (commit $COMMIT_SHA):
+
+          \`\`\`
+          $FILE_LIST
+          \`\`\`
+
+          Please include these changes in the workshop update."
+
+```
+
+</details>

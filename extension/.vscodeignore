@@ -1,2 +1,17 @@
+# Local build artifacts
 package.template.json
 *.vsix
+
+# Internal-only .github content — keep agents/, skills/, plugin/, copilot-instructions.md
+# Everything else under .github/ is dev tooling (CI, evals, prompts, scripts) and
+# should not ship in the published VSIX.
+.github/actionlint.yaml
+.github/dependabot.yml
+.github/aw/**
+.github/copilot/**
+.github/evals/**
+.github/plugins/**
+.github/references/**
+.github/scripts/**
+.github/templates/**
+.github/workflows/**

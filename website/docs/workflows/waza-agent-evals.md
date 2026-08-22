@@ -1,0 +1,1189 @@
+---
+title: "Waza agent evals"
+sidebar_label: "Waza agent evals"
+description: "GitHub Actions workflow: Waza agent evals"
+---
+
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/waza-agent-evals.yml -->
+
+
+# Waza agent evals
+
+**Workflow file:** `.github/workflows/waza-agent-evals.yml`
+
+## Triggers
+
+- **`pull_request`** — paths: `.github/agents/**/*.agent.md, .github/evals/agents/**, .github/workflows/waza-agent-evals.yml`
+- **`workflow_dispatch`**
+
+
+## Permissions
+
+- `contents: read`
+- `pull-requests: write`
+
+## Jobs
+
+### `preflight`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | Preflight (check secrets) |
+| **Runs On** | `ubuntu-latest` |
+| **Steps** | 1 |
+
+### `prepare`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | Determine matrix |
+| **Runs On** | `ubuntu-latest` |
+| **Depends On** | `preflight` |
+| **Steps** | 2 |
+
+### `tokens`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | Agent file token comparison vs main (advisory) |
+| **Runs On** | `ubuntu-latest` |
+| **Depends On** | `preflight` |
+| **Steps** | 4 |
+
+### `eval`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | ${{ matrix.agent || 'eval (skipped — no agent changes)' }} |
+| **Runs On** | `ubuntu-latest` |
+| **Depends On** | `preflight`, `prepare` |
+| **Steps** | 6 |
+
+### `comment`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | Post advisory comment on PR |
+| **Runs On** | `ubuntu-latest` |
+| **Depends On** | `preflight`, `prepare`, `eval`, `tokens` |
+| **Steps** | 4 |
+
+
+
+## Source
+
+<details>
+<summary>Click to view full workflow YAML</summary>
+
+```yaml
+name: Waza agent evals
+
+# Advisory-mode evaluation of custom Git-Ape agents.
+# Runs on PRs that touch a `.agent.md` or its eval directory. Posts a comment
+# with results. Always non-blocking — eval failures never gate merges.
+#
+# Why a parallel workflow (vs. extending waza-evals.yml):
+#   - Different cost profile: agent evals are compound (agent + auto-loaded
+#     skills via plugin.json) and cost ~5 premium reqs each. No tier-based
+#     multi-model fan-out — single model (claude-sonnet-4.6) to cap quota.
+#   - Different artifacts: agents share `waza tokens profile` and `waza
+#     quality` parity with the skills workflow (each agent's `.agent.md`
+#     is staged as a temporary `SKILL.md` to satisfy waza's skill-walker);
+#     `waza check` is skipped because the agentskills.io spec it enforces
+#     rejects agent-specific frontmatter fields ('agents', 'argument-hint',
+#     'model', 'tools', 'user-invocable') as invalid.
+#   - Different layout: agent evals live at `.github/evals/agents/<name>/`,
+#     not `.github/evals/<name>/`. The eval consumes a mirrored
+#     `<name>.agent.md` next to `eval.yaml` via `skill_directories: ["."]`,
+#     which this workflow re-syncs from the canonical `.github/agents/` copy
+#     before running.
+#
+# Per-PR scoping:
+#   - Touch the workflow file → full matrix.
+#   - Touch `.github/agents/<name>.agent.md` → that agent only (if an eval
+#     directory exists).
+#   - Touch `.github/evals/agents/<name>/...` → that agent only.
+#   - workflow_dispatch with no input → full matrix.
+#   - workflow_dispatch with `agent:` input → that agent only.
+#
+# Notes:
+#   - The canonical agent list is discovered from the filesystem
+#     (`.github/evals/agents/<name>/eval.yaml`) — no separate manifest.
+#     Drop in a new agent eval directory and this workflow picks it up
+#     on the next PR.
+#   - copilot-sdk needs a Copilot-scoped token. Default GITHUB_TOKEN does
+#     NOT carry that scope. We use the `COPILOT_GITHUB_TOKEN` repo secret
+#     (already configured for waza-evals.yml).
+#   - Comment posting uses the default token (only needs pull-requests: write).
+
+on:
+  pull_request:
+    paths:
+      - '.github/agents/**/*.agent.md'
+      - '.github/evals/agents/**'
+      - '.github/workflows/waza-agent-evals.yml'
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Single agent name to run (default: all agents with an eval directory)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: waza-agent-evals-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Pin waza to a known-good release. Bump deliberately after validating that
+# the new version's eval behavior still matches our baselines. Never resolve
+# via `latest` — the microsoft/waza repo publishes the core release and the
+# sibling azd-extension release at the same commit, and GitHub's
+# `releases/latest` endpoint returns whichever was published last, which has
+# bitten PR #109 with a 404 on the wrong asset.
+env:
+  WAZA_VERSION: 'v0.37.0'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # preflight: verify that the COPILOT_GITHUB_TOKEN secret is configured.
+  # When absent, every downstream job is skipped cleanly (no red checks). The
+  # maintainer setup steps are in PR #109 / README.
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Preflight (check secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check COPILOT_GITHUB_TOKEN availability
+        id: check
+        env:
+          TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          if [ -z "${TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::COPILOT_GITHUB_TOKEN secret is not set. Skipping all waza agent eval jobs. See repo README / PR #109 for setup."
+            exit 0
+          fi
+          # Token is set — verify it can actually read the private microsoft/waza
+          # repo (release downloads need access). Reject silently if 401/403/404.
+          # Capture headers + body for diagnostics (no token is ever printed).
+          hdr_file=$(mktemp)
+          body_file=$(mktemp)
+          http_code=$(curl -sS -D "${hdr_file}" -o "${body_file}" -w "%{http_code}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/microsoft/waza/releases/latest || true)
+          if [ "${http_code}" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "COPILOT_GITHUB_TOKEN can read microsoft/waza — eval jobs will run."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::COPILOT_GITHUB_TOKEN cannot read microsoft/waza (HTTP ${http_code}). Skipping all waza agent eval jobs."
+            echo "--- diagnostic: response headers (token not included) ---"
+            grep -iE '^(http|x-oauth-scopes|x-accepted-oauth-scopes|x-github-sso|x-ratelimit-remaining|x-ratelimit-used|x-github-request-id):' "${hdr_file}" || true
+            echo "--- diagnostic: response body (first 500 bytes) ---"
+            head -c 500 "${body_file}" || true
+            echo
+            echo "--- diagnostic: token-user identity probe ---"
+            user_code=$(curl -sS -o "${body_file}.user" -w "%{http_code}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/user || true)
+            echo "GET /user -> HTTP ${user_code}"
+            if [ "${user_code}" = "200" ]; then
+              jq -r '"token user: \(.login)  (type: \(.type))"' "${body_file}.user" 2>/dev/null || head -c 200 "${body_file}.user"
+            else
+              head -c 300 "${body_file}.user" || true
+            fi
+            echo
+          fi
+          rm -f "${hdr_file}" "${body_file}" "${body_file}.user"
+
+  # ---------------------------------------------------------------------------
+  # prepare: discover all configured agents from the filesystem, then narrow
+  # to the subset affected by this PR (or run all on workflow_dispatch / a
+  # workflow-file change). Outputs:
+  #   - agents: JSON array of selected agent names (drives comment ordering)
+  #   - legs:   JSON array of { agent } entries for matrix.include
+  #   - mode/reason: human-readable scope info for the PR comment banner
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: Determine matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: preflight
+    if: needs.preflight.outputs.enabled == 'true'
+    outputs:
+      agents: ${{ steps.select.outputs.agents }}
+      legs: ${{ steps.select.outputs.legs }}
+      reason: ${{ steps.select.outputs.reason }}
+      mode: ${{ steps.select.outputs.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select agents
+        id: select
+        env:
+          REQUESTED: ${{ inputs.agent }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Canonical agent list: every directory under .github/evals/agents/
+          # that contains an eval.yaml. Filesystem is the source of truth.
+          # The directory may not exist yet (no agent suites ported) — treat as empty.
+          if [ -d .github/evals/agents ]; then
+            ALL_AGENTS="$(
+              find .github/evals/agents -mindepth 2 -maxdepth 2 -name eval.yaml \
+                | awk -F/ '{print $4}' \
+                | sort -u \
+                | jq -R -s -c 'split("\n") | map(select(length > 0))'
+            )"
+          else
+            ALL_AGENTS="[]"
+          fi
+          echo "ALL_AGENTS=$ALL_AGENTS"
+
+          # emit <selected-agents-json> <mode> <human-reason>
+          emit() {
+            local selected="$1" mode="$2" reason="$3"
+            local legs
+            legs="$(echo "$selected" | jq -c '[ .[] | { agent: . } ]')"
+            {
+              echo "agents=${selected}"
+              echo "legs=${legs}"
+              echo "mode=${mode}"
+              echo "reason=${reason}"
+            } >> "$GITHUB_OUTPUT"
+            echo "Selected agents: ${selected}"
+            echo "Legs: ${legs}"
+            echo "Mode: ${mode}"
+            echo "Reason: ${reason}"
+          }
+
+          # --- Case 1: workflow_dispatch with single-agent input ---
+          if [ "$EVENT" = "workflow_dispatch" ] && [ -n "${REQUESTED:-}" ]; then
+            if echo "$ALL_AGENTS" | jq -e --arg a "$REQUESTED" '. | index($a)' > /dev/null; then
+              emit "[\"$REQUESTED\"]" "single" "workflow_dispatch input ($REQUESTED)"
+              exit 0
+            else
+              echo "::error::Requested agent '$REQUESTED' has no eval directory under .github/evals/agents/ (available: $ALL_AGENTS)"
+              exit 1
+            fi
+          fi
+
+          # --- Case 2: workflow_dispatch without input → full matrix ---
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            emit "$ALL_AGENTS" "full" "workflow_dispatch (no input → full matrix)"
+            exit 0
+          fi
+
+          # --- Case 3: pull_request — diff against base ---
+          if [ -z "${BASE_SHA:-}" ] || [ -z "${HEAD_SHA:-}" ]; then
+            emit "$ALL_AGENTS" "full" "pull_request: missing base/head SHA → full matrix"
+            exit 0
+          fi
+
+          git fetch --no-tags origin "$BASE_SHA" 2>/dev/null || true
+
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
+          if [ -z "$changed" ]; then
+            emit "[]" "none" "no files changed in PR"
+            exit 0
+          fi
+
+          echo "--- changed files ---"
+          echo "$changed"
+          echo "---------------------"
+
+          # Workflow-file changes → full matrix (semantics of this workflow itself changed).
+          if echo "$changed" | grep -qE '^\.github/workflows/waza-agent-evals\.yml$'; then
+            emit "$ALL_AGENTS" "full" "workflow file changed → full matrix"
+            exit 0
+          fi
+
+          # Per-agent changes from both possible paths:
+          #   .github/agents/<name>.agent.md
+          #   .github/evals/agents/<name>/...
+          # shellcheck disable=SC2016
+          changed_agents=$(
+            echo "$changed" | awk -F/ '
+              /^\.github\/agents\/.+\.agent\.md$/ {
+                fname=$3
+                sub(/\.agent\.md$/, "", fname)
+                print fname
+              }
+              /^\.github\/evals\/agents\// && NF >= 5 {print $4}
+            ' | sort -u
+          )
+
+          if [ -z "$changed_agents" ]; then
+            emit "[]" "none" "no per-agent files changed"
+            exit 0
+          fi
+
+          # Intersect with the configured (filesystem) list.
+          selected=$(
+            printf '%s\n' "$changed_agents" \
+              | jq -R -s -c --argjson all "$ALL_AGENTS" \
+                  '[ split("\n")[] | select(length > 0) | select(IN($all[])) ]'
+          )
+
+          if [ "$selected" = "[]" ]; then
+            emit "[]" "none" "changed agent(s) have no eval directory: $(echo "$changed_agents" | tr '\n' ' ')"
+            exit 0
+          fi
+
+          count=$(echo "$selected" | jq 'length')
+          names=$(echo "$selected" | jq -r 'join(", ")')
+          emit "$selected" "subset" "diff-scoped: ${count} changed agent(s) — ${names}"
+
+  # ---------------------------------------------------------------------------
+  # tokens: token comparison vs main for `.agent.md` files. Runs once (not
+  # per-matrix) and uploads a single JSON artifact consumed by the comment
+  # job. `waza tokens compare` is local computation only — no LLM, no quota
+  # cost. Advisory — never fails the workflow.
+  # ---------------------------------------------------------------------------
+  tokens:
+    name: Agent file token comparison vs main (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: preflight
+    if: needs.preflight.outputs.enabled == 'true'
+    continue-on-error: true
+    env:
+      # Only used for the release-API lookup (public-repo read). Keeps the
+      # secret list consistent across all jobs in this workflow.
+      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      WAZA_NO_UPDATE_CHECK: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install waza (pinned release)
+        run: |
+          set -euo pipefail
+          waza_version="${WAZA_VERSION}"
+          if [ -z "${waza_version}" ]; then
+            echo "::error::WAZA_VERSION env var is not set"
+            exit 1
+          fi
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m)"
+          case "${arch}" in
+            x86_64|amd64) arch=amd64 ;;
+            aarch64|arm64) arch=arm64 ;;
+          esac
+          asset="waza-${os}-${arch}"
+          base="https://github.com/microsoft/waza/releases/download/${waza_version}"
+          tmp="$(mktemp -d)"
+          curl -fsSL -o "${tmp}/${asset}"      "${base}/${asset}"
+          curl -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt"
+          ( cd "${tmp}" && grep " ${asset}$" checksums.txt | sha256sum -c - )
+          sudo install -m 0755 "${tmp}/${asset}" /usr/local/bin/waza
+          rm -rf "${tmp}"
+          waza --version
+
+      - name: Compare .agent.md token counts vs origin/main
+        # Advisory step — never gate the workflow on filter quirks. Disable
+        # `-e` (GitHub injects `bash -e {0}`) so a single jq failure can't
+        # kill the step before the recovery branches run.
+        shell: bash {0}
+        run: |
+          set -uo pipefail
+          mkdir -p .waza-results
+          # `waza tokens compare` without --skills walks every .md file
+          # in the repo. We post-filter to .github/agents/*.agent.md
+          # entries only. --threshold 0 keeps the exit code clean
+          # (advisory, never gates).
+          waza tokens compare origin/main --threshold 0 --format json \
+            > .waza-results/tokens-compare-raw.json 2>&1 || true
+
+          # Filter to .agent.md files in the agents directory. Tolerate
+          # multiple top-level schemas across waza versions — if the JSON
+          # has a top-level `files` array, filter that; otherwise pass
+          # the raw payload through and let the comment script decide.
+          # `.path // ""` makes the regex test null-safe (some waza
+          # versions emit summary/totals entries with a null path).
+          if jq -e 'type == "object" and has("files")' \
+               .waza-results/tokens-compare-raw.json > /dev/null 2>&1; then
+            jq '{
+              base: .base,
+              head: .head,
+              files: [ .files[]
+                | select((.path // "") | test("^\\.github/agents/.+\\.agent\\.md$")) ]
+            }' .waza-results/tokens-compare-raw.json \
+              > .waza-results/tokens-compare.json \
+              || cp .waza-results/tokens-compare-raw.json .waza-results/tokens-compare.json
+          else
+            cp .waza-results/tokens-compare-raw.json .waza-results/tokens-compare.json
+          fi
+
+          echo "--- filtered agent token comparison ---"
+          cat .waza-results/tokens-compare.json || true
+          exit 0
+
+      - name: Upload token comparison artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: waza-agent-tokens-compare
+          path: .waza-results/tokens-compare.json
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: true
+
+  # ---------------------------------------------------------------------------
+  # eval: matrix (agent). Each leg runs `waza run` on the agent's compound
+  # eval and produces a markdown snippet for the PR comment. Single-model
+  # (claude-sonnet-4.6) to cap quota cost — each leg averages ~5 premium reqs.
+  # ---------------------------------------------------------------------------
+  eval:
+    name: "${{ matrix.agent || 'eval (skipped — no agent changes)' }}"
+    needs: [preflight, prepare]
+    if: needs.preflight.outputs.enabled == 'true' && needs.prepare.outputs.legs != '[]' && needs.prepare.outputs.legs != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      # Throttle concurrent SDK sessions to keep us under the Copilot models
+      # API rate-limit ceiling. Without this cap, bursting 8 agent legs in
+      # parallel reliably trips `Failed to list models: 429` on a subset of
+      # legs — they fail in <2s without consuming any premium requests and
+      # surface as fake low scores. 3 concurrent SDK sessions has empirically
+      # stayed under the limit; raise cautiously.
+      max-parallel: 3
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.legs) }}
+    env:
+      # copilot-sdk authenticates with this token. Default GITHUB_TOKEN does
+      # not carry Copilot scope, so we use a dedicated PAT in repo secrets.
+      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      WAZA_NO_UPDATE_CHECK: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install waza (pinned release)
+        run: |
+          set -euo pipefail
+          waza_version="${WAZA_VERSION}"
+          if [ -z "${waza_version}" ]; then
+            echo "::error::WAZA_VERSION env var is not set"
+            exit 1
+          fi
+          echo "Installing waza ${waza_version}"
+
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m)"
+          case "${arch}" in
+            x86_64|amd64) arch=amd64 ;;
+            aarch64|arm64) arch=arm64 ;;
+          esac
+          asset="waza-${os}-${arch}"
+          base="https://github.com/microsoft/waza/releases/download/${waza_version}"
+          tmp="$(mktemp -d)"
+
+          curl -fsSL -o "${tmp}/${asset}"      "${base}/${asset}"
+          curl -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt"
+          ( cd "${tmp}" && grep " ${asset}$" checksums.txt | sha256sum -c - )
+          sudo install -m 0755 "${tmp}/${asset}" /usr/local/bin/waza
+          rm -rf "${tmp}"
+          waza --version
+
+      - name: Sync mirrored .agent.md from canonical .github/agents/
+        # The eval's `skill_directories: ["."]` loads the sibling .agent.md
+        # mirror; the canonical source lives in .github/agents/. Copy on
+        # every run so the eval always reflects the canonical agent file
+        # under test, without requiring contributors to keep them in sync
+        # by hand.
+        run: |
+          set -euo pipefail
+          agent="${{ matrix.agent }}"
+          src=".github/agents/${agent}.agent.md"
+          dst=".github/evals/agents/${agent}/${agent}.agent.md"
+          if [ -f "$src" ] && [ -d ".github/evals/agents/${agent}" ]; then
+            cp "$src" "$dst"
+            echo "Synced ${src} -> ${dst}"
+          else
+            echo "::warning::Missing canonical agent file or eval dir for ${agent}: src=${src}, dst-dir=.github/evals/agents/${agent}"
+          fi
+
+      - name: Run waza eval (advisory)
+        id: run
+        run: |
+          # GitHub's default shell is `bash -e`. `set -uo pipefail` does NOT
+          # disable -e, so a non-zero exit from `waza run` (e.g. metric below
+          # threshold) kills the script before `rc=$?` runs. Explicitly
+          # disable errexit so we can capture the code and surface it in the
+          # PR comment instead of failing the leg silently.
+          set +e
+          set -uo pipefail
+          mkdir -p .waza-results
+          agent="${{ matrix.agent }}"
+          spec=".github/evals/agents/${agent}/eval.yaml"
+
+          # ---- Retry-on-infra-failure wrapper -------------------------------
+          # Three infra-failure classes can corrupt a leg WITHOUT being model
+          # quality signal — see the same pattern in waza-evals.yml and
+          # waza-trends.yml. Detect ALL three classes per attempt, retry on
+          # any of them (with longer backoff on quota), and INFRA_FAILED
+          # the leg if retries exhaust so we don't blend fake low scores
+          # into the PR comment:
+          #   1. `Session not found` (JSON-RPC -32603): the Copilot SDK
+          #      dropped the session before waza's `prompt` grader could
+          #      resume it (continue_session: true). Validations get wiped
+          #      to null on affected tasks, dragging the leg aggregate down.
+          #   2. `failed to run grader`: the judge LLM backend itself
+          #      crashed during a grader call. Status=error, empty
+          #      validations, fake low score.
+          #   3. `Failed to list models: 429`: Copilot models API rate-limit
+          #      hit BEFORE the agent could start. Worst case: all tasks
+          #      return status=error in <2s with deterministic 0-ish scores.
+          #
+          # All three are transient. We retry up to 2 times (3 total
+          # attempts). On exhaustion, we delete the corrupt JSON and write
+          # an INFRA_FAILED sidecar + markdown notice; the aggregator's
+          # fallback path (no JSON → use rawMd) will surface that notice
+          # instead of polluting the score table.
+          #
+          # --judge-model is decoupled from the executor model and pinned
+          # to claude-opus-4.7 for TWO reasons:
+          #   1. No self-grading bias — opus-4.7 is NOT in any runner
+          #      roster (this workflow currently fixes the runner to
+          #      sonnet-4.6, but the rule holds: judge is always outside
+          #      whatever set of models we ever fan runners across).
+          #   2. Judge capability ≥ runner — opus-4.7 is chosen as a
+          #      higher-capability judge than sonnet-4.6 so quality scores
+          #      have headroom and aren't capped by a same-tier judge.
+          # If we ever add per-agent model overrides AND opus-4.7 lands in
+          # a runner roster, re-pin the judge to a model still outside it.
+          max_attempts=3
+          attempt=0
+          rc=0
+          while [ $attempt -lt $max_attempts ]; do
+            attempt=$((attempt + 1))
+            echo "::group::waza run attempt ${attempt}/${max_attempts} for ${agent}"
+            rc=0
+            waza run "${spec}" \
+              --model "claude-sonnet-4.6" \
+              --judge-model "claude-opus-4.7" \
+              --suggest \
+              --recommend \
+              --format "github-comment" \
+              --output ".waza-results/${agent}.json" \
+              --reporter "junit:.waza-results/${agent}.junit.xml" \
+              > ".waza-results/${agent}.md"
+            rc=$?
+            echo "::endgroup::"
+
+            if [ ! -f ".waza-results/${agent}.json" ]; then
+              echo "::warning::attempt ${attempt}: no JSON produced (rc=${rc})"
+              if [ $attempt -lt $max_attempts ]; then sleep 5; continue; fi
+              break
+            fi
+
+            # Count each infra-failure class in this attempt's artifact.
+            infra_counts=$(jq -r '
+              [.tasks[]?.runs[]? | (.error_msg // "")] as $errs
+              | { session: ([$errs[] | select(contains("Session not found"))] | length),
+                  grader:  ([$errs[] | select(contains("failed to run grader"))]  | length),
+                  quota:   ([$errs[] | select(contains("Failed to list models: 429"))] | length) }
+              | "\(.session) \(.grader) \(.quota)"
+            ' ".waza-results/${agent}.json" 2>/dev/null || echo "0 0 0")
+            session_errs=$(echo "${infra_counts}" | awk '{print $1}')
+            grader_errs=$(echo "${infra_counts}" | awk '{print $2}')
+            quota_errs=$(echo "${infra_counts}" | awk '{print $3}')
+            total_infra=$((session_errs + grader_errs + quota_errs))
+
+            if [ "${total_infra}" = "0" ]; then
+              echo "::notice::${agent} attempt ${attempt} clean (no infra-failure errors)"
+              break
+            fi
+
+            echo "::warning::${agent} attempt ${attempt} hit ${session_errs} session-not-found + ${grader_errs} grader-infra + ${quota_errs} quota-429 error(s)"
+            if [ $attempt -lt $max_attempts ]; then
+              # Discard partial artifacts so the next attempt is independent.
+              rm -f ".waza-results/${agent}.json" ".waza-results/${agent}.md" ".waza-results/${agent}.junit.xml"
+              # Quota errors need longer backoff than session/grader to let
+              # the Copilot models API window reset.
+              if [ "${quota_errs}" != "0" ]; then sleep 30; else sleep 5; fi
+            fi
+          done
+
+          # Final classification: if any infra errors remain after all
+          # attempts, treat the leg as INFRA_FAILED and discard the corrupt
+          # JSON so it doesn't pollute the score table.
+          final_session=0
+          final_grader=0
+          final_quota=0
+          if [ -f ".waza-results/${agent}.json" ]; then
+            infra_counts=$(jq -r '
+              [.tasks[]?.runs[]? | (.error_msg // "")] as $errs
+              | { session: ([$errs[] | select(contains("Session not found"))] | length),
+                  grader:  ([$errs[] | select(contains("failed to run grader"))]  | length),
+                  quota:   ([$errs[] | select(contains("Failed to list models: 429"))] | length) }
+              | "\(.session) \(.grader) \(.quota)"
+            ' ".waza-results/${agent}.json" 2>/dev/null || echo "0 0 0")
+            final_session=$(echo "${infra_counts}" | awk '{print $1}')
+            final_grader=$(echo "${infra_counts}" | awk '{print $2}')
+            final_quota=$(echo "${infra_counts}" | awk '{print $3}')
+          fi
+          final_infra=$((final_session + final_grader + final_quota))
+
+          if [ "${final_infra}" != "0" ]; then
+            echo "::error::${agent} still has ${final_session} session-not-found + ${final_grader} grader-infra + ${final_quota} quota-429 error(s) after ${max_attempts} attempts — discarding corrupt artifact"
+            printf 'session_not_found_errors=%s\ngrader_failed_errors=%s\nquota_429_errors=%s\nattempts=%s\nlast_exit_code=%s\n' \
+              "${final_session}" "${final_grader}" "${final_quota}" "${max_attempts}" "${rc}" \
+              > ".waza-results/${agent}.infra-failed"
+            rm -f ".waza-results/${agent}.json" ".waza-results/${agent}.junit.xml"
+            # Replace the markdown with a clear INFRA_FAILED notice. Use
+            # printf (no heredoc) because heredoc EOF terminators clash
+            # with YAML block-scalar indentation rules in `run: |` steps.
+            {
+              printf '### `%s` — INFRA_FAILED\n\n' "${agent}"
+              printf 'waza run hit infra-level error(s) from the Copilot SDK '
+              printf 'after **%s attempt(s)**:\n\n' "${max_attempts}"
+              printf -- '- `Session not found` (JSON-RPC -32603): **%s**\n' "${final_session}"
+              printf -- '- `failed to run grader` (judge backend crash): **%s**\n' "${final_grader}"
+              printf -- '- `Failed to list models: 429` (Copilot quota): **%s**\n\n' "${final_quota}"
+              printf 'These error classes are transient infrastructure issues, '
+              printf 'not model-quality signal. **No score is reported for this leg** '
+              printf '— treating a corrupted run as a low score would be misleading. '
+              printf 'See the workflow logs and the `waza-agent-results-%s` artifact for details.\n' "${agent}"
+            } > ".waza-results/${agent}.md"
+          fi
+          # ---- end retry wrapper --------------------------------------------
+
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          echo
+          echo "--- captured PR-comment markdown ---"
+          cat ".waza-results/${agent}.md" || true
+          # Never fail the step itself — surface the code in the comment.
+          exit 0
+
+      - name: Agent signal — tokens profile + quality (advisory)
+        # Parity with `waza-evals.yml`: surface `waza tokens profile` and
+        # `waza quality` output for `.agent.md` files. Both commands target
+        # `SKILL.md` only, so we stage a temporary copy of the agent file
+        # named `SKILL.md` in a NON-DOT directory ('.waza-results/...' or
+        # any other dotted path is silently skipped by waza's workspace
+        # walker). The stage dir is named with the agent slug so judge
+        # output ('📊 <name>: ...') and table headers display the agent
+        # name instead of a random tmp suffix.
+        #
+        # `waza check` is intentionally skipped: it validates the
+        # agentskills.io SKILL spec, which rejects agent-specific
+        # frontmatter fields ('agents', 'argument-hint', 'model',
+        # 'tools', 'user-invocable') as invalid. Running it would
+        # surface confusing "spec failures" that aren't real agent
+        # quality signal.
+        #
+        # `waza quality` consumes ~1 premium Copilot request per leg via
+        # its LLM judge (claude-sonnet-4.6 by default). Failures are
+        # tolerated with `|| true` so a flaky judge call doesn't tank
+        # the whole leg.
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p .waza-results
+          agent="${{ matrix.agent }}"
+          src=".github/agents/${agent}.agent.md"
+          if [ ! -f "$src" ]; then
+            echo "::warning::canonical agent file missing for ${agent}: ${src} — skipping signal steps"
+            exit 0
+          fi
+
+          # Stage as SKILL.md in a non-dotted path so waza's workspace
+          # walker (which skips hidden/dotted dirs) finds it.
+          stage_root="waza-agent-stage"
+          stage_dir="${stage_root}/${agent}"
+          rm -rf "$stage_dir"
+          mkdir -p "$stage_dir"
+          cp "$src" "${stage_dir}/SKILL.md"
+
+          echo "::group::waza tokens profile (${agent})"
+          waza tokens profile "$stage_dir" \
+            > ".waza-results/${agent}-tokens-profile.txt" 2>&1 || true
+          # Strip the temp stage_root prefix from the human-readable output
+          # so the display reads "agent-name:" instead of
+          # "waza-agent-stage/agent-name:".
+          sed -i "s|${stage_root}/||g" ".waza-results/${agent}-tokens-profile.txt" || true
+          cat ".waza-results/${agent}-tokens-profile.txt" || true
+          echo "::endgroup::"
+
+          echo "::group::waza quality (${agent}) — LLM judge, ~1 premium req"
+          waza quality "$stage_dir" --format table \
+            > ".waza-results/${agent}-quality.txt" 2>&1 || true
+          sed -i "s|${stage_root}/||g" ".waza-results/${agent}-quality.txt" || true
+          cat ".waza-results/${agent}-quality.txt" || true
+          echo "::endgroup::"
+
+          # Clean up stage so it doesn't end up in the artifact.
+          rm -rf "$stage_root"
+
+      - name: Upload eval artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: waza-agent-results-${{ matrix.agent }}
+          path: .waza-results/
+          retention-days: 14
+          if-no-files-found: warn
+          # `.waza-results/` starts with a dot, and upload-artifact treats
+          # any path segment starting with `.` as hidden by default. Without
+          # this, the artifact is silently empty.
+          include-hidden-files: true
+
+  # ---------------------------------------------------------------------------
+  # comment: fan-in. Downloads all artifacts and posts one aggregated comment.
+  # Idempotent — uses an HTML marker to update the same comment on subsequent
+  # pushes instead of stacking new ones.
+  # ---------------------------------------------------------------------------
+  comment:
+    name: Post advisory comment on PR
+    needs: [preflight, prepare, eval, tokens]
+    if: github.event_name == 'pull_request' && needs.preflight.outputs.enabled == 'true' && always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download all eval artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: waza-agent-results-*
+          merge-multiple: false
+
+      - name: Download token comparison artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: waza-agent-tokens-compare
+          path: artifacts/waza-agent-tokens-compare
+        continue-on-error: true
+
+      # `actions/download-artifact@v8` is documented as creating a per-artifact
+      # subdirectory under `path` when `pattern` is used with `merge-multiple:
+      # false`. In practice, when only ONE artifact matches the pattern
+      # (typical for diff-scoped PR runs with a single changed agent), v8
+      # extracts the artifact contents directly into `path` with no
+      # subdirectory — the same behavior as a single-name download. The
+      # downstream aggregator script expects the nested layout, so this step
+      # normalizes the flat case back into nested. Idempotent: a no-op when
+      # the layout is already nested (multi-agent runs).
+      - name: Normalize artifact layout (handle v8 single-match flattening)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d artifacts ]; then
+            echo "artifacts/ does not exist — nothing to normalize"
+            exit 0
+          fi
+
+          echo "--- artifact layout BEFORE normalization ---"
+          find artifacts -maxdepth 3 -mindepth 1 | sort
+
+          shopt -s nullglob
+          cd artifacts
+          for f in *.json *.md *.junit.xml *-quality.txt *-tokens-profile.txt *.infra-failed; do
+            [ -f "$f" ] || continue
+            agent="$f"
+            for suf in -quality.txt -tokens-profile.txt .junit.xml .json .md .infra-failed; do
+              agent="${agent%"$suf"}"
+            done
+            if [ -z "$agent" ] || [ "$agent" = "$f" ]; then
+              echo "::warning::Could not derive agent slug from filename '$f' — leaving in place"
+              continue
+            fi
+            mkdir -p "waza-agent-results-${agent}"
+            mv -- "$f" "waza-agent-results-${agent}/"
+            echo "  moved: $f -> waza-agent-results-${agent}/"
+          done
+          cd -
+
+          echo "--- artifact layout AFTER normalization ---"
+          find artifacts -maxdepth 3 -mindepth 1 | sort
+
+      - name: Aggregate and post comment
+        uses: actions/github-script@v9
+        env:
+          PREPARE_MODE: ${{ needs.prepare.outputs.mode }}
+          PREPARE_REASON: ${{ needs.prepare.outputs.reason }}
+          PREPARE_AGENTS: ${{ needs.prepare.outputs.agents }}
+        with:
+          # Default GITHUB_TOKEN — has `pull-requests: write` and is the
+          # right identity for bot-style comments.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const agents = JSON.parse(process.env.PREPARE_AGENTS || '[]');
+            const root = 'artifacts';
+            const allDirs = fs.existsSync(root)
+              ? fs.readdirSync(root)
+                  .filter((d) => d.startsWith('waza-agent-results-'))
+                  .sort()
+              : [];
+
+            // ---------------- helpers ----------------
+            function readFileOrNull(filePath) {
+              try {
+                if (!fs.existsSync(filePath)) return null;
+                const c = fs.readFileSync(filePath, 'utf8');
+                return c.length > 0 ? c : null;
+              } catch (e) {
+                core.debug(`readFileOrNull: ${filePath} -> ${e.message}`);
+                return null;
+              }
+            }
+
+            function readJsonOrNull(filePath) {
+              const raw = readFileOrNull(filePath);
+              if (!raw) return null;
+              try {
+                return JSON.parse(raw);
+              } catch (e) {
+                core.debug(`readJsonOrNull: parse failed for ${filePath}: ${e.message}`);
+                return null;
+              }
+            }
+
+            function fmtMs(ms) {
+              if (typeof ms !== 'number' || !isFinite(ms)) return '—';
+              if (ms < 1000) return `${ms}ms`;
+              const s = ms / 1000;
+              if (s < 60) return `${s.toFixed(1)}s`;
+              const m = Math.floor(s / 60);
+              return `${m}m${(s - m * 60).toFixed(0)}s`;
+            }
+
+            function fmtTokens(n) {
+              if (typeof n !== 'number' || !isFinite(n) || n === 0) return '—';
+              if (n < 1000) return String(n);
+              if (n < 1_000_000) return `${(n / 1000).toFixed(1)}K`;
+              return `${(n / 1_000_000).toFixed(2)}M`;
+            }
+
+            function scoreEmoji(score, succeeded, total) {
+              if (typeof score !== 'number') return '⚠️';
+              if (succeeded === total && total > 0) return '✅';
+              if (succeeded > 0) return '⚠️';
+              return '❌';
+            }
+
+            function truncateText(text, maxLines) {
+              if (!text) return '';
+              const lines = text.split('\n');
+              if (lines.length <= maxLines) return text;
+              return lines.slice(0, maxLines).join('\n')
+                + `\n… (${lines.length - maxLines} more lines truncated)`;
+            }
+
+            // ---------------- top-level: agent token compare ----------------
+            const tcPath = path.join(root, 'waza-agent-tokens-compare', 'tokens-compare.json');
+            const tc = readJsonOrNull(tcPath);
+            let tokenCompareSection = '';
+            if (tc) {
+              const files = Array.isArray(tc.files) ? tc.files : [];
+              if (files.length > 0) {
+                const rows = files
+                  .map((f) => {
+                    const before = (f.base_tokens != null) ? f.base_tokens
+                                  : (f.before != null) ? f.before : '—';
+                    const after = (f.head_tokens != null) ? f.head_tokens
+                                  : (f.after != null) ? f.after
+                                  : (f.tokens != null) ? f.tokens : '—';
+                    const delta = (f.delta != null) ? f.delta
+                                  : (typeof before === 'number' && typeof after === 'number')
+                                    ? (after - before) : '—';
+                    const pct = (f.percent_change != null) ? `${f.percent_change.toFixed(1)}%`
+                                : (typeof before === 'number' && before > 0 && typeof delta === 'number')
+                                  ? `${(delta * 100 / before).toFixed(1)}%`
+                                  : '—';
+                    const sign = (typeof delta === 'number' && delta > 0) ? '+' : '';
+                    return `| \`${f.path}\` | ${before} | ${after} | ${sign}${delta} | ${pct} |`;
+                  })
+                  .join('\n');
+                tokenCompareSection = [
+                  '<details><summary>📊 Agent file token comparison vs <code>main</code> (advisory)</summary>',
+                  '',
+                  `| File | Base | Head | Δ | % |`,
+                  `|---|---|---|---|---|`,
+                  rows,
+                  '',
+                  '</details>',
+                ].join('\n');
+              } else {
+                tokenCompareSection = [
+                  '<details><summary>📊 Agent file token comparison vs <code>main</code> (advisory)</summary>',
+                  '',
+                  '_No `.agent.md` files changed vs `main` (or token-compare returned no entries)._',
+                  '',
+                  '</details>',
+                ].join('\n');
+              }
+            }
+
+            // ---------------- per-agent sections ----------------
+            const byAgent = new Map();
+            for (const d of allDirs) {
+              const agent = d.replace(/^waza-agent-results-/, '');
+              byAgent.set(agent, d);
+            }
+
+            const sections = [];
+            for (const agent of agents) {
+              const dir = byAgent.get(agent);
+              if (!dir) {
+                sections.push([
+                  `### Agent: \`${agent}\``,
+                  '',
+                  '_No artifact produced. See workflow logs._',
+                ].join('\n'));
+                continue;
+              }
+
+              const jsonPath = path.join(root, dir, `${agent}.json`);
+              const rawMd = readFileOrNull(path.join(root, dir, `${agent}.md`));
+              const json = readJsonOrNull(jsonPath);
+
+              if (!json) {
+                // Fall back to raw github-comment markdown if JSON is unavailable.
+                sections.push([
+                  `### Agent: \`${agent}\``,
+                  '',
+                  rawMd || '_No output captured. See workflow logs._',
+                ].join('\n'));
+                continue;
+              }
+
+              const summary = json.summary || {};
+              const usage = summary.usage || {};
+              const total = summary.total_tests || 0;
+              const ok = summary.succeeded || 0;
+              const failed = summary.failed || 0;
+              const score = (typeof summary.aggregate_score === 'number')
+                ? summary.aggregate_score.toFixed(2) : '—';
+              const emoji = scoreEmoji(summary.aggregate_score, ok, total);
+
+              const headline =
+                `**Score:** ${emoji} ${score} (${ok}/${total} tasks) | ` +
+                `**Duration:** ${fmtMs(summary.duration_ms)} | ` +
+                `**Cost:** ${usage.premium_requests ?? '—'} premium req${usage.premium_requests === 1 ? '' : 's'}, ` +
+                `${usage.turns ?? '—'} turns | ` +
+                `**Tokens:** ${fmtTokens(usage.input_tokens)} in / ${fmtTokens(usage.output_tokens)} out` +
+                (usage.cache_read_tokens ? ` / ${fmtTokens(usage.cache_read_tokens)} cache-read` : '');
+
+              // Per-task table.
+              const tasks = Array.isArray(json.tasks) ? json.tasks : [];
+              const taskRows = tasks.map((t) => {
+                const run0 = (t.runs && t.runs[0]) || {};
+                const sd = run0.session_digest || {};
+                const taskScore = (typeof t.score === 'number') ? t.score.toFixed(2)
+                                : (typeof run0.score === 'number') ? run0.score.toFixed(2)
+                                : '—';
+                const passed = run0.status === 'passed' || run0.status === 'pass';
+                const statusEmoji = passed ? '✅' : (run0.status === 'error' ? '⚠️' : '❌');
+                const toolCalls = sd.tool_call_count ?? '—';
+                const graders = (run0.validations)
+                  ? Object.keys(run0.validations).join(', ')
+                  : '—';
+                const name = (t.display_name || t.name || t.id || '(unnamed)')
+                  .replace(/\|/g, '\\|');
+                return `| ${name} | ${taskScore} | ${statusEmoji} | ${toolCalls} | ${graders} |`;
+              }).join('\n');
+              const taskTable = tasks.length > 0
+                ? [
+                    '| Task | Score | Status | Tool calls | Graders |',
+                    '|---|---|---|---|---|',
+                    taskRows,
+                  ].join('\n')
+                : '_No task data in JSON output._';
+
+              // Per-agent signal sections (parity with skills workflow):
+              // model-independent, fed by per-leg `waza tokens profile`
+              // and `waza quality` output. Both files live alongside the
+              // eval JSON/markdown in the same artifact dir.
+              const tokensProfilePath = path.join(root, dir, `${agent}-tokens-profile.txt`);
+              const tokensProfileRaw = readFileOrNull(tokensProfilePath);
+              const tokensSection = tokensProfileRaw
+                ? [
+                    '<details><summary>🔢 Tokens (count + profile)</summary>',
+                    '',
+                    '```',
+                    tokensProfileRaw.trim(),
+                    '```',
+                    '',
+                    '</details>',
+                  ].join('\n')
+                : '';
+
+              const qualityPath = path.join(root, dir, `${agent}-quality.txt`);
+              const qualityRaw = readFileOrNull(qualityPath);
+              const qualitySection = qualityRaw
+                ? [
+                    '<details><summary>🎯 Quality (5-dim table)</summary>',
+                    '',
+                    '```',
+                    qualityRaw.trim(),
+                    '```',
+                    '',
+                    '_Scored by `waza quality` with `claude-sonnet-4.6` as LLM judge. The agent\'s `.agent.md` is staged as `SKILL.md` for analysis; treat dimensions as advisory signal (the rubric was authored for skills)._',
+                    '',
+                    '</details>',
+                  ].join('\n')
+                : '';
+
+              // Failure details (only when something failed).
+              const failureDetails = [];
+              for (const t of tasks) {
+                const run0 = (t.runs && t.runs[0]) || {};
+                if (run0.status === 'passed' || run0.status === 'pass') continue;
+                const name = t.display_name || t.name || t.id || '(unnamed)';
+                const lines = [`#### Task: ${name}`, ''];
+                const validations = run0.validations || {};
+                for (const [gname, v] of Object.entries(validations)) {
+                  if (v.passed) continue;
+                  const fb = (v.feedback || '_no feedback_').replace(/\n/g, ' ').slice(0, 400);
+                  lines.push(`- ❌ **${gname}** (${(v.score ?? 0).toFixed(2)}): ${fb}`);
+                }
+                const out = run0.final_output;
+                if (out && typeof out === 'string') {
+                  lines.push('', '<details><summary>Agent output (truncated)</summary>', '', '```', truncateText(out, 30), '```', '', '</details>');
+                }
+                failureDetails.push(lines.join('\n'));
+              }
+              const failurePanel = (failed > 0 && failureDetails.length > 0)
+                ? [
+                    '<details open><summary>🐛 Failure details</summary>',
+                    '',
+                    failureDetails.join('\n\n---\n\n'),
+                    '',
+                    '</details>',
+                  ].join('\n')
+                : '';
+
+              // Suggestion / recommendation report (--suggest --recommend).
+              const sug = (json.metadata && json.metadata.suggestion_report) || null;
+              const rec = (json.metadata && json.metadata.recommendation_report) || null;
+              const suggestionParts = [];
+              if (sug && typeof sug === 'string' && sug.trim().length > 0) {
+                suggestionParts.push(sug.trim());
+              }
+              if (rec && typeof rec === 'string' && rec.trim().length > 0) {
+                if (suggestionParts.length > 0) suggestionParts.push('\n\n---\n\n');
+                suggestionParts.push(rec.trim());
+              }
+              const suggestionPanel = suggestionParts.length > 0
+                ? [
+                    failed > 0
+                      ? '<details open><summary>💡 Suggestions / root-cause analysis</summary>'
+                      : '<details><summary>💡 Suggestions / recommendations</summary>',
+                    '',
+                    suggestionParts.join(''),
+                    '',
+                    '</details>',
+                  ].join('\n')
+                : '';
+
+              // Raw eval output (closed by default — fallback / drill-down).
+              const rawPanel = rawMd
+                ? [
+                    '<details><summary>📄 Full eval output (raw <code>--format github-comment</code> markdown)</summary>',
+                    '',
+                    rawMd.trim(),
+                    '',
+                    '</details>',
+                  ].join('\n')
+                : '';
+
+              const parts = [
+                `### Agent: \`${agent}\``,
+                '',
+                headline,
+                '',
+                taskTable,
+              ];
+              if (tokensSection) { parts.push('', tokensSection); }
+              if (qualitySection) { parts.push('', qualitySection); }
+              if (failurePanel) { parts.push('', failurePanel); }
+              if (suggestionPanel) { parts.push('', suggestionPanel); }
+              if (rawPanel) { parts.push('', rawPanel); }
+              sections.push(parts.join('\n'));
+            }
+
+            const totalLegs = allDirs.length;
+
+            const prepareMode = (process.env.PREPARE_MODE || '').trim();
+            const prepareReason = (process.env.PREPARE_REASON || '').trim();
+            let scopeBanner = '';
+            if (prepareMode === 'none') {
+              scopeBanner =
+                '> ℹ️ **No agents evaluated.** ' + (prepareReason || 'No relevant changes detected.');
+            } else if (prepareMode === 'subset') {
+              scopeBanner =
+                '> 🎯 **Diff-scoped run.** ' + (prepareReason || 'Only changed agents evaluated.') +
+                ' Touch `.github/workflows/waza-agent-evals.yml` or trigger `workflow_dispatch` to run all agents.';
+            } else if (prepareMode === 'single') {
+              scopeBanner =
+                '> 🎯 **Single-agent run.** ' + (prepareReason || 'workflow_dispatch input.');
+            } else if (prepareMode === 'full') {
+              scopeBanner =
+                '> 🔁 **Full matrix run.** ' + (prepareReason || 'All configured agents evaluated.');
+            }
+
+            const header = [
+              '<!-- waza-agent-evals-comment -->',
+              '## 🤖 Waza agent evals (advisory)',
+              '',
+              scopeBanner,
+              scopeBanner ? '' : null,
+              'Ran ' + totalLegs + ' agent eval' + (totalLegs === 1 ? '' : 's') +
+                ' against `claude-sonnet-4.6`. Each eval consumes ~5 premium Copilot requests; results are non-blocking — investigate failures via the workflow logs and the per-agent `waza-agent-results-*` artifacts.',
+              '',
+              '> **How this works:** This workflow auto-syncs the canonical `.github/agents/<name>.agent.md` into the sibling mirror inside `.github/evals/agents/<name>/` before each run, so the score below reflects the version of the agent in this PR — not whatever was committed when the eval was first wired up.',
+              '',
+            ].filter((line) => line !== null).join('\n');
+
+            const sectionsBlock = sections.length > 0
+              ? sections.join('\n\n---\n\n')
+              : '_No agents in scope for this PR._';
+            const body = [
+              header.replace(/\s+$/, ''),
+              tokenCompareSection.replace(/\s+$/, ''),
+              sectionsBlock,
+            ].filter((s) => s.length > 0).join('\n\n') + '\n';
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body && c.body.includes('<!-- waza-agent-evals-comment -->'));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+```
+
+</details>

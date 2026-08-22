@@ -4,21 +4,20 @@ sidebar_label: "Deploy"
 description: "GitHub Actions workflow: Git-Ape: Deploy"
 ---
 
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-deploy.exampleyml -->
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/templates/workflows/git-ape-deploy.yml -->
 
 
 # Git-Ape: Deploy
 
-**Workflow file:** `.github/workflows/git-ape-deploy.exampleyml`
+**Workflow file:** `.github/skills/git-ape-onboarding/templates/workflows/git-ape-deploy.yml`
 
-:::info[Activation required]
-This workflow ships as `git-ape-deploy.exampleyml` and is **inert** until renamed to `git-ape-deploy.yml`. The [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow renames every `.exampleyml` file in `.github/workflows/` to `.yml` after you complete the experimental-status acknowledgments.
+:::info[Scaffolded by `/git-ape-onboarding`]
+This workflow is **shipped as a template** under `.github/skills/git-ape-onboarding/templates/workflows/` and copied into your repository's `.github/workflows/` by the [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow. It does **not** run in the git-ape repo itself.
 :::
 
 ## Triggers
 
 - **`push`** — branches: `["main"]` — paths: `.azure/deployments/**/template.json, .azure/deployments/**/parameters.json`
-- **`issue_comment`** — types: `created`
 
 
 ## Permissions
@@ -32,21 +31,12 @@ This workflow ships as `git-ape-deploy.exampleyml` and is **inert** until rename
 
 ## Jobs
 
-### `check-comment-trigger`
-
-| Property | Value |
-|----------|-------|
-| **Display Name** | Check /deploy trigger |
-| **Runs On** | `ubuntu-latest` |
-| **Steps** | 1 |
-
 ### `detect-deployments`
 
 | Property | Value |
 |----------|-------|
 | **Display Name** | Detect deployments to execute |
 | **Runs On** | `ubuntu-latest` |
-| **Depends On** | `check-comment-trigger` |
 | **Steps** | 2 |
 
 ### `deploy`
@@ -56,8 +46,8 @@ This workflow ships as `git-ape-deploy.exampleyml` and is **inert** until rename
 | **Display Name** | Deploy: ${{ matrix.deployment_id }} |
 | **Runs On** | `ubuntu-latest` |
 | **Environment** | `azure-deploy` |
-| **Depends On** | `detect-deployments`, `check-comment-trigger` |
-| **Steps** | 13 |
+| **Depends On** | `detect-deployments` |
+| **Steps** | 17 |
 
 
 
@@ -69,9 +59,13 @@ This workflow ships as `git-ape-deploy.exampleyml` and is **inert** until rename
 ```yaml
 # Git-Ape Deploy Workflow
 # Triggers on:
-#   1. PR merge to main (when deployment files are included)
-#   2. `/deploy` comment on an approved PR (deploys from branch before merge)
+#   PR merge to main (when deployment files are included)
 # Runs the actual ARM deployment, captures outputs, and runs integration tests.
+#
+# NOTE: There is intentionally no `/deploy` comment trigger. A comment author's
+# authorization cannot be reliably verified from the workflow, so deployment is
+# gated solely on merge to main (which already requires PR review + approval via
+# branch protection).
 
 name: "Git-Ape: Deploy"
 
@@ -79,106 +73,28 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
-  # Trigger 1: PR merged to main with deployment artifacts
+  # PR merged to main with deployment artifacts
   push:
     branches: [main]
     paths:
       - ".azure/deployments/**/template.json"
       - ".azure/deployments/**/parameters.json"
 
-  # Trigger 2: `/deploy` comment on a PR
-  issue_comment:
-    types: [created]
-
 permissions:
   id-token: write         # OIDC token for Azure login
   contents: write          # Commit state files back to repo
   pull-requests: write     # Post deployment results as PR comment
-  issues: write            # Post on issue comments
+  issues: write            # Open a tracking issue if a merged-PR deploy fails
   security-events: write   # Upload SARIF results from template analyzer
   actions: read            # Required by codeql-action/upload-sarif to read workflow run context
 
 concurrency:
-  group: git-ape-deploy-${{ github.event_name == 'push' && github.sha || github.event.comment.id }}
+  group: git-ape-deploy-${{ github.sha }}
   cancel-in-progress: false   # Never cancel in-progress deployments
 
 jobs:
-  # Gate: Only run on `/deploy` comments on approved PRs
-  check-comment-trigger:
-    name: Check /deploy trigger
-    if: github.event_name == 'issue_comment'
-    runs-on: ubuntu-latest
-    outputs:
-      should_deploy: ${{ steps.check.outputs.should_deploy }}
-      pr_ref: ${{ steps.check.outputs.pr_ref }}
-    steps:
-      - name: Check comment and PR status
-        id: check
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const comment = context.payload.comment.body.trim();
-            if (!comment.startsWith('/deploy')) {
-              core.setOutput('should_deploy', 'false');
-              return;
-            }
-
-            // Must be on a PR (not a regular issue)
-            if (!context.payload.issue.pull_request) {
-              core.setOutput('should_deploy', 'false');
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: '❌ `/deploy` can only be used on pull requests.',
-              });
-              return;
-            }
-
-            // Get PR details
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-
-            // Check PR is approved
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-            const approved = reviews.some(r => r.state === 'APPROVED');
-
-            if (!approved) {
-              core.setOutput('should_deploy', 'false');
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: '❌ PR must be **approved** before deploying. Get a review approval first.',
-              });
-              return;
-            }
-
-            core.setOutput('should_deploy', 'true');
-            core.setOutput('pr_ref', pr.head.ref);
-
-            // React to the comment
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'rocket',
-            });
-
   detect-deployments:
     name: Detect deployments to execute
-    needs: [check-comment-trigger]
-    if: |
-      always() &&
-      (github.event_name == 'push' ||
-       (github.event_name == 'issue_comment' && needs.check-comment-trigger.outputs.should_deploy == 'true'))
     runs-on: ubuntu-latest
     outputs:
       deployment_ids: ${{ steps.find.outputs.deployment_ids }}
@@ -186,19 +102,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.check-comment-trigger.outputs.pr_ref || github.ref }}
           fetch-depth: 0
 
       - name: Find deployment directories
         id: find
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            # On merge: find deployments changed in the merge commit
-            CHANGED_FILES=$(git diff --name-only HEAD~1...HEAD -- '.azure/deployments/*/template.json' 2>/dev/null || true)
-          else
-            # On /deploy comment: find all deployments with template.json on the branch
-            CHANGED_FILES=$(git diff --name-only origin/main...HEAD -- '.azure/deployments/*/template.json' 2>/dev/null || true)
-          fi
+          # On merge: find deployments changed in the merge commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1...HEAD -- '.azure/deployments/*/template.json' 2>/dev/null || true)
 
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "has_deployments=false" >> "$GITHUB_OUTPUT"
@@ -209,16 +119,26 @@ jobs:
 
           DEPLOYMENT_IDS=$(echo "$CHANGED_FILES" | sed 's|.azure/deployments/\([^/]*\)/.*|\1|' | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
 
+          # Reject any deployment directory name outside a safe charset before it
+          # becomes a matrix value. matrix.deployment_id is derived from
+          # attacker-controllable PR directory names; constraining it to
+          # [A-Za-z0-9._-] guarantees it can never carry shell or expression
+          # metacharacters into downstream jobs (defense in depth on top of the
+          # env-passing used in every run/script block).
+          INVALID=$(echo "$DEPLOYMENT_IDS" | jq -r '.[] | select(test("^[A-Za-z0-9._-]+$") | not)')
+          if [[ -n "$INVALID" ]]; then
+            echo "::error::Invalid deployment directory name(s): $INVALID. Allowed characters: A-Z a-z 0-9 . _ -"
+            exit 1
+          fi
+
           echo "has_deployments=true" >> "$GITHUB_OUTPUT"
           echo "deployment_ids=$DEPLOYMENT_IDS" >> "$GITHUB_OUTPUT"
           echo "Deployments to execute: $DEPLOYMENT_IDS"
 
   deploy:
     name: "Deploy: ${{ matrix.deployment_id }}"
-    needs: [detect-deployments, check-comment-trigger]
-    if: |
-      always() &&
-      needs.detect-deployments.outputs.has_deployments == 'true'
+    needs: [detect-deployments]
+    if: needs.detect-deployments.outputs.has_deployments == 'true'
     runs-on: ubuntu-latest
     environment: azure-deploy
     strategy:
@@ -226,16 +146,20 @@ jobs:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
       max-parallel: 1    # Deploy sequentially to avoid conflicts
       fail-fast: false
+    # matrix.deployment_id is attacker-controllable (derived from PR directory
+    # names). Expose it as an environment variable so run/script blocks reference
+    # "$DEPLOYMENT_ID" / process.env.DEPLOYMENT_ID instead of inlining ${{ ... }},
+    # preventing script injection.
+    env:
+      DEPLOYMENT_ID: ${{ matrix.deployment_id }}
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.check-comment-trigger.outputs.pr_ref || github.ref }}
 
       - name: Read deployment parameters
         id: params
         run: |
-          DEPLOY_DIR=".azure/deployments/${{ matrix.deployment_id }}"
+          DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
 
           if [[ ! -f "$DEPLOY_DIR/template.json" ]]; then
             echo "::error::Template not found: $DEPLOY_DIR/template.json"
@@ -262,15 +186,81 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate before deploy
+      - name: Capture pre-deploy state (for rollback)
+        id: pre_state
         run: |
-          az deployment sub validate \
-            --location "${{ steps.params.outputs.location }}" \
+          STACK_NAME="$DEPLOYMENT_ID"
+          echo "::group::Pre-deploy state capture"
+          echo "[$(date -u +%H:%M:%S)] Checking if stack '$STACK_NAME' already exists…"
+
+          # Does the stack currently exist? If yes, this is an UPDATE (rollback possible).
+          # If no, this is a NEW deployment (rollback = delete partial stack).
+          if PRIOR_STACK=$(az stack sub show --name "$STACK_NAME" --output json 2>/dev/null); then
+            PRIOR_STATE=$(echo "$PRIOR_STACK" | jq -r '.provisioningState // "unknown"')
+            PRIOR_ID=$(echo "$PRIOR_STACK" | jq -r '.id // empty')
+            echo "stack_existed=true" >> "$GITHUB_OUTPUT"
+            echo "prior_stack_id=$PRIOR_ID" >> "$GITHUB_OUTPUT"
+            echo "[$(date -u +%H:%M:%S)] Prior stack found — provisioningState=$PRIOR_STATE"
+            echo "[$(date -u +%H:%M:%S)] Prior stackId: $PRIOR_ID"
+          else
+            echo "stack_existed=false" >> "$GITHUB_OUTPUT"
+            echo "[$(date -u +%H:%M:%S)] No prior stack — this is a NEW deployment."
+          fi
+
+          # Also snapshot the previous template from git. On a push (merge to
+          # main), HEAD~1 is the pre-merge state of main — the last-known-good
+          # baseline to roll back to.
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          BASELINE_REF="HEAD~1"
+          mkdir -p /tmp/rollback
+          if git show "$BASELINE_REF:$DEPLOY_DIR/template.json" > /tmp/rollback/template.json 2>/dev/null; then
+            cp "$DEPLOY_DIR/parameters.json" /tmp/rollback/parameters.json 2>/dev/null || true
+            # Prefer the previous parameters if they exist at the baseline ref
+            git show "$BASELINE_REF:$DEPLOY_DIR/parameters.json" > /tmp/rollback/parameters.json 2>/dev/null || true
+            echo "prior_template_available=true" >> "$GITHUB_OUTPUT"
+            echo "[$(date -u +%H:%M:%S)] Previous template captured from $BASELINE_REF → /tmp/rollback/"
+            echo "    template bytes: $(wc -c < /tmp/rollback/template.json)"
+          else
+            echo "prior_template_available=false" >> "$GITHUB_OUTPUT"
+            echo "[$(date -u +%H:%M:%S)] No previous template in git history (first deployment)"
+          fi
+          echo "::endgroup::"
+
+      - name: Validate before deploy (stack)
+        env:
+          # location comes from parameters.json (attacker-controllable) — route it
+          # through env so it can't be inlined into the run script (injection).
+          LOCATION: ${{ steps.params.outputs.location }}
+        run: |
+          echo "::group::Template validation"
+          echo "[$(date -u +%H:%M:%S)] Validating stack '$DEPLOYMENT_ID' in '$LOCATION'"
+          az stack sub validate \
+            --name "$DEPLOYMENT_ID" \
+            --location "$LOCATION" \
             --template-file "${{ steps.params.outputs.deploy_dir }}/template.json" \
             --parameters @"${{ steps.params.outputs.deploy_dir }}/parameters.json" \
+            --action-on-unmanage deleteAll \
+            --deny-settings-mode none \
             --output json
+          echo "[$(date -u +%H:%M:%S)] Validation passed ✓"
+          echo "::endgroup::"
+
+      - name: Stage template for security scan
+        id: scan_stage
+        run: |
+          # WORKAROUND: see git-ape-plan.yml for full explanation. Template Analyzer's
+          # directory walker skips .azure/ on Linux (.NET treats dot-prefixed paths as
+          # Hidden), so we stage the template into a non-dotted dir at the workspace root.
+          STAGE_DIR="templateanalyzer-scan/$DEPLOYMENT_ID"
+          mkdir -p "$STAGE_DIR"
+          cp "${{ steps.params.outputs.deploy_dir }}/template.json" "$STAGE_DIR/template.json"
+          if [[ -f "${{ steps.params.outputs.deploy_dir }}/parameters.json" ]]; then
+            cp "${{ steps.params.outputs.deploy_dir }}/parameters.json" "$STAGE_DIR/template.parameters.json"
+          fi
+          echo "stage_dir=$STAGE_DIR" >> "$GITHUB_OUTPUT"
+          ls -la "$STAGE_DIR"
 
       - name: Run Microsoft Defender for DevOps template analyzer
         id: security_scan
@@ -278,8 +268,10 @@ jobs:
         uses: microsoft/security-devops-action@v1
         with:
           tools: templateanalyzer
-        env:
-          GDN_TEMPLATEANALYZER_INPUT: ${{ steps.params.outputs.deploy_dir }}/template.json
+
+      - name: Cleanup staged template
+        if: always()
+        run: rm -rf templateanalyzer-scan
 
       - name: Upload SARIF results
         if: always() && steps.security_scan.outputs.sarifFile != ''
@@ -303,53 +295,121 @@ jobs:
             echo "Security scan passed — no errors found"
           fi
 
-      - name: Deploy to Azure
+      - name: Deploy to Azure (Deployment Stack)
         id: deploy
+        env:
+          # location/project/environment come from parameters.json (attacker-
+          # controllable) — route through env to prevent run-script injection.
+          LOCATION: ${{ steps.params.outputs.location }}
+          PROJECT: ${{ steps.params.outputs.project }}
+          ENVIRONMENT: ${{ steps.params.outputs.environment }}
         run: |
-          echo "🚀 Starting deployment: ${{ matrix.deployment_id }}"
+          STACK_NAME="$DEPLOYMENT_ID"
+          echo "::group::Stack deployment"
+          echo "[$(date -u +%H:%M:%S)] 🚀 Starting stack deployment: $STACK_NAME"
+          echo "    location    : $LOCATION"
+          echo "    template    : ${{ steps.params.outputs.deploy_dir }}/template.json"
+          echo "    parameters  : ${{ steps.params.outputs.deploy_dir }}/parameters.json"
+          echo "    project     : $PROJECT"
+          echo "    environment : $ENVIRONMENT"
+          echo "    prior stack : ${{ steps.pre_state.outputs.stack_existed }}"
           START_TIME=$(date +%s)
 
-          DEPLOY_OUTPUT=$(az deployment sub create \
-            --name "${{ matrix.deployment_id }}" \
-            --location "${{ steps.params.outputs.location }}" \
+          # Default Azure CLI output to JSON. The --verbose diagnostics below are
+          # written to stderr; capture them in a temp file so they don't get mixed
+          # into the JSON on stdout that we parse with jq (which would otherwise
+          # crash this step on an otherwise-successful deploy). The trap guarantees
+          # the temp file is removed when the step exits, however it ends.
+          export AZURE_CORE_OUTPUT=json
+          VERBOSE_LOG=$(mktemp)
+          trap 'rm -f "$VERBOSE_LOG"' EXIT
+
+          # Create/update the subscription-scope Deployment Stack.
+          # --action-on-unmanage deleteAll binds the whole stack (RG + contents)
+          # to a single lifecycle so destroy is idempotent across all scopes.
+          set +e
+          DEPLOY_OUTPUT=$(az stack sub create \
+            --name "$STACK_NAME" \
+            --location "$LOCATION" \
             --template-file "${{ steps.params.outputs.deploy_dir }}/template.json" \
             --parameters @"${{ steps.params.outputs.deploy_dir }}/parameters.json" \
-            --output json 2>&1)
-
+            --action-on-unmanage deleteAll \
+            --deny-settings-mode none \
+            --description "Git-Ape deployment $STACK_NAME" \
+            --tags "managedBy=git-ape" "deploymentId=$STACK_NAME" \
+            --yes \
+            --verbose \
+            --output json 2>"$VERBOSE_LOG")
           EXIT_CODE=$?
+          set -e
+
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-
           echo "deploy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
+          echo "[$(date -u +%H:%M:%S)] az stack sub create exited with code $EXIT_CODE after ${DURATION}s"
+          echo "::endgroup::"
 
           if [[ $EXIT_CODE -ne 0 ]]; then
+            # The real error is on stderr (captured in VERBOSE_LOG); stdout
+            # (DEPLOY_OUTPUT) is usually empty on failure. Surface both.
+            VERBOSE_CONTENT=$(cat "$VERBOSE_LOG")
             echo "deploy_status=failed" >> "$GITHUB_OUTPUT"
             echo "deploy_error<<EOF" >> "$GITHUB_OUTPUT"
             echo "$DEPLOY_OUTPUT" >> "$GITHUB_OUTPUT"
+            echo "$VERBOSE_CONTENT" >> "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
             echo ""
             echo "=========================================="
-            echo "❌ DEPLOYMENT FAILED"
+            echo "❌ STACK DEPLOYMENT FAILED"
             echo "=========================================="
             echo "$DEPLOY_OUTPUT"
+            echo "$VERBOSE_CONTENT"
             echo "=========================================="
-            echo "::error::Deployment failed — see output above for details"
+
+            # Surface the underlying deployment operation errors — the stack error
+            # is usually just a summary; the real root cause is in the operations list.
+            echo "::group::Underlying deployment operation errors"
+            echo "[$(date -u +%H:%M:%S)] Fetching failed operations from deployment '$STACK_NAME'…"
+            az deployment sub show --name "$STACK_NAME" --output json 2>/dev/null \
+              | jq -r '.properties // {}' || echo "No subscription-scope deployment details available."
+
+            # Enumerate per-operation failures with their error messages
+            az deployment operation sub list --name "$STACK_NAME" --output json 2>/dev/null \
+              | jq -r '.[] | select(.properties.provisioningState == "Failed") |
+                  "──────────\nResource : \(.properties.targetResource.resourceName // "n/a") (\(.properties.targetResource.resourceType // "n/a"))\nStatus   : \(.properties.statusCode // "n/a")\nMessage  : \(.properties.statusMessage.error.message // .properties.statusMessage // "n/a")"' \
+              || echo "No operation details available (deployment may not have reached Azure)."
+            echo "::endgroup::"
+
+            echo "::error::Stack deployment failed — see output above for details"
             exit 1
           fi
 
           echo "deploy_status=succeeded" >> "$GITHUB_OUTPUT"
 
-          # Extract outputs
-          OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.properties.outputs // {}')
+          # Capture the stack resource id — this is the single source of truth
+          # for destroy. Stored in state.json as `stackId`.
+          STACK_ID=$(echo "$DEPLOY_OUTPUT" | jq -r '.id // empty')
+          echo "stack_id=$STACK_ID" >> "$GITHUB_OUTPUT"
+
+          # Extract template outputs from the stack
+          OUTPUTS=$(echo "$DEPLOY_OUTPUT" | jq -r '.outputs // .properties.outputs // {}')
           echo "deploy_outputs<<EOF" >> "$GITHUB_OUTPUT"
           echo "$OUTPUTS" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-          # Extract resource group name
+          # Extract resource group name (for integration tests)
           RG_NAME=$(echo "$OUTPUTS" | jq -r '.resourceGroupName.value // empty')
           echo "resource_group=$RG_NAME" >> "$GITHUB_OUTPUT"
 
-          echo "✅ Deployment succeeded in ${DURATION}s"
+          # Capture the list of managed resources from the stack — this is the
+          # authoritative manifest for everything the stack will delete on destroy.
+          MANAGED=$(echo "$DEPLOY_OUTPUT" | jq -c '[(.resources // .properties.resources // [])[] | {id: .id, status: .status}]')
+          echo "managed_resources<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$MANAGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          echo "✅ Stack deployed in ${DURATION}s — stackId: $STACK_ID"
+          echo "   Managed resources: $(echo "$MANAGED" | jq 'length')"
 
       - name: Run integration tests
         id: tests
@@ -412,31 +472,145 @@ jobs:
           echo -e "$TEST_RESULTS" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
+      - name: Rollback on failure
+        id: rollback
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          # location comes from parameters.json (attacker-controllable) — route it
+          # through env to prevent run-script injection.
+          LOCATION: ${{ steps.params.outputs.location }}
+        run: |
+          STACK_NAME="$DEPLOYMENT_ID"
+          STACK_EXISTED="${{ steps.pre_state.outputs.stack_existed }}"
+          PRIOR_TEMPLATE_AVAILABLE="${{ steps.pre_state.outputs.prior_template_available }}"
+
+          echo "::group::Rollback decision"
+          echo "[$(date -u +%H:%M:%S)] Evaluating rollback strategy…"
+          echo "    stack existed before       : $STACK_EXISTED"
+          echo "    prior template available   : $PRIOR_TEMPLATE_AVAILABLE"
+
+          ROLLBACK_ACTION="none"
+          ROLLBACK_STATUS="not-attempted"
+
+          if [[ "$STACK_EXISTED" == "true" && "$PRIOR_TEMPLATE_AVAILABLE" == "true" ]]; then
+            ROLLBACK_ACTION="redeploy-previous"
+            echo "[$(date -u +%H:%M:%S)] Strategy: redeploy previous template (last-known-good)"
+            echo "::endgroup::"
+
+            echo "::group::Rollback — redeploying previous template"
+            set +e
+            az stack sub create \
+              --name "$STACK_NAME" \
+              --location "$LOCATION" \
+              --template-file /tmp/rollback/template.json \
+              --parameters @/tmp/rollback/parameters.json \
+              --action-on-unmanage deleteAll \
+              --deny-settings-mode none \
+              --description "Git-Ape ROLLBACK of failed deployment $STACK_NAME" \
+              --tags "managedBy=git-ape" "deploymentId=$STACK_NAME" "rollback=true" \
+              --yes --verbose --output json
+            RB_EXIT=$?
+            set -e
+            if [[ $RB_EXIT -eq 0 ]]; then
+              ROLLBACK_STATUS="succeeded"
+              echo "[$(date -u +%H:%M:%S)] ✅ Rollback succeeded — stack restored to previous template"
+            else
+              ROLLBACK_STATUS="failed"
+              echo "::error::Rollback to previous template FAILED (exit $RB_EXIT) — manual intervention required"
+            fi
+            echo "::endgroup::"
+          elif [[ "$STACK_EXISTED" == "false" ]]; then
+            ROLLBACK_ACTION="delete-failed-stack"
+            echo "[$(date -u +%H:%M:%S)] Strategy: delete the failed new stack (clean slate)"
+            echo "::endgroup::"
+
+            echo "::group::Rollback — tearing down failed new stack"
+            set +e
+            az stack sub delete \
+              --name "$STACK_NAME" \
+              --action-on-unmanage deleteAll \
+              --yes --output json
+            RB_EXIT=$?
+            set -e
+            if [[ $RB_EXIT -eq 0 ]]; then
+              ROLLBACK_STATUS="succeeded"
+              echo "[$(date -u +%H:%M:%S)] ✅ Failed stack deleted — no orphan resources"
+            else
+              ROLLBACK_STATUS="failed"
+              echo "::error::Failed-stack cleanup FAILED (exit $RB_EXIT) — manual intervention required"
+            fi
+            echo "::endgroup::"
+          else
+            echo "[$(date -u +%H:%M:%S)] ⚠️  No rollback possible: prior stack existed but previous template is not in git history"
+            echo "::endgroup::"
+            ROLLBACK_ACTION="manual-required"
+          fi
+
+          echo "rollback_action=$ROLLBACK_ACTION" >> "$GITHUB_OUTPUT"
+          echo "rollback_status=$ROLLBACK_STATUS" >> "$GITHUB_OUTPUT"
+
       - name: Save deployment state
         if: always()
+        env:
+          # Pass step outputs through env so JSON payloads can't break shell quoting
+          # or inject commands (GitHub Actions hardening).
+          STACK_ID: ${{ steps.deploy.outputs.stack_id }}
+          MANAGED_RESOURCES: ${{ steps.deploy.outputs.managed_resources }}
+          # location/project/environment come from parameters.json (attacker-controllable).
+          LOCATION: ${{ steps.params.outputs.location }}
+          PROJECT: ${{ steps.params.outputs.project }}
+          ENVIRONMENT: ${{ steps.params.outputs.environment }}
         run: |
           DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
           STATUS="${{ steps.deploy.outputs.deploy_status || 'failed' }}"
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Default to an empty array and validate the snapshot parses as JSON
+          # before handing it to jq --argjson.
+          MANAGED="${MANAGED_RESOURCES:-[]}"
+          if ! echo "$MANAGED" | jq empty 2>/dev/null; then
+            echo "::warning::managed_resources output was not valid JSON — storing empty array"
+            MANAGED="[]"
+          fi
 
-          # Create/update state.json
-          cat > "$DEPLOY_DIR/state.json" <<EOF
-          {
-            "deploymentId": "${{ matrix.deployment_id }}",
-            "timestamp": "$TIMESTAMP",
-            "status": "$STATUS",
-            "duration": "${{ steps.deploy.outputs.deploy_duration }}",
-            "subscription": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-            "location": "${{ steps.params.outputs.location }}",
-            "project": "${{ steps.params.outputs.project }}",
-            "environment": "${{ steps.params.outputs.environment }}",
-            "resourceGroup": "${{ steps.deploy.outputs.resource_group }}",
-            "triggeredBy": "${{ github.actor }}",
-            "triggerEvent": "${{ github.event_name }}",
-            "runId": "${{ github.run_id }}",
-            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-          EOF
+          # state.json schema v1 — Deployment Stacks edition.
+          # `stackId` is the single source of truth for destroy.
+          # `managedResources` is a snapshot captured at deploy time so the
+          # repo retains a human-readable manifest of what the stack owns.
+          jq -n \
+            --arg schemaVersion "1.0" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg status "$STATUS" \
+            --arg duration "${{ steps.deploy.outputs.deploy_duration }}" \
+            --arg subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}" \
+            --arg location "$LOCATION" \
+            --arg project "$PROJECT" \
+            --arg environment "$ENVIRONMENT" \
+            --arg resourceGroup "${{ steps.deploy.outputs.resource_group }}" \
+            --arg stackId "$STACK_ID" \
+            --argjson managedResources "$MANAGED" \
+            --arg triggeredBy "${{ github.actor }}" \
+            --arg triggerEvent "${{ github.event_name }}" \
+            --arg runId "${{ github.run_id }}" \
+            --arg runUrl "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              schemaVersion: $schemaVersion,
+              deploymentId: $deploymentId,
+              timestamp: $timestamp,
+              status: $status,
+              duration: $duration,
+              subscription: $subscription,
+              location: $location,
+              project: $project,
+              environment: $environment,
+              resourceGroup: $resourceGroup,
+              stackId: (if $stackId == "" then null else $stackId end),
+              managedResources: $managedResources,
+              triggeredBy: $triggeredBy,
+              triggerEvent: $triggerEvent,
+              runId: $runId,
+              runUrl: $runUrl
+            }' > "$DEPLOY_DIR/state.json"
 
       - name: Commit deployment state
         if: always()
@@ -468,63 +642,149 @@ jobs:
           cp /tmp/metadata.json "$DEPLOY_DIR/metadata.json" 2>/dev/null || true
 
           git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json"
-          git diff --cached --quiet || git commit -m "git-ape: update state for ${{ matrix.deployment_id }} [$STATUS]"
-          git push || echo "::warning::Could not push state update to main"
+          git diff --cached --quiet || git commit -m "git-ape: update state for $DEPLOYMENT_ID [$STATUS]"
+          git push || { echo "::error::Failed to push state update to main"; exit 1; }
 
       - name: Post deployment result
-        if: always() && github.event_name == 'issue_comment'
-        uses: actions/github-script@v8
+        if: always()
+        uses: actions/github-script@v9
+        env:
+          DEPLOY_ERROR: ${{ steps.deploy.outputs.deploy_error }}
+          TEST_ENDPOINTS: ${{ steps.tests.outputs.test_endpoints }}
+          RESOURCES_JSON: ${{ steps.tests.outputs.resources }}
         with:
           script: |
-            const deploymentId = '${{ matrix.deployment_id }}';
+            const deploymentId = process.env.DEPLOYMENT_ID;
             const status = '${{ steps.deploy.outputs.deploy_status }}' || 'failed';
             const duration = '${{ steps.deploy.outputs.deploy_duration }}';
-            const outputs = `${{ steps.deploy.outputs.deploy_outputs }}`;
-            const resources = `${{ steps.tests.outputs.resources }}`;
-            const testEndpoints = `${{ steps.tests.outputs.test_endpoints }}`;
+            const rollbackAction = '${{ steps.rollback.outputs.rollback_action }}' || 'none';
+            const rollbackStatus = '${{ steps.rollback.outputs.rollback_status }}' || 'not-attempted';
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const resources = process.env.RESOURCES_JSON || '';
+            const testEndpoints = process.env.TEST_ENDPOINTS || '';
+            const deployError = process.env.DEPLOY_ERROR || '';
 
-            let comment = `## Git-Ape Deploy: \`${deploymentId}\`\n\n`;
+            // Build the comment body
+            let body = `## Git-Ape Deploy: \`${deploymentId}\`\n\n`;
 
             if (status === 'succeeded') {
-              comment += `### ✅ Deployment Succeeded\n\n`;
-              comment += `- **Duration:** ${duration}\n`;
-              comment += `- **Workflow Run:** [View logs](${runUrl})\n\n`;
+              body += `### ✅ Deployment Succeeded\n\n`;
+              body += `- **Duration:** ${duration}\n`;
+              body += `- **Workflow Run:** [View logs](${runUrl})\n\n`;
 
-              if (testEndpoints) {
-                comment += `### Endpoints\n\n${testEndpoints}\n\n`;
-              }
+              if (testEndpoints) body += `### Endpoints\n\n${testEndpoints}\n\n`;
 
               if (resources) {
                 try {
                   const parsed = JSON.parse(resources);
-                  comment += `### Resources (${parsed.length})\n\n`;
-                  comment += `| Name | Type | Status |\n|------|------|--------|\n`;
+                  body += `### Resources (${parsed.length})\n\n| Name | Type | Status |\n|------|------|--------|\n`;
                   for (const r of parsed) {
                     const icon = r.provisioningState === 'Succeeded' ? '✅' : '⚠️';
-                    comment += `| ${r.name} | ${r.type} | ${icon} ${r.provisioningState} |\n`;
+                    body += `| ${r.name} | ${r.type} | ${icon} ${r.provisioningState} |\n`;
                   }
-                  comment += '\n';
+                  body += '\n';
                 } catch {}
               }
             } else {
-              comment += `### ❌ Deployment Failed\n\n`;
-              comment += `- **Workflow Run:** [View logs](${runUrl})\n\n`;
-              const error = `${{ steps.deploy.outputs.deploy_error }}`;
-              if (error) {
-                comment += `\`\`\`\n${error.substring(0, 2000)}\n\`\`\`\n\n`;
+              body += `### ❌ Deployment Failed\n\n`;
+              body += `- **Workflow Run:** [View logs](${runUrl})\n`;
+
+              // Rollback summary
+              const rbIcon = rollbackStatus === 'succeeded' ? '✅'
+                : rollbackStatus === 'failed' ? '❌'
+                : '⚠️';
+              const rbText = {
+                'redeploy-previous': 'Redeployed previous template (last-known-good)',
+                'delete-failed-stack': 'Deleted partially-provisioned stack (clean slate)',
+                'manual-required': 'Manual intervention required — no previous template in git history',
+                'none': 'No rollback attempted',
+              }[rollbackAction] || rollbackAction;
+              body += `- **Rollback:** ${rbIcon} \`${rollbackAction}\` — ${rbText} (*${rollbackStatus}*)\n\n`;
+
+              if (deployError) {
+                body += `<details><summary>Error output</summary>\n\n\`\`\`\n${deployError.substring(0, 4000)}\n\`\`\`\n</details>\n\n`;
+              }
+
+              body += `### Next steps\n\n`;
+              if (rollbackStatus === 'succeeded' && rollbackAction === 'redeploy-previous') {
+                body += `- Environment is restored to the previous known-good state.\n`;
+                body += `- Fix the template and push a new commit — CI will redeploy automatically.\n`;
+              } else if (rollbackStatus === 'succeeded' && rollbackAction === 'delete-failed-stack') {
+                body += `- No resources are provisioned. Safe to iterate on the template and redeploy.\n`;
+              } else {
+                body += `- ⚠️ Manual cleanup may be required. Inspect the stack with:\n`;
+                body += `  \`\`\`bash\n  az stack sub show --name ${deploymentId} -o table\n  \`\`\`\n`;
               }
             }
 
             const marker = `<!-- git-ape-deploy:${deploymentId} -->`;
-            comment = marker + '\n' + comment;
+            body = marker + '\n' + body;
 
+            // Find the target PR from the merge commit SHA.
+            let prNumber = null;
+            {
+              const sha = context.sha;
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: sha,
+              });
+              if (prs.length > 0) prNumber = prs[0].number;
+            }
+
+            if (!prNumber) {
+              core.info('No PR associated with this run — skipping PR comment.');
+              return;
+            }
+
+            // Post the comment (new comment each run; merged PRs still accept comments)
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: comment,
+              issue_number: prNumber,
+              body: body,
             });
+            core.info(`Posted deployment result comment on PR #${prNumber}`);
+
+            // On failure, try to reopen the PR so the team notices.
+            // Merged PRs cannot be reopened — file a tracking issue instead.
+            if (status !== 'succeeded') {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+
+              if (pr.state === 'closed' && !pr.merged) {
+                try {
+                  await github.rest.pulls.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                    state: 'open',
+                  });
+                  core.info(`Reopened PR #${prNumber} due to deployment failure`);
+                } catch (e) {
+                  core.warning(`Could not reopen PR #${prNumber}: ${e.message}`);
+                }
+              } else if (pr.merged) {
+                // Cannot reopen a merged PR — open a tracking issue referencing the PR
+                const issueTitle = `Deployment failed: ${deploymentId} (from PR #${prNumber})`;
+                const issueBody = `The deployment for \`${deploymentId}\` failed after PR #${prNumber} was merged.\n\n`
+                  + `- **Rollback:** \`${rollbackAction}\` (${rollbackStatus})\n`
+                  + `- **Workflow run:** ${runUrl}\n`
+                  + `- **Merged PR:** #${prNumber}\n\n`
+                  + `See the comment on PR #${prNumber} for full details.`;
+                const { data: issue } = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issueTitle,
+                  body: issueBody,
+                  labels: ['deployment-failed', 'git-ape'],
+                });
+                core.info(`Created tracking issue #${issue.number} for merged-PR deployment failure`);
+              }
+            }
 
       - name: Notify via Slack
         if: always()
@@ -535,7 +795,7 @@ jobs:
           if [[ -z "$SLACK_WEBHOOK_URL" ]]; then exit 0; fi
 
           STATUS="${{ steps.deploy.outputs.deploy_status }}"
-          DEPLOY_ID="${{ matrix.deployment_id }}"
+          DEPLOY_ID="$DEPLOYMENT_ID"
           DURATION="${{ steps.deploy.outputs.deploy_duration }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 

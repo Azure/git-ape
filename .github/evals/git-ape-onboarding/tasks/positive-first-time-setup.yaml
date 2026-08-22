@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-first-time-setup
+name: Positive — First-time repo setup
+description: Direct ask to bootstrap a repo for Git-Ape — clear trigger.
+tags: [trigger, positive]
+inputs:
+  prompt: "Onboard this repository for Git-Ape: configure OIDC, federated credentials, RBAC, the GitHub environments, AND scaffold the Git-Ape workflow files (plan/deploy/destroy/verify/drift) and .github/copilot-instructions.md into my repo. My repo is a fresh empty Git repo on the local disk."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to onboard a fresh empty repo for Git-Ape — configure
+        OIDC, federated credentials, RBAC, GitHub environments, AND scaffold
+        the Git-Ape workflow files plus .github/copilot-instructions.md.
+
+        The skill is designed to GATE on prerequisites and required user
+        inputs before executing any state-changing commands. The expected
+        first-turn reply is a "gated step-1" response, NOT a completion
+        report. Grade the response accordingly.
+
+        PASS criteria — the response must satisfy ALL FOUR of:
+          1. Prereq check results are presented (e.g. a table or list of
+             tool versions, Azure CLI auth status, GitHub CLI auth status,
+             or equivalent — proving the agent inspected the environment).
+          2. The auth/prereq gate is explicitly surfaced when blocking
+             (e.g. "Azure CLI is not authenticated", "az login required",
+             or a clear ❌ marker on the Azure auth row). If all prereqs
+             happen to pass, this criterion is automatically satisfied.
+          3. The agent requests at least THREE of the following inputs
+             from the user before proceeding: target GitHub repository,
+             Azure subscription ID, RBAC role to grant, default region,
+             project / deployment name, onboarding mode (interactive vs
+             headless). Requesting them as a numbered list or explicit
+             question block counts.
+          4. The agent does NOT claim to have already configured OIDC,
+             created federated credentials, created GitHub environments,
+             scaffolded workflow files, or assigned RBAC roles. The reply
+             is a gated handoff that waits for user input + auth before
+             continuing. (If the agent fabricates "I've configured X" or
+             "I created Y" before receiving inputs, FAIL this criterion.)
+
+        If ALL FOUR are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-what-do-i-need
+name: Positive — "What do I need to install?"
+description: Direct phrasing from the SKILL.md "When to use" section.
+# See positive-command-not-found.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "What do I need to install before running git-ape onboarding?"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/prereq-check/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked what they need to install before running Git-Ape
+        onboarding.
+
+        PASS criteria — the response must contain ALL of:
+          1. Lists `az` (Azure CLI), `gh` (GitHub CLI), `jq`, and `git` as
+             required tools.
+          2. Notes authentication requirements (at minimum `az login`; ideally
+             also `gh auth login`).
+          3. Mentions either minimum versions OR "use latest stable" / a
+             version check command.
+          4. Provides install commands or points the user to a verification
+             script (e.g., a prereq-check skill invocation that runs the
+             checks for them).
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

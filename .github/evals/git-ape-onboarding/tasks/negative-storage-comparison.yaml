@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-storage-comparison
+name: Negative — Storage service comparison (off-topic)
+description: A storage feature comparison has zero overlap with one-time onboarding setup.
+tags: [trigger, negative]
+inputs:
+  prompt: "What's the difference between Azure Blob Storage and AWS S3 for static website hosting?"
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: negative
+      threshold: 0.5

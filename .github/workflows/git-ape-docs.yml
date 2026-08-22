@@ -27,10 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -47,10 +47,14 @@ jobs:
         working-directory: website
         run: npm run build
 
+      - name: Copy hidden static dirs (Docusaurus skips dotfiles)
+        run: cp -r website/static/.well-known website/build/.well-known
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
           path: website/build
+          include-hidden-files: true
 
   deploy:
     environment:

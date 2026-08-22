@@ -1,0 +1,8 @@
+👋 Welcome to the Git-Ape Agent Engineering dev container!
+
+🚀 Deploy to Azure      Ask Copilot:  @git-ape deploy a Python function app
+🔐 Sign in to Azure     az login --use-device-code
+🧪 Evaluate skills      waza
+📚 Docs site (:3333)    Run Task → "Docs: Dev Server"
+
+Tools ready: az · gh · copilot · pwsh · node 24 · checkov · arm-ttk · psrule · waza

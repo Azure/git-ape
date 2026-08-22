@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-non-gitape-rg-delete
+name: Negative — Deleting a non-Git-Ape resource group
+description: Deleting a plain resource group with no state.json is outside this skill's scope — use az group delete directly.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Delete the resource group `rg-myproject-prod-eastus` and everything inside it. It wasn't created by Git-Ape — I made it manually with `az group create`."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-destroy/SKILL.md
+      mode: negative
+      threshold: 0.5

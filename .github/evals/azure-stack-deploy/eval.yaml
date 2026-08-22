@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Expanded-tier evaluation suite for the azure-stack-deploy skill.
+# Validates trigger precision via the heuristic `trigger` grader plus
+# per-positive-task answer_quality LLM judge.
+#
+# Run: waza run .github/evals/azure-stack-deploy/eval.yaml
+
+name: azure-stack-deploy-eval
+description: Trigger precision + answer quality for azure-stack-deploy (Azure Deployment Stacks).
+skill: azure-stack-deploy
+version: "0.1"
+
+config:
+  # 2 trials catches obvious LLM nondeterminism flakes (single trial = no
+  # flake signal). Pilot tier bumps to 3 via /skill-promote.
+  trials_per_task: 2
+  timeout_seconds: 60
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Skill should activate on Deployment Stack deploy prompts and stay quiet on teardown / preview / unrelated prompts.
+
+graders:
+  # Budget grader: azure-stack-deploy is a guided deploy workflow; flag any
+  # leg that explodes in tool calls or runs unreasonably long.
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 240000
+
+  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks
+  # only (see tasks/positive-*.yaml). Keeps judge-model errors from
+  # zeroing out the negative-task trigger check in the same leg.
+  #
+  # Do NOT add `skill_invocation` with `required_skills:` here — eval-level
+  # prompt graders fire on EVERY task (including negatives) and produce
+  # deterministic 0.0 noise across all models (removed in commit 2f699c79
+  # from git-ape-onboarding for this reason).
+
+tasks:
+  - "tasks/*.yaml"

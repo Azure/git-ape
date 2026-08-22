@@ -4,15 +4,15 @@ sidebar_label: "Plan"
 description: "GitHub Actions workflow: Git-Ape: Plan"
 ---
 
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-plan.exampleyml -->
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/templates/workflows/git-ape-plan.yml -->
 
 
 # Git-Ape: Plan
 
-**Workflow file:** `.github/workflows/git-ape-plan.exampleyml`
+**Workflow file:** `.github/skills/git-ape-onboarding/templates/workflows/git-ape-plan.yml`
 
-:::info[Activation required]
-This workflow ships as `git-ape-plan.exampleyml` and is **inert** until renamed to `git-ape-plan.yml`. The [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow renames every `.exampleyml` file in `.github/workflows/` to `.yml` after you complete the experimental-status acknowledgments.
+:::info[Scaffolded by `/git-ape-onboarding`]
+This workflow is **shipped as a template** under `.github/skills/git-ape-onboarding/templates/workflows/` and copied into your repository's `.github/workflows/` by the [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow. It does **not** run in the git-ape repo itself.
 :::
 
 ## Triggers
@@ -45,7 +45,7 @@ This workflow ships as `git-ape-plan.exampleyml` and is **inert** until renamed 
 | **Display Name** | Plan Local: ${{ matrix.deployment_id }} |
 | **Runs On** | `ubuntu-latest` |
 | **Depends On** | `detect-deployments` |
-| **Steps** | 10 |
+| **Steps** | 12 |
 
 ### `plan-azure`
 
@@ -54,7 +54,7 @@ This workflow ships as `git-ape-plan.exampleyml` and is **inert** until renamed 
 | **Display Name** | Plan Azure: ${{ matrix.deployment_id }} |
 | **Runs On** | `ubuntu-latest` |
 | **Depends On** | `detect-deployments` |
-| **Steps** | 7 |
+| **Steps** | 8 |
 
 ### `plan-comment`
 
@@ -114,9 +114,13 @@ jobs:
 
       - name: Find deployment directories with changes
         id: find
+        env:
+          # Route attacker-controllable context through env, never inline into the
+          # shell — base_ref is part of the PR payload (GitHub Actions hardening).
+          BASE_REF: ${{ github.base_ref }}
         run: |
           # Find all deployment directories that have template.json changes in this PR
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '.azure/deployments/*/template.json' '.azure/deployments/*/parameters.json')
+          CHANGED_FILES=$(git diff --name-only "origin/${BASE_REF}...HEAD" -- '.azure/deployments/*/template.json' '.azure/deployments/*/parameters.json')
 
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "has_deployments=false" >> "$GITHUB_OUTPUT"
@@ -127,6 +131,18 @@ jobs:
 
           # Extract unique deployment IDs
           DEPLOYMENT_IDS=$(echo "$CHANGED_FILES" | sed 's|.azure/deployments/\([^/]*\)/.*|\1|' | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+
+          # Reject any deployment directory name outside a safe charset before it
+          # becomes a matrix value. matrix.deployment_id is derived from
+          # attacker-controllable PR directory names; constraining it to
+          # [A-Za-z0-9._-] guarantees it can never carry shell or expression
+          # metacharacters into downstream jobs (defense in depth on top of the
+          # env-passing used in every run/script block).
+          INVALID=$(echo "$DEPLOYMENT_IDS" | jq -r '.[] | select(test("^[A-Za-z0-9._-]+$") | not)')
+          if [[ -n "$INVALID" ]]; then
+            echo "::error::Invalid deployment directory name(s): $INVALID. Allowed characters: A-Z a-z 0-9 . _ -"
+            exit 1
+          fi
 
           echo "has_deployments=true" >> "$GITHUB_OUTPUT"
           echo "deployment_ids=$DEPLOYMENT_IDS" >> "$GITHUB_OUTPUT"
@@ -141,6 +157,11 @@ jobs:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
       fail-fast: false
+    # matrix.deployment_id is attacker-controllable (derived from PR directory
+    # names). Expose it as an environment variable so run/script blocks reference
+    # "$DEPLOYMENT_ID" instead of inlining ${{ ... }}, preventing script injection.
+    env:
+      DEPLOYMENT_ID: ${{ matrix.deployment_id }}
 
     steps:
       - uses: actions/checkout@v6
@@ -148,7 +169,7 @@ jobs:
       - name: Read deployment parameters
         id: params
         run: |
-          DEPLOY_DIR=".azure/deployments/${{ matrix.deployment_id }}"
+          DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
 
           if [[ ! -f "$DEPLOY_DIR/template.json" ]]; then
             echo "::error::Template not found: $DEPLOY_DIR/template.json"
@@ -206,9 +227,13 @@ jobs:
 
       - name: Estimate deployment cost
         id: cost
+        env:
+          # location comes from parameters.json (attacker-controllable) — route it
+          # through env to prevent run-script injection.
+          LOCATION: ${{ steps.params.outputs.location }}
         run: |
           TEMPLATE="${{ steps.params.outputs.deploy_dir }}/template.json"
-          REGION="${{ steps.params.outputs.location }}"
+          REGION="$LOCATION"
           COST_TABLE="| Resource Type | SKU | Est. Monthly |\n|---|---|---|\n"
           TOTAL=0
           COST_NOTES=""
@@ -274,14 +299,38 @@ jobs:
             echo "has_architecture=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Stage template for security scan
+        id: scan_stage
+        run: |
+          # WORKAROUND: Microsoft Defender for DevOps' templateanalyzer tool always
+          # runs `analyze-directory $GITHUB_WORKSPACE` and ignores GDN_TEMPLATEANALYZER_INPUT.
+          # Template Analyzer's file walker uses .NET EnumerationOptions which default to
+          # AttributesToSkip=Hidden|System. On Linux, .NET treats any path starting with
+          # "." as Hidden — so .azure/deployments/<id>/template.json is silently skipped
+          # and the scanner reports "Analyzed 0 files in the directory specified."
+          # See: https://github.com/Azure/template-analyzer/blob/main/src/Analyzer.Utilities/TemplateDiscovery.cs
+          #
+          # Workaround: copy the template + parameters to a non-dotted directory at the
+          # workspace root so the walker discovers them.
+          STAGE_DIR="templateanalyzer-scan/$DEPLOYMENT_ID"
+          mkdir -p "$STAGE_DIR"
+          cp "${{ steps.params.outputs.deploy_dir }}/template.json" "$STAGE_DIR/template.json"
+          if [[ -f "${{ steps.params.outputs.deploy_dir }}/parameters.json" ]]; then
+            cp "${{ steps.params.outputs.deploy_dir }}/parameters.json" "$STAGE_DIR/template.parameters.json"
+          fi
+          echo "stage_dir=$STAGE_DIR" >> "$GITHUB_OUTPUT"
+          ls -la "$STAGE_DIR"
+
       - name: Run Microsoft Defender for DevOps template analyzer
         id: security_scan
         continue-on-error: true
         uses: microsoft/security-devops-action@v1
         with:
           tools: templateanalyzer
-        env:
-          GDN_TEMPLATEANALYZER_INPUT: ${{ steps.params.outputs.deploy_dir }}/template.json
+
+      - name: Cleanup staged template
+        if: always()
+        run: rm -rf templateanalyzer-scan
 
       - name: Upload SARIF results (non-blocking)
         id: sarif_upload
@@ -396,6 +445,9 @@ jobs:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
       fail-fast: false
+    # See plan-local: route the attacker-controllable matrix value through env.
+    env:
+      DEPLOYMENT_ID: ${{ matrix.deployment_id }}
 
     steps:
       - uses: actions/checkout@v6
@@ -403,7 +455,7 @@ jobs:
       - name: Read deployment parameters
         id: params
         run: |
-          DEPLOY_DIR=".azure/deployments/${{ matrix.deployment_id }}"
+          DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
 
           if [[ ! -f "$DEPLOY_DIR/template.json" ]]; then
             echo "::error::Template not found: $DEPLOY_DIR/template.json"
@@ -426,18 +478,27 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate template
+      - name: Validate template (stack)
         id: validate
         if: steps.azure_login.outcome == 'success'
+        env:
+          # location comes from parameters.json (attacker-controllable) — route it
+          # through env to prevent run-script injection.
+          LOCATION: ${{ steps.params.outputs.location }}
         run: |
-          echo "### Validating ARM template..."
+          echo "### Validating deployment stack..."
 
-          RESULT=$(az deployment sub validate \
-            --location "${{ steps.params.outputs.location }}" \
+          # az stack sub validate mirrors az deployment sub validate but also
+          # verifies stack-specific settings (action-on-unmanage, deny settings).
+          RESULT=$(az stack sub validate \
+            --name "$DEPLOYMENT_ID" \
+            --location "$LOCATION" \
             --template-file "${{ steps.params.outputs.deploy_dir }}/template.json" \
             --parameters @"${{ steps.params.outputs.deploy_dir }}/parameters.json" \
+            --action-on-unmanage deleteAll \
+            --deny-settings-mode none \
             --output json 2>&1) || true
 
           # Guard against non-JSON output (e.g. auth/CLI errors) — jq exits non-zero
@@ -461,14 +522,35 @@ jobs:
 
       - name: Run what-if analysis
         id: whatif
-        if: steps.validate.outputs.validation_status == 'passed'
+        if: steps.azure_login.outcome == 'success'
+        env:
+          # location comes from parameters.json (attacker-controllable) — route it
+          # through env to prevent run-script injection.
+          LOCATION: ${{ steps.params.outputs.location }}
         run: |
+          # NOTE: Deployment Stacks don't yet support what-if
+          # (see https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks#known-issues).
+          # We fall back to `az deployment sub what-if` against the underlying
+          # ARM template — this accurately previews resource changes even though
+          # it doesn't model the stack wrapper itself.
+          #
+          # Run unconditionally on login success: validation and what-if catch
+          # different classes of issues (schema vs. preflight/runtime), so even
+          # if validation failed, what-if may surface additional context.
+          set +e
           WHATIF_OUTPUT=$(az deployment sub what-if \
-            --location "${{ steps.params.outputs.location }}" \
+            --location "$LOCATION" \
             --template-file "${{ steps.params.outputs.deploy_dir }}/template.json" \
             --parameters @"${{ steps.params.outputs.deploy_dir }}/parameters.json" \
-            --no-prompt 2>&1) || true
+            --no-prompt 2>&1)
+          WHATIF_EXIT=$?
+          set -e
 
+          if [[ $WHATIF_EXIT -eq 0 ]]; then
+            echo "whatif_status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "whatif_status=failed" >> "$GITHUB_OUTPUT"
+          fi
           echo "whatif_result<<EOF" >> "$GITHUB_OUTPUT"
           echo "$WHATIF_OUTPUT" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -480,6 +562,7 @@ jobs:
           AZURE_LOGIN_OUTCOME: ${{ steps.azure_login.outcome }}
           VALIDATION_STATUS: ${{ steps.validate.outputs.validation_status }}
           VALIDATION_ERROR: ${{ steps.validate.outputs.validation_error }}
+          WHATIF_STATUS: ${{ steps.whatif.outputs.whatif_status }}
           WHATIF_RESULT: ${{ steps.whatif.outputs.whatif_result }}
         run: |
           mkdir -p .git-ape-plan
@@ -492,17 +575,28 @@ jobs:
             fi
           fi
 
+          FINAL_WHATIF_STATUS="$WHATIF_STATUS"
+          if [[ -z "$FINAL_WHATIF_STATUS" ]]; then
+            if [[ "$AZURE_LOGIN_OUTCOME" == "failure" ]]; then
+              FINAL_WHATIF_STATUS="login_failed"
+            else
+              FINAL_WHATIF_STATUS="skipped"
+            fi
+          fi
+
           jq -n \
             --arg deploymentId "$DEPLOYMENT_ID" \
             --arg azureLoginOutcome "$AZURE_LOGIN_OUTCOME" \
             --arg validationStatus "$FINAL_VALIDATION_STATUS" \
             --arg validationError "$VALIDATION_ERROR" \
+            --arg whatifStatus "$FINAL_WHATIF_STATUS" \
             --arg whatifResult "$WHATIF_RESULT" \
             '{
               deploymentId: $deploymentId,
               azureLoginOutcome: $azureLoginOutcome,
               validationStatus: $validationStatus,
               validationError: $validationError,
+              whatifStatus: $whatifStatus,
               whatifResult: $whatifResult
             }' > ".git-ape-plan/plan-azure-${DEPLOYMENT_ID}.json"
 
@@ -515,6 +609,17 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: What-if gate
+        # Runs AFTER the artifact upload so the Plan Comment job still posts the
+        # full plan (validation + scan + what-if details) to the PR. This step
+        # only fails the Plan Azure job to block merge/deploy when what-if
+        # cannot produce a valid deployment preview — a failed what-if means the
+        # template wouldn't deploy successfully even if everything else is green.
+        if: steps.whatif.outputs.whatif_status == 'failed'
+        run: |
+          echo "::error::What-if analysis failed — deployment would not succeed. See the PR comment for the full output."
+          exit 1
+
   plan-comment:
     name: "Plan Comment: ${{ matrix.deployment_id }}"
     needs: [detect-deployments, plan-local, plan-azure]
@@ -524,6 +629,10 @@ jobs:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
       fail-fast: false
+    # See plan-local: route the attacker-controllable matrix value through env so
+    # the github-script step reads process.env.DEPLOYMENT_ID, not an inlined ${{ }}.
+    env:
+      DEPLOYMENT_ID: ${{ matrix.deployment_id }}
 
     steps:
       - name: Download local summary artifact
@@ -541,11 +650,11 @@ jobs:
           path: .git-ape-plan/azure
 
       - name: Post plan as PR comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
-            const deploymentId = '${{ matrix.deployment_id }}';
+            const deploymentId = process.env.DEPLOYMENT_ID;
 
             function loadSummary(kind) {
               const path = `.git-ape-plan/${kind}/plan-${kind}-${deploymentId}.json`;
@@ -555,11 +664,55 @@ jobs:
               return JSON.parse(fs.readFileSync(path, 'utf8'));
             }
 
+            // Fetch templateanalyzer Code Scanning alerts for THIS PR so we can render
+            // each finding as a clickable link to its alert page (Security tab) and to
+            // the rule documentation. Falls back gracefully if the API call fails or
+            // returns no alerts (e.g. SARIF upload was skipped or still processing).
+            async function fetchTemplateAnalyzerAlerts() {
+              try {
+                const ref = `refs/pull/${context.issue.number}/merge`;
+                const { data: alerts } = await github.rest.codeScanning.listAlertsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref,
+                  tool_name: 'templateanalyzer',
+                  per_page: 100,
+                });
+                return alerts;
+              } catch (err) {
+                core.warning(`Could not fetch templateanalyzer alerts: ${err.message}`);
+                return [];
+              }
+            }
+
+            function renderAlertsTable(alerts) {
+              if (!alerts || alerts.length === 0) return '';
+              const sevIcon = (s) => ({ error: '🔴', warning: '🟡', note: '🔵', none: '⚪' }[s] || '⚪');
+              let table = '| Sev | Rule | Line | Description |\n';
+              table += '|---|---|---|---|\n';
+              for (const a of alerts) {
+                const sev = a.rule?.severity || 'none';
+                const ruleId = a.rule?.id || '?';
+                const ruleName = a.rule?.name || '';
+                const helpUri = a.rule?.help_uri || '';
+                const ruleLabel = helpUri
+                  ? `[\`${ruleId}\`](${helpUri}) ${ruleName}`
+                  : `\`${ruleId}\` ${ruleName}`;
+                const line = a.most_recent_instance?.location?.start_line || '?';
+                const desc = (a.rule?.description || '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+                const alertLink = `[#${a.number}](${a.html_url})`;
+                table += `| ${sevIcon(sev)} | ${alertLink} · ${ruleLabel} | ${line} | ${desc} |\n`;
+              }
+              return table;
+            }
+
+            const alerts = await fetchTemplateAnalyzerAlerts();
             const local = loadSummary('local') || {};
             const azure = loadSummary('azure') || {};
 
             const validationStatus = azure.validationStatus || 'skipped';
             const validationError = azure.validationError || '';
+            const whatifStatus = azure.whatifStatus || 'skipped';
             const whatifResult = azure.whatifResult || '';
             const azureLoginOutcome = azure.azureLoginOutcome || '';
             const scanStatus = local.scanStatus || 'skipped';
@@ -599,27 +752,40 @@ jobs:
               comment += `${tagDetails}\n\n`;
             }
 
-            if (validationStatus === 'passed') {
-              if (securityScanOutcome === 'failure' && scanStatus === 'skipped') {
-                comment += `### ⚠️ Security Scan: Tool Execution Failed\n\n`;
-              } else if (scanStatus === 'passed') {
-                comment += `### ✅ Security Scan: Passed`;
-                if (parseInt(scanWarnings) > 0 || parseInt(scanNotes) > 0) {
-                  comment += ` (${scanWarnings} warning(s), ${scanNotes} note(s))`;
-                }
-                comment += `\n\n`;
-              } else if (scanStatus === 'failed') {
-                comment += `### ❌ Security Scan: Failed (${scanErrors} error(s), ${scanWarnings} warning(s))\n\n`;
-              } else {
-                comment += `### ⚠️ Security Scan: Skipped\n\n`;
+            // Security scan runs locally on the template file and is independent of
+            // Azure validation. Always render the section so reviewers see the result
+            // even when validation fails.
+            if (securityScanOutcome === 'failure' && scanStatus === 'skipped') {
+              comment += `### ⚠️ Security Scan: Tool Execution Failed\n\n`;
+            } else if (scanStatus === 'passed') {
+              comment += `### ✅ Security Scan: Passed`;
+              if (parseInt(scanWarnings) > 0 || parseInt(scanNotes) > 0) {
+                comment += ` (${scanWarnings} warning(s), ${scanNotes} note(s))`;
               }
+              comment += `\n\n`;
+            } else if (scanStatus === 'failed') {
+              comment += `### ❌ Security Scan: Failed (${scanErrors} error(s), ${scanWarnings} warning(s))\n\n`;
+            } else {
+              comment += `### ⚠️ Security Scan: Skipped\n\n`;
+            }
 
-              if (scanFindings) {
-                comment += `<details>\n<summary>Security findings</summary>\n\n${scanFindings}\n\n</details>\n\n`;
-              }
-              if (sarifUploadOutcome === 'failure') {
-                comment += `> SARIF upload to GitHub code scanning failed, but this does not block plan generation.\n\n`;
-              }
+            // Prefer the live Code Scanning alerts table (rich links into the Security
+            // tab + rule docs). Fall back to the inline SARIF text findings when the
+            // alerts API hasn't surfaced them yet (e.g. SARIF still processing).
+            const alertsTable = renderAlertsTable(alerts);
+            const codeScanningFilterUrl =
+              `https://github.com/${context.repo.owner}/${context.repo.repo}` +
+              `/security/code-scanning?query=pr%3A${context.issue.number}+tool%3Atemplateanalyzer`;
+
+            if (alertsTable) {
+              comment += `<details open>\n<summary>${alerts.length} finding(s) — Microsoft Defender for DevOps · Template Analyzer</summary>\n\n${alertsTable}\n\n</details>\n\n`;
+              comment += `> 🔗 **[View all ${alerts.length} alerts in the Security tab →](${codeScanningFilterUrl})**\n\n`;
+            } else if (scanFindings) {
+              comment += `<details open>\n<summary>Security findings (Microsoft Defender for DevOps · Template Analyzer)</summary>\n\n${scanFindings}\n\n</details>\n\n`;
+              comment += `> 🔗 **[View in Security tab →](${codeScanningFilterUrl})** (alerts may take a moment to appear after upload)\n\n`;
+            }
+            if (sarifUploadOutcome === 'failure') {
+              comment += `> SARIF upload to GitHub code scanning failed, but this does not block plan generation.\n\n`;
             }
 
             if (costTotal && validationStatus === 'passed') {
@@ -635,9 +801,20 @@ jobs:
               comment += `### Architecture\n\n${architectureContent}\n\n`;
             }
 
-            if (validationStatus === 'passed' && whatifResult) {
+            // What-if rendering is driven solely by whatifStatus — validation and
+            // what-if are decoupled gates that catch different classes of issues.
+            if (whatifStatus === 'passed' && whatifResult) {
               comment += `### What-If Analysis\n\n`;
               comment += `\`\`\`\n${whatifResult}\n\`\`\`\n\n`;
+            } else if (whatifStatus === 'failed') {
+              comment += `### ❌ What-If Analysis: Failed\n\n`;
+              comment += `\`\`\`\n${whatifResult}\n\`\`\`\n\n`;
+            } else if (whatifStatus === 'login_failed') {
+              comment += `### ⚠️ What-If Analysis: Skipped\n\n`;
+              comment += `> Skipped because Azure OIDC login failed.\n\n`;
+            } else {
+              comment += `### ⚠️ What-If Analysis: Skipped\n\n`;
+              comment += `> What-if did not run. See validation/login status above.\n\n`;
             }
 
             if (validationStatus === 'passed') {
@@ -645,7 +822,6 @@ jobs:
               comment += `### Next Steps\n\n`;
               comment += `1. Review the plan above\n`;
               comment += `2. Approve and merge this PR to trigger deployment\n`;
-              comment += `3. Or comment \`/deploy\` to deploy from this branch before merging\n`;
             }
 
             const { data: comments } = await github.rest.issues.listComments({

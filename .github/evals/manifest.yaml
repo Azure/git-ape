@@ -1,0 +1,55 @@
+# Single source of truth for the waza-evals workflow matrix.
+#
+# Consumed by `.github/workflows/waza-evals.yml` (prepare job) to:
+#   - decide which skills are configured for evaluation
+#   - generate the matrix.include payload (skill × model fan-out per tier)
+#   - drive the per-skill ordering of the PR comment
+#
+# Everything else (skill markdown, eval.yaml, tasks, fixtures) is
+# auto-discovered from the filesystem by waza itself. This file only
+# exists because waza has no native "tier" concept.
+#
+# Maintenance:
+#   - Add a skill: append a `{ name, tier }` entry to `skills:`. Make sure
+#     `.github/skills/<name>/SKILL.md` and `.github/evals/<name>/eval.yaml`
+#     exist.
+#   - Promote a skill (expanded → pilot): change its `tier:`.
+#   - Add/remove a model on a tier: edit `tiers.<tier>.models:`.
+#   - Editing this file triggers the FULL matrix on PR (config-wide change).
+#
+# Bootstrap state (PR 1 of the eval harness port):
+#   Only `prereq-check` is enabled at landing time — it doubles as the
+#   harness smoke test. Each remaining skill suite ships in its own PR
+#   tracked under https://github.com/Azure/git-ape/issues/93.
+
+# Ordered list of evaluable skills. Order controls the PR-comment ordering.
+skills:
+  # Pilot tier: full multi-model fan-out (most-trusted skills).
+  - name: prereq-check
+    tier: pilot
+  - name: git-ape-onboarding
+    tier: pilot
+  # Expanded tier: 2-model fan-out for skills still maturing toward pilot.
+  - name: azure-stack-deploy
+    tier: expanded
+  - name: azure-stack-destroy
+    tier: expanded
+  - name: azure-policy-advisor
+    tier: expanded
+# Per-tier model fan-out. The matrix runs each selected skill against every
+# model in its tier. To compare additional models, add them here.
+#
+# Models with `baseline: true` run with `waza run --baseline` (A/B mode) to
+# cap quota cost. The PR comment labels them clearly.
+tiers:
+  pilot:
+    models:
+      - name: claude-sonnet-4.6
+      - name: gpt-5.4
+        baseline: true
+      - name: gpt-5.3-codex
+      - name: claude-opus-4.6
+  expanded:
+    models:
+      - name: claude-sonnet-4.6
+      - name: gpt-5.3-codex

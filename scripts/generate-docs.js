@@ -94,6 +94,20 @@ function rewriteSkillLinks(body, skillDir) {
   });
 }
 
+// Rewrite cross-references to a skill's `SKILL.md` into docusaurus-friendly slug links.
+// Source files link to skills via relative paths like `../skills/<name>/SKILL.md` (from
+// agent sources) or `../<name>/SKILL.md` (from sibling skill sources). The generated
+// docusaurus pages live at `docs/skills/<slug>.md`, so rewrite the target to the slug
+// using the supplied base (`../skills/` from agent pages, `./` from skill pages).
+function rewriteSkillRefLinks(body, targetBase) {
+  return body.replace(/(\[[^\]\n]+\])\(([^)\s]+\/SKILL\.md)\)/g, (_match, label, url) => {
+    if (/^https?:\/\//i.test(url)) return `${label}(${url})`;
+    const segments = url.replace(/\/SKILL\.md$/, '').split('/');
+    const skillName = segments[segments.length - 1];
+    return `${label}(${targetBase}${slugify(skillName)})`;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Agent doc generation
 // ---------------------------------------------------------------------------
@@ -123,7 +137,7 @@ function generateAgentDocs() {
     agents.push({ name, slug, description, userInvocable, file });
 
     // Extract meaningful body (skip the frontmatter warning section, keep substance)
-    const bodyTrimmed = rewriteAgentLinks(body.trim());
+    const bodyTrimmed = rewriteSkillRefLinks(rewriteAgentLinks(body.trim()), '../skills/');
 
     let content = `---
 title: "${name}"
@@ -262,7 +276,7 @@ function generateSkillDocs() {
 
     skills.push({ name, slug, description, userInvocable, phase, dir });
 
-    const bodyTrimmed = rewriteSkillLinks(body.trim(), dir);
+    const bodyTrimmed = rewriteSkillRefLinks(rewriteSkillLinks(body.trim(), dir), './');
 
     let content = `---
 title: "${toTitleCase(name)}"
@@ -354,67 +368,92 @@ function generateWorkflowDocs() {
   const outDir = path.join(DOCS_OUT, 'workflows');
   ensureDir(outDir);
 
-  const workflowFiles = fs.readdirSync(WORKFLOWS_DIR).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml') || f.endsWith('.exampleyml'));
+  // Two sources of workflows:
+  //   - Repo CI: .github/workflows/ — runs in the git-ape repo itself
+  //   - User-facing templates: .github/skills/git-ape-onboarding/templates/workflows/
+  //     scaffolded into a user's repo by /git-ape-onboarding
+  const SOURCES = [
+    {
+      kind: 'repo',
+      label: 'Repo CI',
+      dir: WORKFLOWS_DIR,
+      sourcePrefix: '.github/workflows',
+      filter: (f) => f.endsWith('.yml') || f.endsWith('.yaml'),
+      note: '',
+    },
+    {
+      kind: 'template',
+      label: 'User-facing (scaffolded)',
+      dir: path.join(ROOT, '.github', 'skills', 'git-ape-onboarding', 'templates', 'workflows'),
+      sourcePrefix: '.github/skills/git-ape-onboarding/templates/workflows',
+      filter: (f) => f.endsWith('.yml') || f.endsWith('.yaml'),
+      note: '\n:::info[Scaffolded by `/git-ape-onboarding`]\nThis workflow is **shipped as a template** under `.github/skills/git-ape-onboarding/templates/workflows/` and copied into your repository\'s `.github/workflows/` by the [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow. It does **not** run in the git-ape repo itself.\n:::\n',
+    },
+  ];
+
   const workflows = [];
 
-  for (const file of workflowFiles) {
-    const filePath = path.join(WORKFLOWS_DIR, file);
-    const raw = readFile(filePath);
-    let wf;
-    try {
-      wf = yaml.load(raw);
-    } catch (e) {
-      console.warn(`  ⚠ Failed to parse ${file}: ${e.message}`);
-      continue;
-    }
+  for (const source of SOURCES) {
+    if (!fs.existsSync(source.dir)) continue;
+    const workflowFiles = fs.readdirSync(source.dir).filter(source.filter);
 
-    const name = wf.name || file;
-    // Normalise slug: strip both .yml/.yaml and .exampleyml extensions
-    const slug = slugify(file.replace(/\.(example)?ya?ml$/, ''));
-    const triggers = wf.on || wf.true || {};
-    const jobs = wf.jobs || {};
-    const jobNames = Object.keys(jobs);
-    const permissions = wf.permissions || {};
-
-    workflows.push({ name, slug, file, triggers, jobNames });
-
-    // Format triggers
-    let triggerSection = '';
-    if (typeof triggers === 'string') {
-      triggerSection = `- \`${triggers}\``;
-    } else if (Array.isArray(triggers)) {
-      triggerSection = triggers.map((t) => `- \`${t}\``).join('\n');
-    } else {
-      for (const [event, config] of Object.entries(triggers)) {
-        triggerSection += `- **\`${event}\`**`;
-        if (config && typeof config === 'object') {
-          if (config.branches) triggerSection += ` — branches: \`${JSON.stringify(config.branches)}\``;
-          if (config.paths) triggerSection += ` — paths: \`${config.paths.slice(0, 3).join(', ')}${config.paths.length > 3 ? '...' : ''}\``;
-          if (config.types) triggerSection += ` — types: \`${config.types.join(', ')}\``;
-        }
-        triggerSection += '\n';
+    for (const file of workflowFiles) {
+      const filePath = path.join(source.dir, file);
+      const raw = readFile(filePath);
+      let wf;
+      try {
+        wf = yaml.load(raw);
+      } catch (e) {
+        console.warn(`  ⚠ Failed to parse ${file}: ${e.message}`);
+        continue;
       }
-    }
 
-    // Format jobs
-    let jobSection = '';
-    for (const [jobId, jobConfig] of Object.entries(jobs)) {
-      const jobName = jobConfig.name || jobId;
-      const runsOn = jobConfig['runs-on'] || 'unknown';
-      const env = jobConfig.environment || '';
-      const needs = jobConfig.needs || [];
-      const stepCount = (jobConfig.steps || []).length;
+      const name = wf.name || file;
+      const slug = slugify(file.replace(/\.ya?ml$/, ''));
+      const triggers = wf.on || wf.true || {};
+      const jobs = wf.jobs || {};
+      const jobNames = Object.keys(jobs);
+      const permissions = wf.permissions || {};
 
-      jobSection += `### \`${jobId}\`\n\n`;
-      jobSection += `| Property | Value |\n|----------|-------|\n`;
-      jobSection += `| **Display Name** | ${jobName} |\n`;
-      jobSection += `| **Runs On** | \`${runsOn}\` |\n`;
-      if (env) jobSection += `| **Environment** | \`${typeof env === 'string' ? env : env.name || JSON.stringify(env)}\` |\n`;
-      if (needs.length > 0) jobSection += `| **Depends On** | ${(Array.isArray(needs) ? needs : [needs]).map(n => `\`${n}\``).join(', ')} |\n`;
-      jobSection += `| **Steps** | ${stepCount} |\n\n`;
-    }
+      workflows.push({ name, slug, file, triggers, jobNames, kind: source.kind, sourcePrefix: source.sourcePrefix });
 
-    const content = `---
+      // Format triggers
+      let triggerSection = '';
+      if (typeof triggers === 'string') {
+        triggerSection = `- \`${triggers}\``;
+      } else if (Array.isArray(triggers)) {
+        triggerSection = triggers.map((t) => `- \`${t}\``).join('\n');
+      } else {
+        for (const [event, config] of Object.entries(triggers)) {
+          triggerSection += `- **\`${event}\`**`;
+          if (config && typeof config === 'object') {
+            if (config.branches) triggerSection += ` — branches: \`${JSON.stringify(config.branches)}\``;
+            if (config.paths) triggerSection += ` — paths: \`${config.paths.slice(0, 3).join(', ')}${config.paths.length > 3 ? '...' : ''}\``;
+            if (config.types) triggerSection += ` — types: \`${config.types.join(', ')}\``;
+          }
+          triggerSection += '\n';
+        }
+      }
+
+      // Format jobs
+      let jobSection = '';
+      for (const [jobId, jobConfig] of Object.entries(jobs)) {
+        const jobName = jobConfig.name || jobId;
+        const runsOn = jobConfig['runs-on'] || 'unknown';
+        const env = jobConfig.environment || '';
+        const needs = jobConfig.needs || [];
+        const stepCount = (jobConfig.steps || []).length;
+
+        jobSection += `### \`${jobId}\`\n\n`;
+        jobSection += `| Property | Value |\n|----------|-------|\n`;
+        jobSection += `| **Display Name** | ${jobName} |\n`;
+        jobSection += `| **Runs On** | \`${runsOn}\` |\n`;
+        if (env) jobSection += `| **Environment** | \`${typeof env === 'string' ? env : env.name || JSON.stringify(env)}\` |\n`;
+        if (needs.length > 0) jobSection += `| **Depends On** | ${(Array.isArray(needs) ? needs : [needs]).map(n => `\`${n}\``).join(', ')} |\n`;
+        jobSection += `| **Steps** | ${stepCount} |\n\n`;
+      }
+
+      const content = `---
 title: "${name}"
 sidebar_label: "${name.replace('Git-Ape: ', '')}"
 description: "GitHub Actions workflow: ${name}"
@@ -422,8 +461,8 @@ description: "GitHub Actions workflow: ${name}"
 
 # ${name}
 
-**Workflow file:** \`.github/workflows/${file}\`
-${file.endsWith('.exampleyml') ? '\n:::info[Activation required]\nThis workflow ships as `' + file + '` and is **inert** until renamed to `' + file.replace(/\.exampleyml$/, '.yml') + '`. The [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow renames every `.exampleyml` file in `.github/workflows/` to `.yml` after you complete the experimental-status acknowledgments.\n:::\n' : ''}
+**Workflow file:** \`${source.sourcePrefix}/${file}\`
+${source.note}
 ## Triggers
 
 ${triggerSection}
@@ -450,8 +489,14 @@ ${raw}
 </details>
 `;
 
-    writeAutoGenerated(path.join(outDir, `${slug}.md`), `.github/workflows/${file}`, content);
+      writeAutoGenerated(path.join(outDir, `${slug}.md`), `${source.sourcePrefix}/${file}`, content);
+    }
   }
+
+  // Partition for the overview
+  const templateWorkflows = workflows.filter((w) => w.kind === 'template');
+  const repoWorkflows = workflows.filter((w) => w.kind === 'repo');
+  const renderRow = (w) => `| [${w.name}](./${w.slug}) | \`${w.sourcePrefix}/${w.file}\` | ${Object.keys(typeof w.triggers === 'object' && !Array.isArray(w.triggers) ? w.triggers : {}).join(', ') || String(w.triggers)} | ${w.jobNames.join(', ')} |`;
 
   // Generate overview
   const overviewContent = `---
@@ -465,15 +510,21 @@ description: "Overview of Git-Ape GitHub Actions workflows"
 
 Git-Ape provides GitHub Actions workflows for automated deployment lifecycle management.
 
-:::info[Activation required]
-Workflows ship as **\`*.exampleyml\`** files in \`.github/workflows/\` so they are inert when the plugin is first installed. The [\`/git-ape-onboarding\`](/docs/skills/git-ape-onboarding) flow renames each \`.exampleyml\` to \`.yml\` after you complete the experimental-status acknowledgments. Files still ending in \`.exampleyml\` in the inventory below are not yet active.
+:::info[Workflows ship via the onboarding skill]
+The user-facing workflows below are **shipped as templates** under \`.github/skills/git-ape-onboarding/templates/workflows/\` and **scaffolded into your repository** by the [\`/git-ape-onboarding\`](/docs/skills/git-ape-onboarding) flow. The scaffold step uses **skip-with-notice on collision** — it never overwrites an existing file. The workflows ship as ready-to-run \`.yml\` files (no manual rename needed) and do not run inside the git-ape repo itself.
 :::
 
-## Workflow Inventory
+## User-facing workflows (scaffolded into your repo)
+
+| Workflow | Template file | Triggers | Jobs |
+|----------|---------------|----------|------|
+${templateWorkflows.map(renderRow).join('\n')}
+
+## Repo CI workflows (run inside the git-ape repo)
 
 | Workflow | File | Triggers | Jobs |
 |----------|------|----------|------|
-${workflows.map((w) => `| [${w.name}](./${w.slug}) | \`${w.file}\` | ${Object.keys(typeof w.triggers === 'object' && !Array.isArray(w.triggers) ? w.triggers : {}).join(', ') || String(w.triggers)} | ${w.jobNames.join(', ')} |`).join('\n')}
+${repoWorkflows.map(renderRow).join('\n')}
 
 ## Pipeline Architecture
 
@@ -484,8 +535,6 @@ graph LR
     Review --> Merge["Merge to main"]
     Merge --> Deploy["git-ape-deploy.yml<br/>ARM Deployment"]
     Deploy --> Test["Integration Tests"]
-
-    Comment["/deploy Comment"] --> Deploy
 
     Destroy["PR: status → destroy-requested"] --> DestroyMerge["Merge"]
     DestroyMerge --> DestroyWF["git-ape-destroy.yml<br/>Delete Resources"]
@@ -498,7 +547,7 @@ graph LR
     classDef destroy fill:#fecaca,stroke:#b91c1c,stroke-width:1px,color:#7f1d1d
     classDef verify fill:#ede9fe,stroke:#7c3aed,stroke-width:1px,color:#4c1d95
     class PR,Plan plan
-    class Review,Merge,Comment review
+    class Review,Merge review
     class Deploy,Test deploy
     class Destroy,DestroyMerge,DestroyWF destroy
     class Manual,Verify verify

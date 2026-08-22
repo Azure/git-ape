@@ -1,85 +1,64 @@
-version: 2
-
-# Dependabot configuration for git-ape.
-#
-# Strategy:
-# - Group the @docusaurus/* family into a single PR (they always release together).
-# - Group React + types together.
-# - Treat all other npm minor/patch as a single weekly PR to reduce noise.
-# - Keep major bumps separate so they can be reviewed individually (Docusaurus 3 -> 4 etc.).
-# - Bump GitHub Actions versions weekly, grouped, so workflow drift stays small.
-#
-# Notes:
-# - There is only one package.json in this repo (under /website), so npm ecosystem
-#   is scoped to that directory.
-# - Dependabot security alerts run independently of this file; this config covers
-#   version updates only.
-
 updates:
-  # ---------------------------------------------------------------------------
-  # npm — Docusaurus website
-  # ---------------------------------------------------------------------------
-  - package-ecosystem: "npm"
-    directory: "/website"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "website"
-    commit-message:
-      prefix: "deps(website)"
-      include: "scope"
-    groups:
-      docusaurus:
-        patterns:
-          - "@docusaurus/*"
-          - "docusaurus-*"
-        update-types:
-          - "minor"
-          - "patch"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-        update-types:
-          - "minor"
-          - "patch"
-      website-minor-patch:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "@docusaurus/*"
-          - "docusaurus-*"
-          - "react"
-          - "react-dom"
-          - "@types/react"
-        update-types:
-          - "minor"
-          - "patch"
-
-  # ---------------------------------------------------------------------------
-  # GitHub Actions — workflow runners
-  # ---------------------------------------------------------------------------
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "deps(actions)"
-      include: "scope"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+- commit-message:
+    include: scope
+    prefix: deps(website)
+  directory: /website
+  groups:
+    docusaurus:
+      patterns:
+      - "@docusaurus/*"
+      - docusaurus-*
+      update-types:
+      - minor
+      - patch
+    react:
+      patterns:
+      - react
+      - react-dom
+      - "@types/react"
+      update-types:
+      - minor
+      - patch
+    website-minor-patch:
+      exclude-patterns:
+      - "@docusaurus/*"
+      - docusaurus-*
+      - react
+      - react-dom
+      - "@types/react"
+      patterns:
+      - "*"
+      update-types:
+      - minor
+      - patch
+  labels:
+  - dependencies
+  - website
+  open-pull-requests-limit: 5
+  package-ecosystem: npm
+  schedule:
+    day: monday
+    interval: weekly
+    time: "06:00"
+    timezone: Etc/UTC
+- commit-message:
+    include: scope
+    prefix: deps(actions)
+  directory: /
+  groups:
+    github-actions:
+      patterns:
+      - "*"
+  ignore:
+  - dependency-name: "github/gh-aw-actions/**" # Managed by gh aw compile. Version-locked to the gh-aw compiler; do not bump.
+  labels:
+  - dependencies
+  - github-actions
+  open-pull-requests-limit: 3
+  package-ecosystem: github-actions
+  schedule:
+    day: monday
+    interval: weekly
+    time: "06:00"
+    timezone: Etc/UTC
+version: 2

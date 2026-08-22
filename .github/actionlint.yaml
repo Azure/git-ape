@@ -18,3 +18,14 @@ paths:
     ignore:
       - 'shellcheck reported issue in this script: SC2015'
       - 'shellcheck reported issue in this script: SC2016'
+  # The waza eval workflows emit markdown PR comments via `printf` with
+  # backticks inside single-quoted strings (literal markdown code spans like
+  # `prompt`, `continue_session: true`). SC2016 ("Expressions don't expand in
+  # single quotes") is exactly the intent — single quotes prevent the shell
+  # from interpolating. Silence for these two files only.
+  ".github/workflows/waza-evals.yml":
+    ignore:
+      - 'shellcheck reported issue in this script: SC2016'
+  ".github/workflows/waza-agent-evals.yml":
+    ignore:
+      - 'shellcheck reported issue in this script: SC2016'

@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -57,8 +57,22 @@ jobs:
           fi
           echo "Resolved version: $VERSION (tag: v$VERSION)"
 
-      - name: Bump plugin.json and marketplace.json
-        id: bump
+      - name: Validate release commit is on main history
+        run: |
+          set -euo pipefail
+          # Runs for both push (tag already exists) and workflow_dispatch (tag
+          # created later in this job). Guarding here — before any tag is
+          # created or pushed — ensures a manual release cannot publish from a
+          # commit that is not reachable from main.
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "❌ Release commit $GITHUB_SHA is not reachable from origin/main."
+            echo "Create releases from commits already merged to main."
+            exit 1
+          fi
+          echo "✅ Release commit is reachable from origin/main."
+
+      - name: Validate release version invariant
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
@@ -68,45 +82,53 @@ jobs:
           MARKETPLACE_JSON=".github/plugin/marketplace.json"
           PLUGIN_NAME=$(jq -r '.name' "$PLUGIN_JSON")
 
-          OLD_PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
-          OLD_MKT_VERSION=$(jq -r '.metadata.version' "$MARKETPLACE_JSON")
-          OLD_MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
+          PLUGIN_VERSION=$(jq -r '.version' "$PLUGIN_JSON")
+          MKT_METADATA_VERSION=$(jq -r '.metadata.version' "$MARKETPLACE_JSON")
+          MKT_ENTRY_VERSION=$(jq -r --arg name "$PLUGIN_NAME" \
             '.plugins[] | select(.name == $name) | .version' "$MARKETPLACE_JSON")
 
-          echo "Current versions:"
-          echo "  plugin.json:        $OLD_PLUGIN_VERSION"
-          echo "  marketplace.meta:   $OLD_MKT_VERSION"
-          echo "  marketplace.entry:  $OLD_MKT_ENTRY_VERSION"
+          echo "Current versions at release commit:"
+          echo "  plugin.json:        $PLUGIN_VERSION"
+          echo "  marketplace.meta:   $MKT_METADATA_VERSION"
+          echo "  marketplace.entry:  $MKT_ENTRY_VERSION"
           echo "Target version:       $VERSION"
 
-          jq --arg v "$VERSION" '.version = $v' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
-          mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"
+          ERRORS=0
 
-          jq --arg v "$VERSION" --arg name "$PLUGIN_NAME" '
-            .metadata.version = $v
-            | .plugins |= map(if .name == $name then .version = $v else . end)
-          ' "$MARKETPLACE_JSON" > "$MARKETPLACE_JSON.tmp"
-          mv "$MARKETPLACE_JSON.tmp" "$MARKETPLACE_JSON"
-
-          if git diff --quiet plugin.json .github/plugin/marketplace.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          if [[ "$PLUGIN_VERSION" != "$VERSION" ]]; then
+            echo "❌ plugin.json version ($PLUGIN_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
           fi
 
-      - name: Commit version bump (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch' && steps.bump.outputs.changed == 'true'
+          if [[ "$MKT_ENTRY_VERSION" != "$VERSION" ]]; then
+            echo "❌ marketplace plugin entry version ($MKT_ENTRY_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ "$MKT_METADATA_VERSION" != "$VERSION" ]]; then
+            echo "❌ marketplace metadata.version ($MKT_METADATA_VERSION) does not match release version ($VERSION)"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [[ "$ERRORS" -gt 0 ]]; then
+            echo
+            echo "Release invariant failed: tag v$VERSION must point to a commit where version files are already synchronized."
+            echo "Fix by merging a release PR that bumps plugin.json + .github/plugin/marketplace.json before tagging."
+            exit 1
+          fi
+
+      - name: Ensure release tag exists (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add plugin.json .github/plugin/marketplace.json
-          git commit -m "chore(release): bump plugin to v$VERSION"
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing it."
+            exit 0
+          fi
+
           git tag -a "$TAG" -m "Release $TAG"
-          git push origin HEAD:${{ github.ref_name }}
           git push origin "$TAG"
 
       - name: Generate release notes
@@ -233,7 +255,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -308,103 +330,16 @@ jobs:
           fi
 
           # VS Code Marketplace rejects semver pre-release suffixes
-          # (e.g. 0.1.0-rc.1). The official channel model uses odd minors
-          # for the Pre-Release channel and even minors for Release.
-          # See: https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions
+          # (e.g. 0.1.0-rc.1). We publish every release as a stable
+          # marketplace release regardless of minor parity — the odd/even
+          # minor convention is opt-in and would require packaging the VSIX
+          # with --pre-release to match, which we don't do here.
           if [[ "$VERSION" == *-* ]]; then
             echo "Version $VERSION carries a semver pre-release suffix, which the"
             echo "VS Code Marketplace does not accept. Skipping marketplace publish."
             exit 0
           fi
 
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
-          if (( MINOR % 2 == 1 )); then
-            FLAG="--pre-release"
-            CHANNEL="Pre-Release"
-          else
-            FLAG=""
-            CHANNEL="Release"
-          fi
-
           VSIX_FILE=$(ls ./*.vsix)
-          echo "Publishing $VSIX_FILE to VS Code Marketplace ($CHANNEL channel)"
-          # shellcheck disable=SC2086
-          vsce publish --packagePath "$VSIX_FILE" --no-dependencies $FLAG
-
-      - name: Update CHANGELOG.md on main
-        if: steps.ver.outputs.prerelease == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.ver.outputs.tag }}
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          # Always work against the tip of main so the changelog stays current,
-          # even when this run was triggered by a tag push from an older commit.
-          git fetch origin main
-          git checkout -B changelog-update origin/main
-
-          DATE=$(date -u +%Y-%m-%d)
-
-          # Strip the heading + install footer from release-notes.md to get just
-          # the entry body. release-notes.md format:
-          #   ## Git-Ape vX.Y.Z
-          #   <body>
-          #   ## Install
-          #   ...
-          ENTRY_BODY=$(awk '
-            /^## Install$/ { exit }
-            /^## Git-Ape / { next }
-            { print }
-          ' release-notes.md | sed -e 's/[[:space:]]*$//' | awk 'NF || p { p=1; print }')
-
-          NEW_ENTRY=$(printf '## [%s] - %s\n\n%s\n' "$VERSION" "$DATE" "$ENTRY_BODY")
-
-          if [[ -f CHANGELOG.md ]]; then
-            # Insert new entry below the top-level header, preserving existing content.
-            awk -v entry="$NEW_ENTRY" '
-              BEGIN { inserted = 0 }
-              {
-                print
-                if (!inserted && /^# /) {
-                  print ""
-                  print entry
-                  inserted = 1
-                }
-              }
-            ' CHANGELOG.md > CHANGELOG.md.tmp
-            mv CHANGELOG.md.tmp CHANGELOG.md
-          else
-            {
-              echo "# Changelog"
-              echo
-              echo "All notable changes to this project are documented here."
-              echo "This project follows [Semantic Versioning](https://semver.org/)."
-              echo
-              echo "$NEW_ENTRY"
-            } > CHANGELOG.md
-          fi
-
-          if git diff --quiet CHANGELOG.md; then
-            echo "CHANGELOG.md unchanged; skipping commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "docs(changelog): add entry for $TAG"
-
-          # Push directly to main. If the push fails (someone else moved main),
-          # fall back to opening a PR so the changelog still lands.
-          if ! git push origin HEAD:main; then
-            echo "Direct push to main rejected; opening a PR instead."
-            BRANCH="changelog/${TAG}"
-            git push origin "HEAD:$BRANCH"
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "docs(changelog): add entry for $TAG" \
-              --body "Automated changelog update for [$TAG](https://github.com/${{ github.repository }}/releases/tag/$TAG)."
-          fi
+          echo "Publishing $VSIX_FILE to VS Code Marketplace (Release channel)"
+          vsce publish --packagePath "$VSIX_FILE" --no-dependencies

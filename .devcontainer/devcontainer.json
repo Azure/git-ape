@@ -1,0 +1,64 @@
+{
+  "name": "Git-Ape Agent Engineering",
+  "image": "mcr.microsoft.com/devcontainers/python:3-3.12-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true,
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/copilot-cli:1": {},
+    "ghcr.io/devcontainers/features/powershell:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24"
+    }
+  },
+
+  "onCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "containerEnv": {
+    "WAZA_NO_UPDATE_CHECK": "1"
+  },
+
+  "forwardPorts": [3333],
+  "portsAttributes": {
+    "3333": {
+      "label": "Docs Site",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-azure-mcp-server",
+        "bewhite.psrule-vscode",
+        "ms-vscode.vscode-chat-customizations-evaluations",
+        "vstirbu.vscode-mermaid-preview",
+        "unifiedjs.vscode-mdx",
+        "dbaeumer.vscode-eslint",
+        "davidanson.vscode-markdownlint",
+        "timonwong.shellcheck",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions",
+        "ms-vscode.powershell"
+      ],
+      "settings": {
+        "azureMcp.serverMode": "namespace",
+        "azureMcp.readOnly": false,
+        "task.allowAutomaticTasks": "on",
+        "chatCustomizationsEvaluations.waza.command": "waza"
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}

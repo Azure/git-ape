@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-command-not-found
+name: Positive — "command not found" failure
+description: Skill should be invoked when CLI tools are missing.
+# `mutable-by-*` tag declares which artifact must change for this task's
+# score to move. Values:
+#   mutable-by-skill        — score reflects SKILL.md (trigger graders)
+#   mutable-by-agent        — score reflects .agent.md (persona, workflow, identity)
+#   mutable-by-eval-grader  — score is locked by grader/task design; only this YAML can fix it
+# Currently consumed by `/agent-improve` (actionability surface + Locked?
+# column + verdict gate). `/skill-improve` integration is tracked as a
+# follow-up; until it lands, the tag is informational on skill tasks.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "az: command not found — what tools should be installed for Git-Ape skills?"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/prereq-check/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user reported `az: command not found` and asked what tools should
+        be installed for Git-Ape skills.
+
+        PASS criteria — the response must contain ALL of:
+          1. Names ALL of the core required tools: `az` (Azure CLI), `gh`
+             (GitHub CLI), `jq`, and `git`.
+          2. Provides a concrete install command for the missing `az` for at
+             least one platform (macOS via `brew install azure-cli`, Linux
+             via apt/yum/curl, or Windows via winget/MSI).
+          3. Recommends verifying versions after install (e.g., `az --version`,
+             `gh --version`).
+          4. Reaches a verdict / next step — either a readiness summary
+             (✅ READY / ⚠️ Missing) OR explicit "after install, run X to
+             verify".
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

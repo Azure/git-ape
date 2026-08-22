@@ -102,6 +102,35 @@
       {
         "path": "./.github/skills/prereq-check/SKILL.md"
       }
+    ],
+    "chatPromptFiles": [
+      {
+        "path": "./.github/prompts/git-ape.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/agent-bench.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/agent-improve.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/agent-onboard.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/agent-promote.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/skill-bench.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/skill-improve.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/skill-onboard.prompt.md"
+      },
+      {
+        "path": "./.github/prompts/skill-promote.prompt.md"
+      }
     ]
   }
 }

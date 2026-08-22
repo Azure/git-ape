@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-off-topic
+name: Negative — Off-topic prompt (Linux kernel scheduling)
+description: Off-topic prompt clearly outside Azure deployment teardown should not trigger this skill.
+tags: [trigger, negative, off-topic, mutable-by-skill]
+inputs:
+  prompt: "Explain how the Linux Completely Fair Scheduler (CFS) picks the next task to run, and how vruntime is recomputed when a task wakes from sleep."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-destroy/SKILL.md
+      mode: negative
+      threshold: 0.5

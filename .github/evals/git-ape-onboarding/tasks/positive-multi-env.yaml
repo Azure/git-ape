@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-multi-env
+name: Positive — Multi-environment onboarding
+description: Multi-env (dev/staging/prod) onboarding question — should trigger the skill.
+tags: [trigger, positive]
+inputs:
+  prompt: "I need to add a staging subscription to an existing Git-Ape repo and create a separate azure-deploy-staging environment. Walk me through it."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to add a staging subscription to an EXISTING Git-Ape
+        repo and create a separate `azure-deploy-staging` GitHub environment.
+
+        The skill is designed to GATE on prerequisites and required user
+        inputs before executing any state-changing commands. The expected
+        first-turn reply is a "gated step-1" response that gathers the
+        multi-env-specific context, NOT a completion report. Grade accordingly.
+
+        PASS criteria — the response must satisfy ALL FOUR of:
+          1. Prereq check results are presented (tool / auth status table
+             or equivalent inspection of the local environment).
+          2. The auth/prereq gate is explicitly surfaced when blocking
+             (e.g. "Azure CLI not authenticated", "az login required").
+             If all prereqs happen to pass, this criterion is satisfied.
+          3. The agent requests at least THREE of the following inputs
+             before proceeding: target GitHub repository, staging Azure
+             subscription ID, RBAC role, existing App Registration reuse
+             decision (or new App Reg), staging environment name confirmation,
+             onboarding mode. Numbered questions or an explicit input block count.
+          4. The agent demonstrates multi-environment AWARENESS — at least
+             ONE of the following must appear in the response:
+             (a) mentions creating a separate federated-credential entry
+                 (or new App Reg / UAMI) for staging,
+             (b) mentions the new GitHub environment name (e.g.
+                 `azure-deploy-staging`),
+             (c) asks whether to reuse the existing service principal or
+                 create a new one for staging isolation,
+             (d) mentions per-environment secrets / RBAC scoping so dev
+                 and staging point at different subscriptions.
+
+        If ALL FOUR are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

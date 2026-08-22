@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Auto-generated default eval suite. Edit tasks/*.yaml to add real-world prompts.
+# Run: waza run .github/evals/git-ape-onboarding/eval.yaml -v
+
+name: git-ape-onboarding-eval
+description: "Onboard a repository, Azure subscription(s), and user identity for Git-Ape CI/CD using a skill-driven CLI playbook. Use for first-time setup of OIDC, federated credentials, RBAC, GitHub environments, and required secrets."
+skill: git-ape-onboarding
+version: "0.2"
+
+config:
+  trials_per_task: 1
+  timeout_seconds: 180
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Skill should activate on relevant prompts and stay quiet otherwise.
+
+graders:
+  # Budget grader: onboarding runs multi-step CLI playbooks; flag runs that
+  # balloon in tool calls or wall time beyond reasonable bounds.
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 240000
+
+  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks only.
+  # Keeps judge-model errors from zeroing out the negative-task trigger check
+  # in the same leg.
+
+  # NOTE: A `skill_invocation` orchestration grader was removed (2026-05-15).
+  # It required sub-skills `azure-naming-research` and `azure-role-selector`
+  # but neither is referenced in SKILL.md — the skill never claims to invoke
+  # them. The grader produced a deterministic 0.0 across all models on every
+  # task (including negatives where the agent correctly refused), contributed
+  # ~25% drag to every leg's avg, and conveyed no model-quality signal. If a
+  # real orchestration contract is added to SKILL.md, re-introduce a grader
+  # that lists the skills SKILL.md actually invokes.
+
+tasks:
+  - "tasks/*.yaml"

@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-clean-up-stack
+name: Positive — Clean up the deployment stack
+description: User asks to clean up a Git-Ape deployment stack and free the resource group; skill should activate.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "Clean up the Azure deployment stack for deploy-20260524-test. I want to free up the resource group and any soft-deletable resources so I can re-deploy with the same name."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-destroy/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). The judge has NO access to the agent's
+  # response unless continue_session: true is set.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to clean up a Git-Ape deployment stack
+        (deploy-20260524-test), free the resource group, and handle any
+        soft-deletable resources so the deployment can be re-created with
+        the same name.
+
+        PASS criteria — the response must contain ALL of:
+          1. Recommends running the `azure-stack-destroy` skill OR its
+             scripts (`destroy-stack.sh` / `destroy-stack.ps1`) rather than
+             a raw `az group delete` — explicitly because raw `az group
+             delete` misses soft-delete cleanup and any multi-RG resources.
+          2. References the requirement for `state.json` under
+             `.azure/deployments/deploy-20260524-test/` (skill refuses to
+             run without it).
+          3. Mentions deleting the deployment stack itself —
+             `az stack sub delete` with `--action-on-unmanage deleteAll`
+             (or equivalent semantics: one delete cleans every resource
+             the stack owns).
+          4. Either covers the soft-delete purge sweep behavior (Key
+             Vault, Cognitive Services purged after stack delete) OR
+             notes that resources flagged `purgeProtected: true` in
+             `state.json` are intentionally retained.
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-skip-on-collision
+name: Positive — Scaffold honors skip-with-notice on collision
+description: |
+  Confirms the agent invokes onboarding and surfaces the skip-with-notice
+  policy when scaffolding workflow files into a repo that already has a
+  customized `.github/workflows/git-ape-deploy.yml`.
+tags: [trigger, positive, scaffold]
+inputs:
+  prompt: "I'm onboarding a repo for Git-Ape. I already have a customized .github/workflows/git-ape-deploy.yml. Will running /git-ape-onboarding overwrite my customization, and what should I expect from the scaffold step?"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user has a CUSTOMIZED `.github/workflows/git-ape-deploy.yml`
+        and asked whether running /git-ape-onboarding will overwrite it,
+        and what to expect from the scaffold step.
+
+        PASS criteria — the response must satisfy AT LEAST THREE of the
+        following FOUR:
+          1. Explicitly states the scaffold step will NOT overwrite existing
+             files (skip-on-collision policy).
+          2. Mentions that a notice / warning / log message is surfaced for
+             each file that is skipped (the user is informed of the collision).
+          3. Recommends backing up OR diffing the existing customization
+             against the upstream template before deciding whether to merge
+             changes manually.
+          4. Reassures the user that their customization is safe and explains
+             how they can opt-in to overwrite or hand-merge upstream changes
+             (e.g., temporarily rename the file, or copy from a reference).
+
+        If AT LEAST THREE of the four are clearly satisfied, call
+        `set_waza_grade_pass`. Otherwise, call `set_waza_grade_fail` and
+        list which criteria are missing or unclear.
+
+        Rationale: criterion 4's opt-in-overwrite mechanic is a corner case;
+        a response that nails the first three (skip policy + notice + diff
+        recommendation) is a comprehensive, user-helpful answer even if it
+        omits the rename-to-force-overwrite workaround.

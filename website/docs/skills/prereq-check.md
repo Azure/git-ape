@@ -1,7 +1,7 @@
 ---
 title: "Prereq Check"
 sidebar_label: "Prereq Check"
-description: "Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing."
+description: "Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose."
 ---
 
 <!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/prereq-check/SKILL.md -->
@@ -9,7 +9,7 @@ description: "Check that all required CLI tools are installed, meet minimum vers
 
 # Prereq Check
 
-> Check that all required CLI tools are installed, meet minimum versions, and have active auth sessions. Shows platform-specific install commands for anything missing.
+> Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose.
 
 ## Details
 
@@ -18,178 +18,144 @@ description: "Check that all required CLI tools are installed, meet minimum vers
 | **Skill Directory** | `.github/skills/prereq-check/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/prereq-check Run without arguments to check all prerequisites` |
+| **Usage** | `/prereq-check` |
 
 
 ## Documentation
 
 # Prerequisites Check
 
-Validates the local environment has the CLI tools and auth sessions needed to run Git-Ape skills.
+Validate that the local environment has the CLI tools and auth sessions needed to run Git-Ape skills. Print platform-specific install commands and PATH-repair guidance for anything missing or version-stale.
+
+## Quick Reference
+
+| Property | Value |
+|----------|-------|
+| Best for | First-time setup, `command not found` triage, dev container validation |
+| Required binaries | `az` ≥ 2.50, `gh` ≥ 2.0, `jq` ≥ 1.6, `git` (any) |
+| Required auth | `az login`, `gh auth login` |
+| Shell | bash on macOS/Linux, PowerShell 7+ on Windows |
+| MCP tools | None — runs locally via shell |
+| Related skills | `git-ape-onboarding` (next step), `azure-validate` (deployment-time checks) |
+| Side effects | Read-only — never installs or modifies anything |
 
 ## When to Use
 
 - Before first-time onboarding (`/git-ape-onboarding`)
-- When any Git-Ape skill fails with a "command not found" error
-- When switching machines or dev containers
-- When a user asks "what do I need to install?"
+- When any Git-Ape skill fails with `command not found`
+- When the user reports a missing binary in their prompt (e.g., `az: command not found`)
+- After switching machines, shells, or dev containers
+- When the user asks "what do I need to install?"
 
-## Required Tools
+## Rules
 
-| Tool | Binary | Minimum Version | Purpose |
-|------|--------|-----------------|---------|
-| Azure CLI | `az` | 2.50 | Azure resource management, RBAC, deployments |
-| GitHub CLI | `gh` | 2.0 | Repo secrets, environments, PR operations |
-| jq | `jq` | 1.6 | JSON parsing in scripts and workflows |
-| git | `git` | any | Version control (usually pre-installed) |
+1. **Run read-only** — never `brew install`, `apt-get install`, or any state-changing command. Print the commands; the user runs them.
+2. **Trust user reports** — if the user reports a tool missing, treat it as ⚠️ even when this terminal can find it (different shell, PATH, container, or machine).
+3. **Stop at first blocking failure** — do not continue to auth checks while any tool is ❌.
+4. **Do not chain into other skills** — never auto-invoke `git-ape-onboarding`; tell the user to run it after `READY`.
 
-## Execution Playbook
+## Steps
 
-Run the steps below in order. Present results as a table. Stop at the first blocking failure.
+| # | Action | Reference |
+|---|--------|-----------|
+| 1 | **Detect Platform** — `uname -s` / `uname -m` on bash, `$PSVersionTable.OS` on PowerShell → macOS / Linux (apt vs dnf) / Windows (PowerShell 7+) | inline |
+| 2 | **Scan Prompt for Reported Missing Tools** — match `<tool>: command not found`, `command not found: <tool>`, `<tool> is not installed` | inline |
+| 3 | **Run Tool Check** — macOS/Linux: `bash scripts/check-tools.sh` · Windows: `pwsh -File scripts/check-tools.ps1` | [scripts/check-tools.sh](https://github.com/Azure/git-ape/blob/main/.github/skills/prereq-check/scripts/check-tools.sh), [scripts/check-tools.ps1](https://github.com/Azure/git-ape/blob/main/.github/skills/prereq-check/scripts/check-tools.ps1) |
+| 4 | **Present Status Table** — pass/fail with found vs. minimum version | See [Status Table](#status-table) |
+| 5 | **Show Install / PATH Repair** — only for ❌ and ⚠️ entries, scoped to platform | [references/install-commands.md](https://github.com/Azure/git-ape/blob/main/.github/skills/prereq-check/references/install-commands.md) |
+| 6 | **Check Auth Sessions** — only if Step 4 reports all tools ✅ | See [Auth Checks](#auth-checks) |
+| 7 | **Emit Verdict** — exactly one of READY / TOOLS MISSING / REPORTED MISSING / AUTH MISSING | See [Outputs](#outputs) |
 
-### Step 1: Detect Platform
+### Status Table
+
+`scripts/check-tools.sh` emits TSV rows of `tool<TAB>status<TAB>found<TAB>minimum`. Render them as:
+
+| Tool | Status | Found | Required |
+|------|--------|-------|----------|
+| az   | ✅ / ⚠️ / ❌ | x.y.z | 2.50 |
+| gh   | ✅ / ⚠️ / ❌ | x.y.z | 2.0  |
+| jq   | ✅ / ⚠️ / ❌ | x.y   | 1.6  |
+| git  | ✅ / ❌      | x.y.z | any  |
+
+Status mapping:
+
+- `OK` → ✅
+- `OUTDATED` or `MISSING` → ❌
+- Reported missing in Step 2 but `OK` in this terminal → ⚠️ with note `reported missing by user`
+
+### Auth Checks
+
+macOS / Linux (bash):
 
 ```bash
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-echo "Platform: $OS / $ARCH"
+az account show --query "{name:name,id:id,tenantId:tenantId}" -o table 2>/dev/null \
+  || echo "❌ Not logged in to Azure. Run: az login"
+
+gh auth status 2>/dev/null \
+  || echo "❌ Not logged in to GitHub. Run: gh auth login"
 ```
 
-Map the result for install instructions:
-- `Darwin` → macOS
-- `Linux` → Linux (check for `apt-get` vs `yum`/`dnf` to narrow distro)
-- `MINGW*` / `MSYS*` → Windows (git-bash)
+Windows (PowerShell 7+):
 
-### Step 2: Check Each Tool
-
-```bash
-# --- az (Azure CLI) — required, minimum 2.50 ---
-if command -v az &>/dev/null; then
-  AZ_VER=$(az version --query '"azure-cli"' -o tsv 2>/dev/null)
-  echo "az: $AZ_VER"
-else
-  echo "az: NOT FOUND"
-fi
-
-# --- gh (GitHub CLI) — required, minimum 2.0 ---
-if command -v gh &>/dev/null; then
-  GH_VER=$(gh --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-  echo "gh: $GH_VER"
-else
-  echo "gh: NOT FOUND"
-fi
-
-# --- jq — required, minimum 1.6 ---
-if command -v jq &>/dev/null; then
-  JQ_VER=$(jq --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+[a-z]*')
-  echo "jq: $JQ_VER"
-else
-  echo "jq: NOT FOUND"
-fi
-
-# --- git — required (usually pre-installed) ---
-if command -v git &>/dev/null; then
-  GIT_VER=$(git --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-  echo "git: $GIT_VER"
-else
-  echo "git: NOT FOUND"
-fi
-```
-
-### Step 3: Present Results
-
-Show a table with pass/fail status:
-
-| Tool | Status | Found Version | Minimum Required |
-|------|--------|---------------|------------------|
-| az   | ✅ / ❌ | x.y.z        | 2.50             |
-| gh   | ✅ / ❌ | x.y.z        | 2.0              |
-| jq   | ✅ / ❌ | x.y          | 1.6              |
-| git  | ✅ / ❌ | x.y.z        | any              |
-
-Mark a tool ❌ if it is missing OR below the minimum version.
-
-### Step 4: Show Install Commands (only if something is missing)
-
-Show install commands only for missing or outdated tools, matching the detected platform.
-
-**macOS (Homebrew):**
-```bash
-brew install azure-cli   # az
-brew install gh           # GitHub CLI
-brew install jq           # jq
-brew install git          # git (if missing)
-```
-
-**Ubuntu / Debian:**
-```bash
-# az — Microsoft repository
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
-# gh — GitHub repository
-(type -p wget >/dev/null || sudo apt-get install wget -y) \
-  && sudo mkdir -p -m 755 /etc/apt/keyrings \
-  && out=$(mktemp) && wget -nv -O"$out" https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-  && cat "$out" | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-  && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-  && sudo apt-get update && sudo apt-get install gh -y
-
-# jq
-sudo apt-get install -y jq
-```
-
-**RHEL / Fedora:**
-```bash
-# az
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo dnf install -y azure-cli
-
-# gh
-sudo dnf install -y gh
-
-# jq
-sudo dnf install -y jq
-```
-
-**Windows (PowerShell with winget):**
 ```powershell
-winget install Microsoft.AzureCLI
-winget install GitHub.cli
-winget install jqlang.jq
+az account show --query "{name:name,id:id,tenantId:tenantId}" -o table 2>$null
+if (-not $?) { Write-Output "❌ Not logged in to Azure. Run: az login" }
+
+gh auth status 2>$null
+if (-not $?) { Write-Output "❌ Not logged in to GitHub. Run: gh auth login" }
 ```
 
-> **Windows note:** Git-Ape skills require a BASH shell. Install [Git for Windows](https://gitforwindows.org/) and use git-bash.
+## Outputs
 
-### Step 5: Check Auth Sessions
+A single chat message containing:
 
-Only run this step if all tools passed Step 3.
+1. **Status table** from Step 4.
+2. **Install / PATH repair commands** for ❌ and ⚠️ entries — pulled from [references/install-commands.md](https://github.com/Azure/git-ape/blob/main/.github/skills/prereq-check/references/install-commands.md), scoped to the detected platform.
+3. **Auth status** (Azure subscription + GitHub user) from Step 6, only when all tools ✅.
+4. **Final verdict** — exactly one of:
+   - `✅ READY` — all tools installed, versions OK, auth sessions active. Render the handoff chip from `## Next` so the user can click into onboarding.
+   - `⚠️ TOOLS MISSING` — list what to install. Do not continue.
+   - `⚠️ REPORTED MISSING` — this terminal finds the tool but the user reported it missing. Print install / PATH repair + verification block.
+   - `⚠️ AUTH MISSING` — tools OK but `az login` and/or `gh auth login` required.
 
-```bash
-# Azure CLI session
-az account show --query "{name:name,id:id,tenantId:tenantId}" -o table 2>/dev/null
-if [[ $? -ne 0 ]]; then
-  echo "❌ Not logged in to Azure. Run: az login"
-fi
+## Error Handling
 
-# GitHub CLI session
-gh auth status 2>/dev/null
-if [[ $? -ne 0 ]]; then
-  echo "❌ Not logged in to GitHub. Run: gh auth login"
-fi
-```
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `az --version` hangs | Stale telemetry / extension cache | `az config set core.collect_telemetry=false`; reinstall if persistent |
+| `gh auth status` says "not logged into any hosts" | No GitHub session | `gh auth login --web` |
+| `az account show` returns `Please run 'az login'` | Expired or missing session | `az login` (use `--use-device-code` in headless shells) |
+| User reports missing tool but this terminal finds it | Different shell / PATH / container / machine | Treat as ⚠️ REPORTED MISSING — print install + PATH repair, do not contradict |
+| `jq --version` starts with `1.5` | Below minimum (1.6) | Upgrade via platform package manager |
+| `check-tools.sh: Permission denied` | Script not executable | `chmod +x .github/skills/prereq-check/scripts/check-tools.sh` |
+| `check-tools.ps1 cannot be loaded because running scripts is disabled` | PowerShell execution policy | Run via `pwsh -File scripts/check-tools.ps1` (bypasses script-block policy), or `Set-ExecutionPolicy -Scope Process RemoteSigned` |
+| `pwsh: command not found` on Windows | PowerShell 7+ not installed | `winget install Microsoft.PowerShell` — Windows PowerShell 5.1 also works but ship `pwsh` for parity |
 
-### Step 6: Summary
+## Constraints
 
-Present a final verdict:
+**Always:**
 
-- **✅ READY** — All tools installed, versions OK, auth sessions active. Proceed with any Git-Ape skill.
-- **⚠️ TOOLS MISSING** — List what to install. Do not proceed until resolved.
-- **⚠️ AUTH MISSING** — Tools OK but user needs to run `az login` and/or `gh auth login`.
+- Print install commands; let the user run them
+- Detect platform before printing recipes
+- Honor user-reported missing tools even when this terminal finds them
+- Stop at the first blocking failure
+- Verify with `command -v <tool>` + `<tool> --version` after suggested fixes
 
-## Agent Behavior
+**Never:**
 
-1. Run Steps 1–5 by executing the commands in the terminal.
-2. Present the results table and install commands (if needed).
-3. Do NOT install anything automatically — show the commands and let the user run them.
-4. If everything passes, tell the user they're ready and suggest next steps (e.g., `/git-ape-onboarding`).
+- Run `brew install`, `apt-get install`, `winget install`, or any state-changing command
+- Require git-bash on Windows — use the PowerShell script (`scripts/check-tools.ps1`) instead
+- Auto-invoke `git-ape-onboarding` after a `READY` verdict
+- Silently drop a reported-missing tool because this terminal finds it
+- Continue to auth checks while any tool is ❌
+- Recommend `sudo` on macOS (Homebrew handles non-root install)
+
+## Next
+
+After a `✅ READY` verdict, render this line verbatim so the chat surface turns it into a clickable handoff:
+
+> Next: **@Git-Ape Onboarding** — or run `/git-ape-onboarding` to start setup.
+
+VS Code Copilot Chat renders `@AgentName` mentions and `/skill-name` slash commands as clickable chips — the user clicks once to dispatch. Do not auto-invoke (Rule 4).
+
+For deployment-time validation of an Azure project, use `azure-validate` instead.

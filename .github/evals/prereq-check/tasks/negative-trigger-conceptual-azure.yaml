@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-trigger-conceptual-azure
+name: Negative — Azure service concept question
+description: A pure conceptual question about an Azure service's behavior has nothing to do with local CLI prerequisites, versions, or auth sessions and must not trigger prereq-check.
+# See positive-command-not-found.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Can you explain how Azure Container Apps revisions work? I want to understand the difference between single-revision and multiple-revision mode, how traffic splitting between revisions behaves, and what triggers a new revision to be created."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/prereq-check/SKILL.md
+      mode: negative
+      threshold: 0.5

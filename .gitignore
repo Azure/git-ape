@@ -19,3 +19,8 @@ docs/docusaurus/
 
 # Playwright MCP test artifacts
 .playwright-mcp/
+
+# Waza skill/agent evals (microsoft/waza)
+.waza-cache/
+.waza-results/
+*.waza-results.json

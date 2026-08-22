@@ -18,7 +18,7 @@ description: "Run preflight validation on ARM templates before deployment. Perfo
 | **Skill Directory** | `.github/skills/azure-deployment-preflight/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-deployment-preflight ARM template path or deployment ID` |
+| **Usage** | `/azure-deployment-preflight` |
 
 
 ## Documentation

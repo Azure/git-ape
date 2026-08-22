@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-local-deploy
+name: Positive — Local deploy of an existing deployment artifact
+description: Skill should be invoked when the user wants to deploy a Git-Ape template.json locally as a Deployment Stack.
+# `mutable-by-skill` — score reflects SKILL.md (trigger + answer_quality
+# graders read from .github/skills/azure-stack-deploy/SKILL.md).
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "I have an ARM template at .azure/deployments/deploy-20260506-001/template.json — deploy it to my Azure subscription the same way the CI workflow would, so destroy stays a single command later."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-deploy/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg.
+  # IMPORTANT: `continue_session: true` is mandatory — without it the judge
+  # has zero access to the agent's response and scores oscillate.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to deploy an existing ARM template
+        (`.azure/deployments/deploy-20260506-001/template.json`) the same
+        way the Git-Ape CI workflow would, so destroy stays a single
+        command later.
+
+        PASS criteria — the response must contain ALL of:
+          1. Names `az stack sub create` (NOT `az deployment sub create`)
+             as the deployment primitive.
+          2. Includes the `--action-on-unmanage deleteAll` flag (this is
+             what makes destroy idempotent and matches the CI workflow).
+          3. References the helper script
+             `.github/skills/azure-stack-deploy/scripts/deploy-stack.sh`
+             OR `deploy-stack.ps1` instead of asking the user to assemble
+             the `az` command from scratch.
+          4. Mentions that `state.json` (schemaVersion 1.0) will be
+             written to capture the stack ID and managed resources.
+
+        If ALL four criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

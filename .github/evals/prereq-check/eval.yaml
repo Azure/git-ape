@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Pilot evaluation suite for the prereq-check skill.
+# Validates trigger precision via the heuristic `trigger` grader.
+#
+# Run: waza run .github/evals/prereq-check/eval.yaml
+
+name: prereq-check-eval
+description: Trigger precision pilot for prereq-check.
+skill: prereq-check
+version: "0.2"
+
+config:
+  # Pilot tier: 3 trials per task for flake detection (per skill-promote contract).
+  # Single-trial runs hide model nondeterminism on borderline triggers.
+  trials_per_task: 3
+  timeout_seconds: 60
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Skill should activate on tooling/install prompts and stay quiet otherwise.
+
+graders:
+  # Budget grader: prereq-check is a lightweight diagnostic; flag anything
+  # that explodes in tool calls or takes longer than expected.
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 240000
+
+  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks only.
+  # Keeps judge-model errors from zeroing out the negative-task trigger check
+  # in the same leg.
+
+tasks:
+  - "tasks/*.yaml"

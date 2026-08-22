@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-redeploy-after-edit
+name: Positive — Re-deploy after template edit
+description: Skill should be invoked when re-deploying an existing deployment ID after template.json was edited (in-place stack update).
+# See positive-local-deploy.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: "I already deployed deploy-20260506-001 last week and just edited its template.json to add a tag. Push the change to the same deployment without creating a duplicate stack — what command do I run?"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-deploy/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user has an existing deployment (`deploy-20260506-001`) and
+        edited its `template.json`. They want to push the change
+        in-place — same stack, no duplicate.
+
+        PASS criteria — the response must contain ALL of:
+          1. Calls out that Azure Deployment Stacks are stateful and that
+             re-running `az stack sub create` against the SAME stack name
+             updates the existing stack in place (NOT create-only).
+          2. Names `az stack sub create` (or the equivalent
+             `deploy-stack.sh` / `deploy-stack.ps1` script) as the
+             command to run again.
+          3. Reuses the same deployment ID / stack name
+             (`deploy-20260506-001`) — does NOT instruct the user to
+             pick a new name or create a fresh deployment folder.
+          4. Reaches a concrete next step — either the exact command to
+             run OR a clear instruction to invoke the
+             `azure-stack-deploy` script with the existing deployment ID.
+
+        If ALL four criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

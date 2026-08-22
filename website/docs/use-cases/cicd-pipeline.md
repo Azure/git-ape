@@ -62,7 +62,7 @@ graph TD
 
 ### `git-ape-deploy.yml` — Execute Deployment
 
-**Triggers:** Push to `main` (PR merge) or `/deploy` comment on approved PR
+**Triggers:** Push to `main` (PR merge)
 
 | Step | Action |
 |------|--------|
@@ -97,7 +97,7 @@ steps:
     with:
       client-id: ${{ secrets.AZURE_CLIENT_ID }}
       tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 ```
 
 ## Related

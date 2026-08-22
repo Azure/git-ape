@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/config.schema.json
+
+# Waza configuration for Azure/git-ape.
+#
+# Skills live under .github/skills/ (existing layout — not touched).
+# Eval suites live under .github/evals/ alongside them.
+# Run results land under .waza-results/ (gitignored).
+
+paths:
+  skills: .github/skills/
+  evals: .github/evals/
+  results: .waza-results/
+
+defaults:
+  engine: copilot-sdk
+  model: claude-sonnet-4.6
+  timeout: 300
+  parallel: true
+  workers: 4
+  verbose: false
+  sessionLog: false
+
+cache:
+  enabled: true
+  dir: .waza-cache
+
+dev:
+  model: claude-sonnet-4.6
+  target: medium-high
+  maxIterations: 5
+
+tokens:
+  # Aspirational token caps for SKILL.md files, calibrated to the upstream
+  # agentskills.io specification recommendation: < 5,000 tokens and < 500 lines
+  # per skill body. (See https://agentskills.io/specification.md#progressive-disclosure)
+  #
+  # Rationale: an earlier iteration of this config set warningThreshold=1000 and
+  # fallbackLimit=1300 in pursuit of a "tighter than upstream" local target.
+  # In practice, several legitimately procedural skills (azure-policy-advisor,
+  # azure-security-analyzer, git-ape-onboarding) carry domain-specific procedures
+  # that exceed 1k tokens by design — the upstream 5,000-token ceiling is the
+  # ground truth for "does this fit in agent context comfortably".
+  #
+  # Skills approaching warningThreshold should explore progressive disclosure
+  # (L2 references/, L3 live tools, scripts/) before being decomposed. Skills
+  # over fallbackLimit should be split into focused sub-skills.
+  #
+  # Re-evaluate when the skill corpus stabilises: `waza tokens count
+  # .github/skills/ --format json | jq '[.files|to_entries[]|
+  # select(.key|endswith("/SKILL.md"))|.value.tokens]|sort'`.
+  warningThreshold: 3000
+  fallbackLimit: 5000
+
+graders:
+  programTimeout: 30

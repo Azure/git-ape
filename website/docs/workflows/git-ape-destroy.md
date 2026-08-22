@@ -4,15 +4,15 @@ sidebar_label: "Destroy"
 description: "GitHub Actions workflow: Git-Ape: Destroy"
 ---
 
-<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/workflows/git-ape-destroy.exampleyml -->
+<!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-onboarding/templates/workflows/git-ape-destroy.yml -->
 
 
 # Git-Ape: Destroy
 
-**Workflow file:** `.github/workflows/git-ape-destroy.exampleyml`
+**Workflow file:** `.github/skills/git-ape-onboarding/templates/workflows/git-ape-destroy.yml`
 
-:::info[Activation required]
-This workflow ships as `git-ape-destroy.exampleyml` and is **inert** until renamed to `git-ape-destroy.yml`. The [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow renames every `.exampleyml` file in `.github/workflows/` to `.yml` after you complete the experimental-status acknowledgments.
+:::info[Scaffolded by `/git-ape-onboarding`]
+This workflow is **shipped as a template** under `.github/skills/git-ape-onboarding/templates/workflows/` and copied into your repository's `.github/workflows/` by the [`/git-ape-onboarding`](/docs/skills/git-ape-onboarding) flow. It does **not** run in the git-ape repo itself.
 :::
 
 ## Triggers
@@ -109,19 +109,33 @@ jobs:
 
       - name: Find destroy-requested deployments
         id: find
+        env:
+          # Route attacker-controllable workflow_dispatch inputs through env so they
+          # can't be interpolated into the shell (GitHub Actions hardening).
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_CONFIRM: ${{ inputs.confirm }}
+          INPUT_DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            CONFIRM="${{ inputs.confirm }}"
-            if [[ "$CONFIRM" != "destroy" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$INPUT_CONFIRM" != "destroy" ]]; then
               echo "::error::Confirmation must be 'destroy'"
               echo "has_destroys=false" >> "$GITHUB_OUTPUT"
               echo "deployment_ids=[]" >> "$GITHUB_OUTPUT"
               exit 1
             fi
-            DEPLOYMENT_IDS='["${{ inputs.deployment_id }}"]'
+            # Constrain the manually-supplied id to a safe charset before it
+            # becomes a matrix value (prevents script injection downstream).
+            if ! [[ "$INPUT_DEPLOYMENT_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::Invalid deployment_id '$INPUT_DEPLOYMENT_ID'. Allowed characters: A-Z a-z 0-9 . _ -"
+              echo "has_destroys=false" >> "$GITHUB_OUTPUT"
+              echo "deployment_ids=[]" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            # Build the JSON array with jq so the input value is safely encoded.
+            DEPLOYMENT_IDS=$(jq -n -c --arg id "$INPUT_DEPLOYMENT_ID" '[$id]')
             echo "has_destroys=true" >> "$GITHUB_OUTPUT"
             echo "deployment_ids=$DEPLOYMENT_IDS" >> "$GITHUB_OUTPUT"
-            echo "Manual destroy requested: ${{ inputs.deployment_id }}"
+            echo "Manual destroy requested: $INPUT_DEPLOYMENT_ID"
             exit 0
           fi
 
@@ -159,6 +173,13 @@ jobs:
           fi
 
           DEPLOYMENT_IDS=$(echo "$DESTROY_IDS" | tr ' ' '\n' | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          # Reject any deployment directory name outside a safe charset before it
+          # becomes a matrix value (defense in depth on top of env-passing).
+          INVALID=$(echo "$DEPLOYMENT_IDS" | jq -r '.[] | select(test("^[A-Za-z0-9._-]+$") | not)')
+          if [[ -n "$INVALID" ]]; then
+            echo "::error::Invalid deployment directory name(s): $INVALID. Allowed characters: A-Z a-z 0-9 . _ -"
+            exit 1
+          fi
           echo "has_destroys=true" >> "$GITHUB_OUTPUT"
           echo "deployment_ids=$DEPLOYMENT_IDS" >> "$GITHUB_OUTPUT"
           echo "Deployments to destroy: $DEPLOYMENT_IDS"
@@ -174,13 +195,18 @@ jobs:
         deployment_id: ${{ fromJson(needs.detect-destroys.outputs.deployment_ids) }}
       max-parallel: 1
       fail-fast: false
+    # matrix.deployment_id is attacker-controllable (derived from PR directory
+    # names / workflow_dispatch input). Expose it as an environment variable so
+    # run blocks reference "$DEPLOYMENT_ID" instead of inlining ${{ ... }},
+    # preventing script injection.
+    env:
+      DEPLOYMENT_ID: ${{ matrix.deployment_id }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Load deployment state
         id: state
         run: |
-          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
           STATE_FILE=".azure/deployments/$DEPLOYMENT_ID/state.json"
 
           if [[ ! -f "$STATE_FILE" ]]; then
@@ -189,17 +215,31 @@ jobs:
             exit 1
           fi
 
+          # Stacks-only: stackId is the single source of truth. Deployments created
+          # via Deployment Stacks carry a stackId and are destroyed by deleting the
+          # stack. A deployment with no stackId is a pre-Stacks (legacy) deployment;
+          # it has no stack to delete, so we fall back to resource-group deletion.
+          STACK_ID=$(jq -r '.stackId // empty' "$STATE_FILE")
+          STACK_NAME=$(jq -r '.deploymentId // empty' "$STATE_FILE")
           RG_NAME=$(jq -r '.resourceGroup // empty' "$STATE_FILE")
 
-          if [[ -z "$RG_NAME" ]]; then
-            echo "::error::No resource group found in state file"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 1
+          if [[ -z "$STACK_ID" ]]; then
+            if [[ -z "$RG_NAME" ]]; then
+              echo "::error::state.json has no stackId and no resourceGroup — a pre-Stacks deployment cannot be safely destroyed by this workflow"
+              echo "found=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            echo "::warning::state.json has no stackId — treating as a pre-Stacks (legacy) deployment; will fall back to deleting resource group '$RG_NAME'"
+            echo "legacy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "legacy=false" >> "$GITHUB_OUTPUT"
           fi
 
           echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "stack_id=$STACK_ID" >> "$GITHUB_OUTPUT"
+          echo "stack_name=$STACK_NAME" >> "$GITHUB_OUTPUT"
           echo "resource_group=$RG_NAME" >> "$GITHUB_OUTPUT"
-          echo "Will destroy resource group: $RG_NAME"
+          echo "Will destroy deployment stack: $STACK_NAME (${STACK_ID:-legacy resource-group fallback})"
 
       - name: Azure Login (OIDC)
         if: steps.state.outputs.found == 'true'
@@ -207,149 +247,129 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build destroy plan
+      - name: Inventory managed resources
         id: check
         if: steps.state.outputs.found == 'true'
+        env:
+          STACK_NAME: ${{ steps.state.outputs.stack_name }}
+          RG_NAME: ${{ steps.state.outputs.resource_group }}
+          LEGACY: ${{ steps.state.outputs.legacy }}
         run: |
-          RG="${{ steps.state.outputs.resource_group }}"
-          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
-
-          # Check if resource group exists
-          EXISTS=$(az group exists --name "$RG")
-          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
-
-          if [[ "$EXISTS" != "true" ]]; then
-            echo "Resource group $RG does not exist (already deleted?)"
+          # Read live managed-resource list from the stack itself.
+          # Stacks are idempotent: if the stack is already gone we record that and exit cleanly.
+          if ! STACK_JSON=$(az stack sub show --name "$STACK_NAME" --output json 2>/dev/null); then
+            # No stack present. For legacy (pre-Stacks) deployments the resource
+            # group may still hold live resources — fall back to deleting it so we
+            # never record "already-destroyed" while real resources persist.
+            if [[ "$LEGACY" == "true" && -n "$RG_NAME" ]] && az group show --name "$RG_NAME" --output none 2>/dev/null; then
+              echo "Stack $STACK_NAME not found, but legacy resource group '$RG_NAME' still exists — will delete it (legacy fallback)"
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+              echo "fallback_rg=true" >> "$GITHUB_OUTPUT"
+              echo "resource_count=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Stack $STACK_NAME not found (already destroyed?)"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "fallback_rg=false" >> "$GITHUB_OUTPUT"
             echo "resource_count=0" >> "$GITHUB_OUTPUT"
-            echo "sub_count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Inventory RG resources
-          RESOURCES=$(az resource list --resource-group "$RG" \
-            --query "[].{name:name, type:type, id:id, provisioningState:provisioningState}" \
-            --output json 2>/dev/null || echo "[]")
-          RESOURCE_COUNT=$(echo "$RESOURCES" | jq 'length')
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "fallback_rg=false" >> "$GITHUB_OUTPUT"
 
-          echo "resource_count=$RESOURCE_COUNT" >> "$GITHUB_OUTPUT"
+          RESOURCES=$(echo "$STACK_JSON" | jq -c '[(.resources // [])[] | {id: .id, status: .status}]')
+          COUNT=$(echo "$RESOURCES" | jq 'length')
+
+          echo "resource_count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "resources<<EOF" >> "$GITHUB_OUTPUT"
           echo "$RESOURCES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-          echo "Resource group $RG has $RESOURCE_COUNT resources"
-          echo "$RESOURCES" | jq -r '.[] | "  - \(.type)/\(.name) (\(.provisioningState))"'
-
-          # Query deployment operations to find subscription-scoped resources
-          # These are NOT deleted by az group delete (e.g. role assignments, policy assignments)
-          SUB_RESOURCES="[]"
-
-          OPS=$(az deployment operation sub list \
-            --name "$DEPLOYMENT_ID" \
-            --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
-            -o json 2>/dev/null || echo "[]")
-
-          if [[ "$OPS" != "[]" ]]; then
-            # Find subscription-scoped authorization/policy resources (role assignments, etc.)
-            # These live outside the RG and survive az group delete
-            SUB_RESOURCES=$(echo "$OPS" | jq -c '[
-              .[] | select(
-                (.resourceType // "" | test("Microsoft.Authorization|Microsoft.Policy")) and
-                (.id // "" | test("/resourceGroups/") | not)
-              )
-            ]')
-
-            # Check nested deployments for RG-scoped role assignments too
-            NESTED_NAMES=$(echo "$OPS" | jq -r '[
-              .[] | select(.resourceType == "Microsoft.Resources/deployments")
-            ] | .[].resourceName // empty')
-
-            for NESTED_NAME in $NESTED_NAMES; do
-              NESTED_OPS=$(az deployment operation group list \
-                --resource-group "$RG" --name "$NESTED_NAME" \
-                --query "[?properties.provisioningState=='Succeeded' && properties.targetResource.id != null].properties.targetResource" \
-                -o json 2>/dev/null || echo "[]")
-
-              # Role assignments scoped to resources within the RG
-              NESTED_AUTH=$(echo "$NESTED_OPS" | jq -c '[
-                .[] | select(
-                  (.resourceType // "" | test("Microsoft.Authorization"))
-                )
-              ]')
-
-              SUB_RESOURCES=$(jq -n --argjson a "$SUB_RESOURCES" --argjson b "$NESTED_AUTH" '$a + $b')
-            done
-          fi
-
-          SUB_COUNT=$(echo "$SUB_RESOURCES" | jq 'length')
-
-          echo "sub_count=$SUB_COUNT" >> "$GITHUB_OUTPUT"
-          echo "sub_resources<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$SUB_RESOURCES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
           echo ""
           echo "=== Destroy Plan ==="
-          echo "Resource group:              $RG ($RESOURCE_COUNT resources)"
-          echo "Subscription-scoped resources: $SUB_COUNT"
-          if [[ "$SUB_COUNT" -gt 0 ]]; then
-            echo "$SUB_RESOURCES" | jq -r '.[] | "  - \(.resourceType): \(.resourceName) (\(.id))"'
-          fi
+          echo "Stack:           $STACK_NAME"
+          echo "Managed resources: $COUNT"
+          echo "$RESOURCES" | jq -r '.[] | "  - \(.id) [\(.status)]"'
           echo "==================="
 
-      - name: Delete subscription-scoped resources
-        id: destroy_sub
-        if: steps.check.outputs.exists == 'true' && steps.check.outputs.sub_count != '0'
-        run: |
-          echo "🗑️ Deleting subscription-scoped resources first..."
-          FAILED=0
-
-          echo '${{ steps.check.outputs.sub_resources }}' | jq -r '.[].id' | while read -r RESOURCE_ID; do
-            echo "  Deleting: $RESOURCE_ID"
-            if ! az resource delete --ids "$RESOURCE_ID" 2>&1; then
-              echo "::warning::Failed to delete $RESOURCE_ID"
-              FAILED=$((FAILED + 1))
-            fi
-          done
-
-          if [[ "$FAILED" -gt 0 ]]; then
-            echo "::warning::$FAILED subscription-scoped resource(s) failed to delete"
-          fi
-
-      - name: Delete resource group
+      - name: Delete deployment stack
         id: destroy
         if: steps.check.outputs.exists == 'true'
+        env:
+          STACK_NAME: ${{ steps.state.outputs.stack_name }}
         run: |
-          RG="${{ steps.state.outputs.resource_group }}"
-          echo "🗑️ Deleting resource group: $RG"
-          echo "This will block until the resource group is fully deleted..."
+          echo "🗑️ Deleting deployment stack: $STACK_NAME"
+          echo "   --action-on-unmanage deleteAll — removes every resource (across RGs / sub scope) the stack manages"
+          echo "   This will block until all managed resources are fully deleted..."
 
           START_TIME=$(date +%s)
 
-          az group delete --name "$RG" --yes 2>&1 || {
+          # --bypass-stack-out-of-sync-error: a destroyed run is one-shot; we
+          # don't need the safety check that protects against stale manifests
+          # during iterative updates.
+          if ! az stack sub delete \
+                --name "$STACK_NAME" \
+                --action-on-unmanage deleteAll \
+                --bypass-stack-out-of-sync-error true \
+                --yes 2>&1; then
             echo "destroy_status=failed" >> "$GITHUB_OUTPUT"
-            echo "::error::Failed to delete resource group $RG"
+            echo "::error::Failed to delete deployment stack $STACK_NAME"
             exit 1
-          }
+          fi
 
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "destroy_status=succeeded" >> "$GITHUB_OUTPUT"
           echo "destroy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
-          echo "✅ Resource group deleted in ${DURATION}s: $RG"
+          echo "✅ Stack deleted in ${DURATION}s: $STACK_NAME"
+
+      - name: Delete resource group (legacy fallback)
+        id: destroy_rg
+        if: steps.check.outputs.fallback_rg == 'true'
+        env:
+          RG_NAME: ${{ steps.state.outputs.resource_group }}
+        run: |
+          echo "🗑️ Legacy fallback: no Deployment Stack present — deleting resource group: $RG_NAME"
+          echo "   This will block until the resource group and all its resources are deleted..."
+
+          START_TIME=$(date +%s)
+
+          if ! az group delete --name "$RG_NAME" --yes 2>&1; then
+            echo "destroy_status=failed" >> "$GITHUB_OUTPUT"
+            echo "::error::Failed to delete resource group $RG_NAME"
+            exit 1
+          fi
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "destroy_status=succeeded" >> "$GITHUB_OUTPUT"
+          echo "destroy_duration=${DURATION}s" >> "$GITHUB_OUTPUT"
+          echo "✅ Resource group deleted in ${DURATION}s: $RG_NAME"
 
       - name: Update deployment state
         if: always() && steps.state.outputs.found == 'true'
         run: |
-          DEPLOYMENT_ID="${{ matrix.deployment_id }}"
           DEPLOY_DIR=".azure/deployments/$DEPLOYMENT_ID"
           STATE_FILE="$DEPLOY_DIR/state.json"
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-          if [[ "${{ steps.check.outputs.exists }}" == "false" ]]; then
+          # The effective destroy outcome comes from whichever path ran: the stack
+          # delete, or the legacy resource-group fallback.
+          FALLBACK_RG="${{ steps.check.outputs.fallback_rg }}"
+          if [[ "$FALLBACK_RG" == "true" ]]; then
+            DESTROY_STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+            DESTROY_DURATION="${{ steps.destroy_rg.outputs.destroy_duration }}"
+          else
+            DESTROY_STATUS="${{ steps.destroy.outputs.destroy_status }}"
+            DESTROY_DURATION="${{ steps.destroy.outputs.destroy_duration }}"
+          fi
+
+          if [[ "${{ steps.check.outputs.exists }}" == "false" && "$FALLBACK_RG" != "true" ]]; then
             STATUS="already-destroyed"
-          elif [[ "${{ steps.destroy.outputs.destroy_status }}" == "succeeded" ]]; then
+          elif [[ "$DESTROY_STATUS" == "succeeded" ]]; then
             STATUS="destroyed"
           else
             STATUS="destroy-failed"
@@ -358,7 +378,7 @@ jobs:
           # Update state file
           if [[ -f "$STATE_FILE" ]]; then
             jq --arg status "$STATUS" --arg ts "$TIMESTAMP" --arg actor "${{ github.actor }}" \
-              --arg duration "${{ steps.destroy.outputs.destroy_duration }}" \
+              --arg duration "$DESTROY_DURATION" \
               '. + {status: $status, destroyedAt: $ts, destroyedBy: $actor, destroyDuration: $duration}' \
               "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
           fi
@@ -373,30 +393,41 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json"
-          git diff --cached --quiet || git commit -m "git-ape: mark ${{ matrix.deployment_id }} as $STATUS"
-          git push || echo "::warning::Could not push state update"
+          git diff --cached --quiet || git commit -m "git-ape: mark $DEPLOYMENT_ID as $STATUS"
+          git push || { echo "::error::Failed to push state update"; exit 1; }
 
       - name: Post summary
         if: always()
         run: |
-          DEPLOY_ID="${{ matrix.deployment_id }}"
+          DEPLOY_ID="$DEPLOYMENT_ID"
+          STACK="${{ steps.state.outputs.stack_name }}"
           RG="${{ steps.state.outputs.resource_group }}"
-          STATUS="${{ steps.destroy.outputs.destroy_status }}"
-          DURATION="${{ steps.destroy.outputs.destroy_duration }}"
           RESOURCE_COUNT="${{ steps.check.outputs.resource_count }}"
-          SUB_COUNT="${{ steps.check.outputs.sub_count }}"
           EXISTS="${{ steps.check.outputs.exists }}"
+          FALLBACK_RG="${{ steps.check.outputs.fallback_rg }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [[ "$FALLBACK_RG" == "true" ]]; then
+            STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+            DURATION="${{ steps.destroy_rg.outputs.destroy_duration }}"
+          else
+            STATUS="${{ steps.destroy.outputs.destroy_status }}"
+            DURATION="${{ steps.destroy.outputs.destroy_duration }}"
+          fi
 
           echo "============================================"
           echo "Git-Ape Destroy Summary"
           echo "============================================"
           echo "Deployment:     $DEPLOY_ID"
+          echo "Stack:          $STACK"
           echo "Resource Group: $RG"
-          if [[ "$EXISTS" == "false" ]]; then
-            echo "Result:         Already destroyed"
+          if [[ "$FALLBACK_RG" == "true" && "$STATUS" == "succeeded" ]]; then
+            echo "Result:         ✅ Destroyed (legacy resource-group fallback)"
+            echo "Duration:       $DURATION"
+          elif [[ "$EXISTS" == "false" ]]; then
+            echo "Result:         Already destroyed (stack not found)"
           elif [[ "$STATUS" == "succeeded" ]]; then
-            echo "Result:         ✅ Destroyed ($RESOURCE_COUNT RG resources + $SUB_COUNT subscription-scoped)"
+            echo "Result:         ✅ Destroyed ($RESOURCE_COUNT managed resources)"
             echo "Duration:       $DURATION"
           else
             echo "Result:         ❌ Failed"
@@ -412,17 +443,21 @@ jobs:
         run: |
           if [[ -z "$SLACK_WEBHOOK_URL" ]]; then exit 0; fi
 
-          DEPLOY_ID="${{ matrix.deployment_id }}"
-          RG="${{ steps.state.outputs.resource_group }}"
-          STATUS="${{ steps.destroy.outputs.destroy_status }}"
+          DEPLOY_ID="$DEPLOYMENT_ID"
+          STACK="${{ steps.state.outputs.stack_name }}"
+          if [[ "${{ steps.check.outputs.fallback_rg }}" == "true" ]]; then
+            STATUS="${{ steps.destroy_rg.outputs.destroy_status }}"
+          else
+            STATUS="${{ steps.destroy.outputs.destroy_status }}"
+          fi
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           if [[ "$STATUS" == "succeeded" ]]; then
             EMOJI="🗑️"
-            MSG="Resource group *$RG* ($DEPLOY_ID) destroyed"
+            MSG="Deployment stack *$STACK* ($DEPLOY_ID) destroyed"
           else
             EMOJI="❌"
-            MSG="Destroy failed for *$RG* ($DEPLOY_ID)"
+            MSG="Destroy failed for stack *$STACK* ($DEPLOY_ID)"
           fi
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \

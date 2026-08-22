@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-trigger-template-edit
+name: Negative — Editing an ARM template
+description: Editing template JSON should NOT trigger prereq-check.
+# See positive-command-not-found.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Add a tag block to the storageAccount resource in this ARM template."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/prereq-check/SKILL.md
+      mode: negative
+      threshold: 0.5

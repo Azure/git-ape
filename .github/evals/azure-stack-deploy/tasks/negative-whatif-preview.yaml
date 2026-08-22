@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-whatif-preview
+name: Negative — What-if preview / preflight validation
+description: What-if preview belongs to azure-deployment-preflight, not azure-stack-deploy.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Before I deploy, show me a what-if preview of the changes the template at .azure/deployments/deploy-20260506-001/template.json would make — don't actually deploy anything yet."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-deploy/SKILL.md
+      mode: negative
+      threshold: 0.5

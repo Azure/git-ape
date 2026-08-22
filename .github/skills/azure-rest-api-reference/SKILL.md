@@ -1,8 +1,9 @@
 ---
 name: azure-rest-api-reference
 description: "Look up Azure REST API and ARM template reference documentation for any resource type. Returns exact property schemas, required fields, valid values, and latest stable API versions. Use BEFORE generating or modifying ARM templates to ensure correctness. No Azure connection required."
-argument-hint: "Resource type (e.g., Microsoft.Web/sites, Microsoft.Storage/storageAccounts)"
-user-invocable: true
+metadata:
+  argument-hint: "Resource type (e.g., Microsoft.Web/sites, Microsoft.Storage/storageAccounts)"
+  user-invocable: true
 ---
 
 # Azure REST API Reference Lookup

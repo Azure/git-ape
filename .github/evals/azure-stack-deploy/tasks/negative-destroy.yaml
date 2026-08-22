@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-destroy
+name: Negative — Destroying / tearing down an existing deployment
+description: Destroy/teardown prompts belong to azure-stack-destroy, not azure-stack-deploy.
+tags: [trigger, negative, mutable-by-skill]
+inputs:
+  prompt: "Tear down the Azure resources I deployed under deploy-20260506-001 — delete the stack and the resource group cleanly."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-stack-deploy/SKILL.md
+      mode: negative
+      threshold: 0.5

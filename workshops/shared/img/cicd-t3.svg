@@ -1,0 +1,40 @@
+<svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+<defs>
+<linearGradient id="dev" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient>
+<linearGradient id="plan" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0F9ED5"/><stop offset="100%" stop-color="#156082"/></linearGradient>
+<linearGradient id="deploy" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4EA72E"/><stop offset="100%" stop-color="#2D6E1B"/></linearGradient>
+<linearGradient id="destroy" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D13438"/><stop offset="100%" stop-color="#A02226"/></linearGradient>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#FFD700"/></marker>
+</defs>
+<g font-family="Segoe UI,system-ui,sans-serif">
+<rect x="20" y="125" width="110" height="60" rx="12" fill="url(#dev)" stroke="rgba(255,255,255,0.3)"/>
+<text x="75" y="148" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">PR</text>
+<text x="75" y="166" text-anchor="middle" fill="#e8e2ff" font-size="10">opened</text>
+<text x="75" y="178" text-anchor="middle" fill="#e8e2ff" font-size="9">template change</text>
+<rect x="170" y="125" width="130" height="60" rx="12" fill="url(#plan)" stroke="rgba(255,255,255,0.3)"/>
+<text x="235" y="148" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">git-ape-plan</text>
+<text x="235" y="166" text-anchor="middle" fill="#d6eef8" font-size="10">validate + what-if</text>
+<text x="235" y="178" text-anchor="middle" fill="#d6eef8" font-size="9">PR comment</text>
+<rect x="340" y="125" width="120" height="60" rx="12" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.25)"/>
+<text x="400" y="148" text-anchor="middle" fill="#FFD700" font-size="13" font-weight="700">Approve</text>
+<text x="400" y="166" text-anchor="middle" fill="#c0cad7" font-size="10">human gate</text>
+<text x="400" y="178" text-anchor="middle" fill="#c0cad7" font-size="9">merge or /deploy</text>
+<rect x="490" y="125" width="100" height="60" rx="12" fill="url(#deploy)" stroke="rgba(255,255,255,0.3)"/>
+<text x="540" y="148" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">deploy</text>
+<text x="540" y="166" text-anchor="middle" fill="#d8efce" font-size="10">stack sub</text>
+<text x="540" y="178" text-anchor="middle" fill="#d8efce" font-size="9">+ integ. tests</text>
+<rect x="170" y="225" width="180" height="56" rx="12" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.22)" stroke-dasharray="4 3"/>
+<text x="260" y="247" text-anchor="middle" fill="#FFD700" font-size="11" font-weight="700">state.json committed</text>
+<text x="260" y="263" text-anchor="middle" fill="#c0cad7" font-size="9">stackId, managedResources[]</text>
+<rect x="380" y="225" width="200" height="56" rx="12" fill="url(#destroy)" stroke="rgba(255,255,255,0.3)"/>
+<text x="480" y="247" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">git-ape-destroy</text>
+<text x="480" y="263" text-anchor="middle" fill="#fac6c8" font-size="9">metadata.json &#8594; destroy-requested</text>
+<text x="300" y="50" text-anchor="middle" fill="#FFD700" font-size="14" font-weight="700">4 GitHub Actions workflows &#183; OIDC federated identity &#183; zero stored secrets</text>
+<text x="300" y="72" text-anchor="middle" fill="#c0cad7" font-size="10" font-style="italic">plan &#183; deploy &#183; destroy &#183; verify</text>
+</g>
+<line x1="130" y1="155" x2="166" y2="155" stroke="#FFD700" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="300" y1="155" x2="336" y2="155" stroke="#FFD700" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="460" y1="155" x2="486" y2="155" stroke="#FFD700" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="540" y1="186" x2="540" y2="220" stroke="#FFD700" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="540" y1="225" x2="350" y2="240" stroke="#FFD700" stroke-width="1.5" stroke-dasharray="3 3"/>
+</svg>

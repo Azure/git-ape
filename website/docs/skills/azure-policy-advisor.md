@@ -1,7 +1,7 @@
 ---
 title: "Azure Policy Advisor"
 sidebar_label: "Azure Policy Advisor"
-description: "Assess Azure Policy compliance for ARM template resources. Queries existing subscription assignments and unassigned custom/built-in definitions, cross-references with Microsoft Learn recommendations. Produces per-resource policy recommendations with implementation options."
+description: "Assess ARM template resources for Azure Policy compliance. Analyse the template, query existing subscription assignments via `az policy assignment list`, identify unassigned built-in and custom policies (CIS, NIST, FedRAMP), and emit a two-part report: template-fixable gaps (Part 1) and subscription-level policy assignments (Part 2). USE FOR: recommending Azure Policy assignments for an ARM template, auditing a subscription against CIS/NIST/general best practices, deciding which initiatives to assign at sub or management-group scope, distinguishing template-fixable vs platform-level governance gaps. DO NOT USE FOR: per-resource security configuration assessment (use azure-security-analyzer), RBAC role recommendations (use azure-role-selector), CAF naming abbreviations (use azure-naming-research), or pricing estimates (use azure-cost-estimator). INVOKES: az policy assignment list, az policy set-definition list, microsoft_docs_search, microsoft_docs_fetch."
 ---
 
 <!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/azure-policy-advisor/SKILL.md -->
@@ -9,7 +9,7 @@ description: "Assess Azure Policy compliance for ARM template resources. Queries
 
 # Azure Policy Advisor
 
-> Assess Azure Policy compliance for ARM template resources. Queries existing subscription assignments and unassigned custom/built-in definitions, cross-references with Microsoft Learn recommendations. Produces per-resource policy recommendations with implementation options.
+> Assess ARM template resources for Azure Policy compliance. Analyse the template, query existing subscription assignments via `az policy assignment list`, identify unassigned built-in and custom policies (CIS, NIST, FedRAMP), and emit a two-part report: template-fixable gaps (Part 1) and subscription-level policy assignments (Part 2). USE FOR: recommending Azure Policy assignments for an ARM template, auditing a subscription against CIS/NIST/general best practices, deciding which initiatives to assign at sub or management-group scope, distinguishing template-fixable vs platform-level governance gaps. DO NOT USE FOR: per-resource security configuration assessment (use azure-security-analyzer), RBAC role recommendations (use azure-role-selector), CAF naming abbreviations (use azure-naming-research), or pricing estimates (use azure-cost-estimator). INVOKES: az policy assignment list, az policy set-definition list, microsoft_docs_search, microsoft_docs_fetch.
 
 ## Details
 
@@ -18,21 +18,49 @@ description: "Assess Azure Policy compliance for ARM template resources. Queries
 | **Skill Directory** | `.github/skills/azure-policy-advisor/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-policy-advisor ARM template JSON or resource types to assess, and optionally a compliance framework (CIS, NIST, general)` |
+| **Usage** | `/azure-policy-advisor` |
 
 
 ## Documentation
 
 # Azure Policy Advisor
 
-Recommend Azure Policy assignments for ARM template resources by combining three sources of truth: existing Azure subscription policy state (assignments + definitions), Microsoft Learn built-in recommendations, and ARM template configuration analysis. Produces per-resource policy recommendations with severity ratings, built-in/custom definition IDs, and ready-to-use implementation options.
+**Recommend** Azure Policy assignments for ARM template resources by combining three sources of truth: existing Azure subscription policy state (assignments + definitions), Microsoft Learn built-in recommendations, and ARM template configuration analysis. The skill **analyses** each resource, **queries** the live subscription, **classifies** gaps, and **produces** per-resource recommendations with severity ratings, built-in/custom definition IDs, and ready-to-use implementation options.
 
-## When to Use
+## USE FOR
 
-- After template generation — recommend policies that complement deployed resources
-- Compliance audit — assess resources against CIS, NIST, or general best practices
-- During onboarding — recommend baseline policies for a new subscription
-- When user asks "what policies should we enforce?" or "are we compliant with X?"
+- "What Azure Policies should we enforce on this template?"
+- "Audit our subscription against CIS Azure Foundations / NIST SP 800-53"
+- "Which built-in initiative covers governance for this deployment?"
+- "Split policy work between template fixes vs subscription-level assignments"
+- "Recommend baseline policy assignments for a new subscription"
+
+## DO NOT USE FOR
+
+- **Per-resource security configuration assessment** (HTTPS-only, public access, shared-key access, TLS version, etc.) → use `azure-security-analyzer`
+- **RBAC role recommendations / least-privilege role selection** → use `azure-role-selector`
+- **CAF naming abbreviations or name-string length/character constraints** → use `azure-naming-research`
+- **Pricing or monthly cost estimation** → use `azure-cost-estimator`
+- **VM SKU / API version / quota availability checks** → use `azure-resource-availability`
+- **Comparing deployed state vs stored template state** (configuration drift) → use `azure-drift-detector`
+- **Generating a new ARM template from requirements** → invoke the `Azure Template Generator` agent
+
+**Scope:** This skill assesses (a) ARM template resources you supply and (b) the existing policy state in the target Azure subscription (active assignments + unassigned custom definitions). It does **not** enumerate the live configuration of deployed resources — for that, use `azure-drift-detector`.
+
+## MCP Tools
+
+| Tool | Purpose |
+|---|---|
+| `microsoft_docs_search` | Search Microsoft Learn for built-in policy definitions per resource type |
+| `microsoft_docs_fetch` | Retrieve full Microsoft Learn pages (built-in policies index, framework initiatives) |
+
+## Prerequisites
+
+| Requirement | How |
+|---|---|
+| Azure CLI logged in | `az login` (skill degrades gracefully — see Troubleshooting if `az` is unavailable) |
+| MCP server `microsoft.docs.mcp` available | Configure in your MCP client; used by Step 4 to look up built-in policy IDs |
+| ARM template OR resource type list | Provided by the user or generated by `Azure Template Generator` |
 
 ## Procedure
 
@@ -63,122 +91,59 @@ Extract for each resource:
 - Current security-relevant properties (cross-reference with security-analyzer output if available)
 ```
 
-### 2. Query Existing Policy Assignments in Azure Subscription
+### 1b. Resolve Subscription and Management Group Context
 
-Before recommending new policies, discover what is **already enforced** in the target subscription. This prevents redundant recommendations and surfaces enforcement gaps.
+If `{subscription-id}` is not provided, discover it:
 
-**Query active assignments at subscription scope (including inherited from management groups):**
+- `az account show --query id -o tsv` — current default subscription
+- `az account list --query "[].{id:id, name:name}" -o table` — all subscriptions the user has access to
+
+If `{mg-name}` is needed (for management-group-scoped queries) and not provided, list available management groups:
+
+- `az account management-group list --query "[].{name:name, displayName:displayName}" -o table`
+
+If multiple subscriptions or management groups exist, ask the user which one to assess — do not guess.
+
+### 2. Discover Existing Policy State (Assignments + Custom Definitions)
+
+Before recommending new policies, discover what is **already enforced** in the target subscription and what **custom definitions exist but are unassigned**. This prevents redundant recommendations, surfaces enforcement gaps, and lets you prefer unassigned custom definitions over equivalent built-ins.
+
+**Run the discovery script:**
 
 ```bash
-# List all policy assignments at subscription scope (includes inherited from management groups)
-az policy assignment list \
+bash .github/skills/azure-policy-advisor/scripts/discover_policy_state.sh \
   --subscription "{subscription-id}" \
-  --query "[].{name:name, displayName:displayName, policyDefinitionId:policyDefinitionId, enforcementMode:enforcementMode, scope:scope}" \
-  -o json
-
-# List initiative (policy set) assignments separately
-az policy assignment list \
-  --subscription "{subscription-id}" \
-  --query "[?contains(policyDefinitionId, 'policySetDefinitions')]" \
-  -o json
+  [--management-group "{mg-name}"] \
+  --output /tmp/policy-state.json
 ```
 
-**Parse each assignment to extract:**
-- Assignment name and display name
-- Policy definition ID (built-in or custom)
-- Enforcement mode (`Default` or `DoNotEnforce`)
-- Assignment scope (management group, subscription, or resource group)
-- Whether it's an individual policy or part of an initiative
+The script wraps `az policy assignment list`, `az policy definition list`, and `az policy set-definition list` at both subscription and (optional) management-group scope, then normalises the output into a single JSON document:
 
-**Build an assignment index** keyed by policy definition ID for fast lookup in later steps:
-
-```
-assignedPolicies = {
-  "/providers/Microsoft.Authorization/policyDefinitions/{id}": {
-    "assignmentName": "...",
-    "enforcementMode": "Default",
-    "scope": "/subscriptions/{sub-id}",
-    "source": "subscription"  // or "management-group-inherited"
-  },
-  ...
+```jsonc
+{
+  "subscription_id": "...", "management_group": "..." | null,
+  "assigned_policies":        [ { policy_definition_id, enforcement_mode, scope, source: "subscription" | "management-group-inherited", ... } ],
+  "assigned_initiatives":     [ { policy_set_definition_id, ... } ],
+  "unassigned_custom_policies":     [ { definition_id, display_name, category, target_resource_type, effect, source: "subscription" | "management-group" } ],
+  "unassigned_custom_initiatives":  [ { definition_id, display_name, ... } ],
+  "errors": [ "..." ]   // non-fatal; partial results still usable
 }
 ```
 
-**If Azure CLI is not available** (e.g., no active session), skip this step and note in the report:
+Use `.assigned_policies` keyed by `policy_definition_id` for the "already-assigned" lookup in Step 5. Use `.unassigned_custom_policies` filtered by `target_resource_type` matching ARM template resources to surface unassigned custom definitions that the platform team should consider assigning.
+
+**If `az` is not available or `az login` has not been run**, the script exits non-zero and prints an error to stderr. Skip Step 5's assigned-vs-unassigned classification and note in the report:
 
 ```markdown
-⚠️ Could not query Azure subscription — existing assignments unknown.
-   Recommendations are based on Microsoft Learn and template analysis only.
-   Run `az login` and re-run for subscription-aware assessment.
+⚠️ Could not query Azure subscription — existing assignments and custom
+   definitions unknown. Recommendations are based on Microsoft Learn and
+   template analysis only. Run `az login` and re-run for subscription-aware
+   assessment.
 ```
 
-### 3. Discover Unassigned Policy Definitions in Subscription
+### 3. Verify Definition IDs Before Recommending
 
-Query the subscription for policy definitions that **exist but are not currently assigned**. This surfaces custom policies created by the organization (e.g., org-specific NIST controls, industry-specific rules) that may be relevant to the resources being deployed.
-
-**Query custom policy definitions:**
-
-```bash
-# List custom policy definitions scoped to the subscription
-az policy definition list \
-  --subscription "{subscription-id}" \
-  --query "[?policyType=='Custom'].{name:name, displayName:displayName, description:description, category:metadata.category, policyRule:policyRule}" \
-  -o json
-
-# List custom initiative definitions
-az policy set-definition list \
-  --subscription "{subscription-id}" \
-  --query "[?policyType=='Custom'].{name:name, displayName:displayName, description:description, policyDefinitions:policyDefinitions}" \
-  -o json
-```
-
-**Also check management group scope** (custom policies are often defined at the management group level):
-
-```bash
-# If the subscription belongs to a management group
-az policy definition list \
-  --management-group "{mg-name}" \
-  --query "[?policyType=='Custom'].{name:name, displayName:displayName, description:description, category:metadata.category}" \
-  -o json
-```
-
-**For each custom definition, extract and classify:**
-
-| Field | Purpose |
-|-------|---------|
-| `displayName` | Human-readable policy name |
-| `metadata.category` | Maps to resource categories (Storage, Compute, Network, etc.) |
-| `policyRule.if.field` | Which resource type/property it targets |
-| `policyRule.then.effect` | What it enforces (Deny, Audit, etc.) |
-
-**Match custom definitions to ARM template resource types:**
-
-For each custom policy definition:
-1. Parse `policyRule.if` conditions to extract the target resource type (e.g., `"field": "type", "equals": "Microsoft.Storage/storageAccounts"`)
-2. If the target resource type matches a resource in the ARM template being assessed, flag it as **relevant**
-3. Cross-reference with the assignment index from Step 2 — if the definition exists but has no matching assignment, mark it as **unassigned custom policy**
-
-**Build a definitions index:**
-
-```
-unassignedDefinitions = {
-  "/subscriptions/{sub-id}/providers/Microsoft.Authorization/policyDefinitions/{custom-id}": {
-    "displayName": "Require NIST-compliant encryption on storage accounts",
-    "category": "Storage",
-    "targetResourceType": "Microsoft.Storage/storageAccounts",
-    "effect": "Deny",
-    "source": "custom"  // or "custom-management-group"
-  },
-  ...
-}
-```
-
-**If Azure CLI is not available**, skip this step and note in the report:
-
-```markdown
-⚠️ Could not query Azure subscription — custom policy definitions unknown.
-   Recommendations are based on Microsoft Learn built-in policies only.
-```
+> **Always verify policy and initiative definition IDs from Microsoft Learn (`microsoft_docs_search` / `microsoft_docs_fetch`) or by calling `az policy set-definition list --query "[?contains(displayName, 'CIS')]" -o table` and `az policy definition list` before recommending them for assignment.** Definition IDs and display names change over time and across Microsoft cloud regions (Public, Government, China). Do not rely on memorized IDs from training data — emit only IDs you have verified live in this run.
 
 ### 4. Research Applicable Built-in Policies via Microsoft Learn
 
@@ -220,202 +185,35 @@ URL: https://learn.microsoft.com/azure/governance/policy/samples/built-in-polici
 Use this to get the complete list of built-in policies organized by category (Storage, App Service, SQL, Key Vault, Network, Monitoring, etc.)
 ```
 
-Key Microsoft Learn reference pages:
-
-| Content | URL |
-|---------|-----|
-| All built-in policies | `https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies` |
-| Built-in initiatives | `https://learn.microsoft.com/azure/governance/policy/samples/built-in-initiatives` |
-| Regulatory compliance | `https://learn.microsoft.com/azure/governance/policy/concepts/regulatory-compliance` |
-| Policy assignment via ARM | `https://learn.microsoft.com/azure/governance/policy/assign-policy-template` |
-| Policy effects reference | `https://learn.microsoft.com/azure/governance/policy/concepts/effect-basics` |
+Key Microsoft Learn reference pages: **Read [references/ms-learn-policy-pages.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/references/ms-learn-policy-pages.md) when you need a specific Microsoft Learn URL** (canonical built-in policies list, framework-specific pages for CIS/NIST/FedRAMP/PCI-DSS, ARM assignment syntax) — it lists the high-value entry points with guidance on which to fetch when.
 
 ### 5. Classify and Prioritize Recommendations
 
-Group recommended policies into severity tiers based on the enforcement mode from compliance context:
+For each recommended policy, assign a severity tier, classify its current status against the ARM template and Steps 2–3 inventory, and resolve precedence when multiple sources cover the same control. **Read [references/classification-rules.yaml](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/references/classification-rules.yaml) for the full rule set** — it defines the four severity tiers (Critical/High/Medium/Low with Audit/Deny effects), the five status classifications (✅ Already assigned, 🔵 Compliant via template, 🟣 Unassigned custom available, ⚠️ Gap, 🔄 Complementary), and the three-rule precedence ladder (`assigned_wins` → `custom_over_builtin` → `builtin_fallback`).
 
-| Tier | Effect (Audit mode) | Effect (Deny mode) | When to Use |
-|------|--------------------|--------------------|-------------|
-| 🔴 **Critical** | Audit | Deny | Prevents insecure deployments: public storage access, missing HTTPS, no encryption |
-| 🟠 **High** | Audit | Deny | Strong security posture: managed identity required, TLS 1.2, AAD-only auth |
-| 🟡 **Medium** | Audit | Audit | Visibility and tracking: tag compliance, diagnostic settings, allowed locations |
-| 🔵 **Low** | AuditIfNotExists | DeployIfNotExists | Auto-remediation: deploy diagnostic settings, enable monitoring |
-
-**Per resource type, prioritize these policy categories:**
-
-**Storage Accounts:**
-1. 🔴 Require secure transfer (HTTPS)
-2. 🔴 Disable public blob access
-3. 🟠 Disable shared key access
-4. 🟠 Require minimum TLS 1.2
-5. 🟡 Require private endpoints (production)
-6. 🟡 Enable soft delete for blobs and containers
-7. 🔵 Deploy diagnostic settings
-
-**App Service / Function Apps:**
-1. 🔴 Require HTTPS only
-2. 🔴 Require managed identity
-3. 🟠 Require minimum TLS 1.2
-4. 🟠 Disable FTP / require FTPS only
-5. 🟡 Disable public network access (production)
-6. 🔵 Enable resource logs
-
-**SQL Servers / Databases:**
-1. 🔴 Require AAD-only authentication
-2. 🔴 Enable transparent data encryption
-3. 🟠 Enable auditing
-4. 🟠 Enable Advanced Threat Protection
-5. 🟡 Require private endpoints (production)
-6. 🔵 Deploy diagnostic settings
-
-**Key Vault:**
-1. 🔴 Enable RBAC authorization
-2. 🔴 Enable soft delete and purge protection
-3. 🟠 Disable public network access (production)
-4. 🟡 Require private endpoints
-5. 🔵 Deploy diagnostic settings for audit events
-
-**Compute / VMs:**
-1. 🔴 Require managed disks
-2. 🟠 Require managed identity
-3. 🟡 Restrict allowed VM SKUs
-4. 🟡 Require approved extensions only
-5. 🔵 Deploy monitoring agent
-
-**AKS / Kubernetes:**
-1. 🔴 Require managed identity
-2. 🔴 Disable local accounts
-3. 🟠 Require Azure Policy add-on
-4. 🟠 Require network policy
-5. 🟡 Require authorized IP ranges for API server
-6. 🔵 Enable Container Insights
-
-**Networking:**
-1. 🟠 Require NSG flow logs
-2. 🟡 Enable Network Watcher
-3. 🟡 Restrict allowed locations
-4. 🔵 Deploy DDoS protection (production)
-
-**General / Cross-cutting:**
-1. 🟡 Require tags on resources (ManagedBy, Environment, Project)
-2. 🟡 Restrict allowed locations
-3. 🔵 Require resource group tags inheritance
-
-For each recommendation, cross-reference with the ARM template, existing assignments (Step 2), and available definitions (Step 3) to determine status:
-
-- ✅ **Already assigned** — policy is actively assigned in the subscription (from Step 2). Note enforcement mode (`Default` vs `DoNotEnforce`) and scope
-- 🔵 **Compliant via template** — ARM template already configures the property the policy would enforce, but policy is not assigned
-- 🟣 **Unassigned custom policy available** — a custom policy definition exists in the subscription/management group (from Step 3) that covers this check, but it is not assigned. Flag for immediate assignment
-- ⚠️ **Gap — not covered** — neither assigned nor available as a custom definition. Recommend the built-in policy from MS Learn
-- 🔄 **Complementary** — policy would add enforcement on top of existing template config and/or existing assignments
-
-**Priority when multiple sources cover the same check:**
-1. If already assigned → report as ✅ (no action needed, unless enforcement mode is `DoNotEnforce`)
-2. If a custom definition exists but is unassigned → recommend assigning it (🟣) over the built-in equivalent
-3. If only a built-in definition exists → recommend the built-in (⚠️)
+**Per resource type, prioritize policy categories ranked by severity. Read [references/per-resource-policy-priorities.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/references/per-resource-policy-priorities.md) when classifying recommendations for any of these resource types: Storage Accounts, App Service / Function Apps, SQL Servers / Databases, Key Vault, Compute / VMs, AKS / Kubernetes, Networking, or general cross-cutting controls.** For resource types not in that list, fall back to the `microsoft_docs_search` query template in Step 4.
 
 ### 6. Generate Policy Recommendations Report
 
 Present findings split into two clear action tracks: **template improvements** (changes to the ARM template) and **subscription-level actions** (policy/initiative assignments). This separation clarifies who needs to act and where.
 
+**Report outline** — **Read [references/policy-assessment-template.md](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/references/policy-assessment-template.md) before producing the final markdown report.** The template includes the canonical heading order, table column definitions for each section, and example rows. Skim the headings here, then fetch the full template:
+
 ```markdown
 ## Azure Policy Compliance Assessment
+**Scope** · **Deployment** · **Compliance Framework** · **Enforcement Mode** · **Subscription Policy State**
 
-**Scope:** {subscription or resource group}
-**Deployment:** {deployment ID or "general subscription audit"}
-**Compliance Framework:** {framework from copilot-instructions.md or user input}
-**Enforcement Mode:** {Audit or Deny}
-**Subscription Policy State:** {Queried | Not available (no az login)}
+### Summary       — table of {Recommended, Already Assigned, Template Compliant, Template Fixable, Subscription-Level Gap} per category
 
-### Summary
+## Part 1: Template Improvements    (developer acts; edit the ARM template)
+### Gaps Fixable in the Template     — table of {Resource Type, Gap, Compliance Control, Fix}
+### Already Compliant in Template    — table of {Resource Type, Property, Template Value, Compliance Control}
 
-| Category | Recommended | Already Assigned | Template Compliant | Template Fixable | Subscription-Level Gap |
-|----------|-------------|-----------------|-------------------|-----------------|----------------------|
-| Storage | 7 | 2 | 3 | 1 | 1 |
-| Key Vault | 5 | 0 | 4 | 1 | 0 |
-| Networking | 4 | 0 | 1 | 1 | 2 |
-| Total | 16 | 2 | 8 | 3 | 3 |
-
----
-
-## Part 1: Template Improvements
-
-_Changes to apply directly in the ARM template to close compliance gaps. These make the deployment itself compliant, independent of policy enforcement._
-
-**Who acts:** Template author / developer
-**Where:** `.azure/deployments/{deployment-id}/template.json`
-
-### Gaps Fixable in the Template
-
-_These gaps can be closed by adding or modifying resources in the ARM template. For each gap, provide the exact ARM template JSON to add — including the full resource definition (type, apiVersion, name, properties), required `dependsOn` references, and any new variables needed._
-
-| # | Resource Type | Gap | Compliance Control | Fix |
-|---|--------------|-----|-------------------|-----|
-| 1 | Storage Account | Blob soft delete not enabled | CP-9 (Contingency Planning) | Add `blobServices/default` child resource with `deleteRetentionPolicy.enabled: true` |
-| 2 | Storage Account | No diagnostic settings | AU-2, AU-6, AU-12 (Audit & Accountability) | Add Log Analytics workspace + diagnostic settings resource |
-| 3 | Key Vault | No resource logs | AU-2, AU-6 (Audit & Accountability) | Add diagnostic settings for AuditEvent category |
-| 4 | NSGs | No flow logs | AU-2, SI-4 (System Monitoring) | Add `networkWatchers/flowLogs` resources |
-
-> After applying these changes, re-run the assessment to verify compliance.
-
-### Already Compliant in Template
-
-_These properties are correctly configured. No template changes needed. Corresponding policies in Part 2 would prevent future drift._
-
-| # | Resource Type | Property | Template Value | Compliance Control |
-|---|--------------|----------|---------------|-------------------|
-| 1 | Storage Account | HTTPS only | `supportsHttpsTrafficOnly: true` | SC-8 (Transmission Confidentiality) |
-| 2 | Storage Account | Public access disabled | `allowBlobPublicAccess: false` | AC-3 (Access Enforcement) |
-| 3 | Storage Account | Shared key disabled | `allowSharedKeyAccess: false` | IA-2 (Identification & Authentication) |
-| 4 | Key Vault | RBAC enabled | `enableRbacAuthorization: true` | AC-3 (Access Enforcement) |
-
----
-
-## Part 2: Subscription-Level Actions
-
-_Policy and initiative assignments at subscription or management group scope. These enforce compliance across ALL resources — not just this deployment._
-
-**Who acts:** Platform team / subscription admin
-**Where:** Azure subscription `{subscription-id}`
-
-### Existing Policy Assignments (from Azure)
-
-_Already active. No action needed unless enforcement mode should change._
-
-| # | Policy/Initiative | Scope | Enforcement | Type | Relevant to Deployment? |
-|---|------------------|-------|-------------|------|------------------------|
-| 1 | {assignment name} | Subscription | Default | Built-in | ✅/❌ |
-| 2 | {assignment name} | Mgmt Group (inherited) | Default | Initiative | ✅/❌ |
-
-### Unassigned Custom Policies (from Azure)
-
-_Custom definitions exist in your subscription or management group but are NOT assigned. These were created by your organization and may cover requirements that built-in policies do not._
-
-| # | Policy | Category | Target Resource | Effect | Scope |
-|---|--------|----------|----------------|--------|-------|
-| 1 | {custom policy name} | Storage | Microsoft.Storage/storageAccounts | Modify | Mgmt Group |
-
-> 🟣 **Action:** These already exist — they just need assignment. Prioritize over built-in equivalents.
-
-### Recommended Built-in Policy Assignments
-
-_Policies from Microsoft Learn that are not covered by existing assignments or custom definitions._
-
-| # | Policy | Effect | Severity | Definition ID | Category | Source |
-|---|--------|--------|----------|--------------|----------|--------|
-| 1 | NSG flow logs | Audit | 🟠 High | 27960feb-... | Networking | [MS Learn]({url}) |
-| 2 | Allowed locations | Audit | 🟡 Medium | e56962a6-... | General | [MS Learn]({url}) |
-
-### Recommended Compliance Initiative
-
-_If a compliance framework was selected:_
-
-| Initiative | Policies | Built-in ID | Status |
-|------------|----------|-------------|--------|
-| NIST SP 800-53 Rev. 5 | 696 | 179d1daa-... | ⚠️ Not assigned |
-
-Assigning this initiative covers {N} of the {M} individual policies recommended above.
-Remaining {M-N} policies need individual assignment.
+## Part 2: Subscription-Level Actions    (platform team acts; assign at sub/mg scope)
+### Existing Policy Assignments      — table of {Policy/Initiative, Scope, Enforcement, Type, Relevant?}
+### Unassigned Custom Policies       — table of {Policy, Category, Target Resource, Effect, Scope}
+### Recommended Built-in Assignments — table of {Policy, Effect, Severity, Definition ID, Category, Source}
+### Recommended Compliance Initiative — table of {Initiative, Policies, Built-in ID, Status}
 ```
 
 ### 7. Provide Implementation Options
@@ -485,12 +283,12 @@ az policy assignment create \
 | `Default` | Active enforcement — new non-compliant resources are denied or audited |
 | `DoNotEnforce` | Audit-only — evaluates compliance without blocking. Recommended for initial rollout |
 
-### 📋 Policy Gate
+### Policy Gate
 
 The policy gate is **advisory** — it surfaces findings without blocking deployment.
 
 ```markdown
-### 📋 Policy Gate: ADVISORY
+### Policy Gate: ADVISORY
 
 **Part 1 — Template Compliance:**
 🔵 {T} of {R} checks pass via template configuration
@@ -500,7 +298,7 @@ The policy gate is **advisory** — it surfaces findings without blocking deploy
 ✅ {A} policies already assigned in subscription
 🟣 {C} custom policies available but unassigned — assign for immediate coverage
 ⚠️ {S} subscription-level gaps — recommend assigning built-in policies or initiative
-📊 Enforcement coverage: {percentage}% of recommended policies actively assigned
+Enforcement coverage: {percentage}% of recommended policies actively assigned
 
 **Action items:**
 
@@ -522,115 +320,19 @@ When invoked during a deployment workflow, save results to the deployment direct
 | `policy-assessment.md` | Markdown | Full assessment report (Section 4 output) |
 | `policy-recommendations.json` | JSON | Structured policy data for automation |
 
-**JSON structure for `policy-recommendations.json`:**
+**JSON structure for `policy-recommendations.json`** — **Read [references/policy-recommendations-schema.json](https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/references/policy-recommendations-schema.json) when emitting the JSON sidecar.** The reference includes complete field definitions, status/actionTrack enum values, and a fully-worked example. Skeleton:
+
 ```json
 {
-  "assessedAt": "2026-04-07T19:00:00Z",
-  "deploymentId": "{deployment-id}",
-  "framework": "{compliance-framework}",
-  "enforcementMode": "Audit",
-  "subscriptionState": "queried",
-  "summary": {
-    "totalRecommended": 16,
-    "alreadyAssigned": 2,
-    "templateCompliant": 8,
-    "templateFixable": 3,
-    "customAvailable": 1,
-    "subscriptionGaps": 3
-  },
-  "existingAssignments": [
-    {
-      "name": "Secure transfer to storage accounts should be enabled",
-      "definitionId": "/providers/Microsoft.Authorization/policyDefinitions/404c3081-a854-4457-ae30-26a93ef643f9",
-      "enforcementMode": "Default",
-      "scope": "/subscriptions/{subscription-id}",
-      "assignedVia": "direct",
-      "policyType": "BuiltIn",
-      "relevantToDeployment": true
-    }
-  ],
-  "unassignedCustomDefinitions": [
-    {
-      "name": "SFI-ID4.2.1 Storage Accounts - Safe Secrets Standard",
-      "definitionId": "/providers/Microsoft.Management/managementGroups/{mg-id}/providers/Microsoft.Authorization/policyDefinitions/{custom-id}",
-      "category": "Storage",
-      "targetResourceType": "Microsoft.Storage/storageAccounts",
-      "effect": "Modify",
-      "definitionScope": "management-group",
-      "actionTrack": "subscription"
-    }
-  ],
-  "templateImprovements": [
-    {
-      "resourceType": "Microsoft.Storage/storageAccounts",
-      "gap": "Blob soft delete not enabled",
-      "complianceControl": "CP-9 (Contingency Planning)",
-      "severity": "medium",
-      "fix": "Add blobServices/default child resource with deleteRetentionPolicy.enabled: true",
-      "actionTrack": "template"
-    },
-    {
-      "resourceType": "Microsoft.Storage/storageAccounts",
-      "gap": "No diagnostic settings",
-      "complianceControl": "AU-2, AU-6, AU-12 (Audit & Accountability)",
-      "severity": "high",
-      "fix": "Add Log Analytics workspace + Microsoft.Insights/diagnosticSettings",
-      "actionTrack": "template"
-    }
-  ],
-  "policies": [
-    {
-      "name": "Secure transfer to storage accounts should be enabled",
-      "definitionId": "404c3081-a854-4457-ae30-26a93ef643f9",
-      "effect": "Deny",
-      "severity": "critical",
-      "category": "Storage",
-      "status": "already-assigned",
-      "policyType": "BuiltIn",
-      "actionTrack": "none",
-      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#storage"
-    },
-    {
-      "name": "Disable shared key access",
-      "definitionId": "{built-in-id}",
-      "effect": "Audit",
-      "severity": "high",
-      "category": "Storage",
-      "status": "template-compliant",
-      "policyType": "BuiltIn",
-      "actionTrack": "subscription",
-      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#storage"
-    },
-    {
-      "name": "Enable blob soft delete",
-      "definitionId": null,
-      "effect": null,
-      "severity": "medium",
-      "category": "Storage",
-      "status": "template-fixable",
-      "policyType": null,
-      "actionTrack": "template",
-      "sourceUrl": null
-    },
-    {
-      "name": "NSG flow logs should be enabled",
-      "definitionId": "27960feb-a23c-4577-8d36-ef8b5f35e0be",
-      "effect": "Audit",
-      "severity": "high",
-      "category": "Networking",
-      "status": "gap",
-      "policyType": "BuiltIn",
-      "actionTrack": "subscription",
-      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#network"
-    }
-  ],
-  "initiative": {
-    "name": "NIST SP 800-53 Rev. 5",
-    "builtInId": "179d1daa-458f-4e47-8086-2a68d0d6c38f",
-    "policyCount": 696,
-    "status": "not-assigned",
-    "coverage": "covers {N} of {M} recommended policies"
-  }
+  "assessedAt": "...", "deploymentId": "...", "framework": "...",
+  "enforcementMode": "Audit|Deny", "subscriptionState": "queried|unavailable",
+  "summary": { "totalRecommended": 16, "alreadyAssigned": 2, "templateCompliant": 8,
+               "templateFixable": 3, "customAvailable": 1, "subscriptionGaps": 3 },
+  "existingAssignments": [ /* from Step 2 .assigned_policies */ ],
+  "unassignedCustomDefinitions": [ /* from Step 2 .unassigned_custom_policies */ ],
+  "templateImprovements": [ /* Part 1 gaps */ ],
+  "policies": [ /* full recommendation list with status + actionTrack */ ],
+  "initiative": { /* compliance-framework initiative if selected */ }
 }
 ```
 
@@ -658,3 +360,26 @@ When invoked during a deployment workflow, save results to the deployment direct
 - **Template Generator:** After `/azure-security-analyzer`, optionally invoke `/azure-policy-advisor` to recommend subscription-level policies that complement the template
 - **Onboarding:** After RBAC setup, the onboarding flow captures compliance preferences and adds them to `copilot-instructions.md` — this skill reads them automatically
 - **Drift Detector:** Cross-reference drift findings with policy recommendations — drift items covered by assigned policies will auto-remediate
+
+## Examples
+
+**Example 1 — Post-template recommendation (general best practices)**
+
+> "I just generated an ARM template with a Storage Account, Function App, and Key Vault for production. What Azure Policies should we enforce? Separate template fixes from subscription-level assignments."
+
+Skill activates → Step 1 reads "General best practices" + Audit from copilot-instructions → Step 2 runs `discover_policy_state.sh` → finds `SecurityCenterBuiltIn` (MCSB) initiative covers 13 of 17 recommendations → Step 6 emits Part 1 (4 template fixes: blob soft delete + 3 diagnostic settings) and Part 2 (3 monitoring built-ins to assign).
+
+**Example 2 — Compliance framework audit**
+
+> "Audit our subscription resources against CIS Azure Foundations v3.0 — what's covered and what's missing?"
+
+Skill activates → Step 1 captures `framework: CIS Azure Foundations v3.0` → Step 2 discovers existing assignments → Step 4 fetches the `CIS Azure Foundations Benchmark v3.0.0` built-in initiative ID from Microsoft Learn → Step 3 verifies the ID via `az policy set-definition list --query "[?contains(displayName, 'CIS')]"` → Step 6 emits per-control coverage + recommended initiative assignment.
+
+## Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---|---|---|
+| `discover_policy_state.sh` exits non-zero, errors about `az login` | Azure CLI not authenticated | Run `az login` and retry. If unauthenticated by design (e.g., template-only review), the skill still produces Part 1 + recommended built-ins from Microsoft Learn, with `subscriptionState: "unavailable"` in the JSON sidecar |
+| Recommended definition ID returns "not found" from `az policy definition show` | Display-name drift or wrong cloud (Public vs Government vs China) | Re-verify via Step 3: `az policy set-definition list --query "[?contains(displayName, '<keyword>')]" -o table`. Definition IDs are stable; display names evolve (e.g., "purge protection" → "deletion protection") |
+| Skill reports ⚠️ for a policy already enforced via initiative | `assigned_policies` lookup keyed on individual policy IDs; initiative members aren't expanded | Cross-check `assigned_initiatives` in the policy-state JSON — if MCSB (`1f3afdf9-d0c9-4c3d-847f-89da613e70a8`) is assigned, 200+ individual policies are covered indirectly. Filed as a known limitation; expansion via `az policy set-definition show --query "policyDefinitions[].policyDefinitionId"` is on the roadmap |
+| `microsoft_docs_search` returns stale or empty results | MCP server not configured, or Microsoft Learn page moved | Fall back to `microsoft_docs_fetch` with the canonical URL from `references/ms-learn-policy-pages.md` (built-in policies index) |

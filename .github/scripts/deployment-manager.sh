@@ -1,6 +1,16 @@
 #!/bin/bash
 # Azure Deployment State Manager
-# Utility script for managing deployment artifacts and state persistence
+# Utility script for managing deployment artifact metadata.
+#
+# Deploy / destroy logic lives in the dedicated skills:
+#   .github/skills/azure-stack-deploy/scripts/deploy-stack.sh   (or .ps1)
+#   .github/skills/azure-stack-destroy/scripts/destroy-stack.sh (or .ps1)
+# These mirror .github/workflows/git-ape-deploy.exampleyml and
+# .github/workflows/git-ape-destroy.exampleyml so local CLI / VS Code
+# operations produce identical state.json (schemaVersion 1.0).
+#
+# This script handles only inventory tasks: list / show / clean / init /
+# validate / export.
 
 set -euo pipefail
 
@@ -318,6 +328,19 @@ main() {
             fi
             validate_deployment "$2"
             ;;
+        deploy|destroy)
+            cat <<EOF
+The '$COMMAND' command has moved to a dedicated skill.
+
+Use one of:
+  bash:       .github/skills/azure-stack-${COMMAND}/scripts/${COMMAND}-stack.sh --deployment-id <id>
+  PowerShell: .github/skills/azure-stack-${COMMAND}/scripts/${COMMAND}-stack.ps1 -DeploymentId <id>
+  Agent:      /azure-stack-${COMMAND} <id>
+
+See .github/skills/azure-stack-${COMMAND}/SKILL.md for full options.
+EOF
+            exit 1
+            ;;
         *)
             echo "Azure Deployment State Manager"
             echo ""
@@ -330,6 +353,10 @@ main() {
             echo "  export <id> [file]      Export deployment as reusable template"
             echo "  init [id]               Initialize new deployment directory"
             echo "  validate <id>           Validate deployment state files"
+            echo ""
+            echo "Deploy / destroy moved to dedicated skills:"
+            echo "  Deploy:  .github/skills/azure-stack-deploy/scripts/deploy-stack.{sh,ps1}"
+            echo "  Destroy: .github/skills/azure-stack-destroy/scripts/destroy-stack.{sh,ps1}"
             echo ""
             echo "Examples:"
             echo "  $0 list"

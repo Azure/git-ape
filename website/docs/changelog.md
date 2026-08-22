@@ -26,6 +26,6 @@ Initial experimental release.
 
 ### CI/CD Workflows
 - `git-ape-plan.yml` — Validate & preview on PR
-- `git-ape-deploy.yml` — Deploy on merge or `/deploy` command
+- `git-ape-deploy.yml` — Deploy on merge to main
 - `git-ape-destroy.yml` — Tear down on merge with destroy-requested status
 - `git-ape-verify.yml` — Manual setup verification

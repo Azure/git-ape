@@ -1,7 +1,7 @@
 {
   "name": "git-ape",
   "description": "Intelligent agent system for deploying any Azure workload through GitHub Copilot. Provides guided, safe, and validated deployments using ARM templates, with built-in security analysis, cost estimation, and CI/CD pipeline integration.",
-  "version": "0.0.1",
+  "version": "0.3.0",
   "author": {
     "name": "Microsoft",
     "url": "https://github.com/Azure/git-ape"
@@ -22,5 +22,6 @@
     "copilot-agents"
   ],
   "agents": ".github/agents/",
-  "skills": ".github/skills/"
+  "skills": ".github/skills/",
+  "prompts": ".github/prompts/"
 }
