@@ -1,0 +1,494 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": "git-ape-onboarding",
+    "description": "Git-Ape self-hosted runner infrastructure as a first-class Git-Ape deployment. Subscription-scoped Deployment Stack template that creates the resource group and, via a nested inner-scope deployment, a fully self-contained runner stack: a user-assigned managed identity, an Azure Container Registry (for the custom runner image), an AcrPull role assignment, a Key Vault (for the GitHub PAT), a Key Vault Secrets User role assignment, an Azure Container Apps managed environment, and an event-driven Container Apps Job that scales ephemeral GitHub Actions runners with the KEDA 'github-runner' scaler (scale-to-zero). The GitHub PAT is referenced from Key Vault (never inline, never in git); set it post-deploy with `az keyvault secret set`. Deploy through the Git-Ape stack flow so you get an architecture diagram, cost estimate, managed deploy, and single-command destroy.\n\nDeploy (local): /azure-stack-deploy git-ape-runners\nDeploy (CI): merge a PR that adds .azure/deployments/git-ape-runners/ -> git-ape-deploy.yml\nDestroy: /azure-stack-destroy git-ape-runners"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus",
+      "metadata": {
+        "description": "Azure region for the resource group and all runner resources."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-git-ape-runners",
+      "metadata": {
+        "description": "Resource group that will own the runner stack. Created by this template."
+      }
+    },
+    "runnerName": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Base name for the managed environment and the Container Apps Job."
+      }
+    },
+    "githubOwnerRepo": {
+      "type": "string",
+      "metadata": {
+        "description": "GitHub target in <owner>/<repo> form for repo-scoped runners, or the org/owner name for org-scoped runners."
+      }
+    },
+    "runnerScope": {
+      "type": "string",
+      "defaultValue": "repo",
+      "allowedValues": [
+        "repo",
+        "org"
+      ],
+      "metadata": {
+        "description": "Runner registration scope."
+      }
+    },
+    "runnerLabels": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Comma-separated runner labels. Must include the value used for the GIT_APE_RUNNER_LABEL workflow variable."
+      }
+    },
+    "acrName": {
+      "type": "string",
+      "defaultValue": "[toLower(format('acrgitape{0}', uniqueString(subscription().id, parameters('resourceGroupName'))))]",
+      "metadata": {
+        "description": "Azure Container Registry name (5-50 alphanumeric, globally unique). Holds the custom runner image built with `az acr build`. Defaults to a deterministic unique name."
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[format('kv-gitape-{0}', substring(uniqueString(subscription().id, parameters('resourceGroupName')), 0, 8))]",
+      "metadata": {
+        "description": "Key Vault name (3-24 chars) that stores the GitHub PAT secret 'github-pat'. Defaults to a deterministic unique name."
+      }
+    },
+    "runnerImage": {
+      "type": "string",
+      "defaultValue": "[format('{0}.azurecr.io/git-ape-runner:latest', parameters('acrName'))]",
+      "metadata": {
+        "description": "Runner container image. Defaults to the custom image in the ACR created by this template. Build it with `az acr build` after the stack deploys (see README)."
+      }
+    },
+    "maxRunners": {
+      "type": "int",
+      "defaultValue": 10,
+      "metadata": {
+        "description": "Maximum concurrent runner executions (KEDA maxExecutions)."
+      }
+    },
+    "minRunners": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Minimum warm runner executions (KEDA minExecutions). Set to 1 to keep one runner always visible in GitHub and avoid cold-start delays; 0 for true scale-to-zero."
+      }
+    },
+    "cpuCores": {
+      "type": "string",
+      "defaultValue": "1.0",
+      "metadata": {
+        "description": "vCPU for the runner container."
+      }
+    },
+    "memorySize": {
+      "type": "string",
+      "defaultValue": "2Gi",
+      "metadata": {
+        "description": "Memory for the runner container (e.g. 2Gi)."
+      }
+    },
+    "infrastructureSubnetId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of an infrastructure subnet for VNet injection of the ACA environment. Leave empty for a non-VNet environment (Consumption needs a /23 or larger)."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "ManagedBy": "git-ape",
+        "Component": "git-ape-runners"
+      },
+      "metadata": {
+        "description": "Tags applied to the resource group and all runner resources."
+      }
+    }
+  },
+  "variables": {
+    "runnerIdentityName": "[format('id-{0}', parameters('runnerName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "git-ape-runners-inner",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "runnerName": {
+            "value": "[parameters('runnerName')]"
+          },
+          "runnerIdentityName": {
+            "value": "[variables('runnerIdentityName')]"
+          },
+          "githubOwnerRepo": {
+            "value": "[parameters('githubOwnerRepo')]"
+          },
+          "runnerScope": {
+            "value": "[parameters('runnerScope')]"
+          },
+          "runnerLabels": {
+            "value": "[parameters('runnerLabels')]"
+          },
+          "acrName": {
+            "value": "[parameters('acrName')]"
+          },
+          "keyVaultName": {
+            "value": "[parameters('keyVaultName')]"
+          },
+          "runnerImage": {
+            "value": "[parameters('runnerImage')]"
+          },
+          "maxRunners": {
+            "value": "[parameters('maxRunners')]"
+          },
+          "minRunners": {
+            "value": "[parameters('minRunners')]"
+          },
+          "cpuCores": {
+            "value": "[parameters('cpuCores')]"
+          },
+          "memorySize": {
+            "value": "[parameters('memorySize')]"
+          },
+          "infrastructureSubnetId": {
+            "value": "[parameters('infrastructureSubnetId')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "runnerName": {
+              "type": "string"
+            },
+            "runnerIdentityName": {
+              "type": "string"
+            },
+            "githubOwnerRepo": {
+              "type": "string"
+            },
+            "runnerScope": {
+              "type": "string"
+            },
+            "runnerLabels": {
+              "type": "string"
+            },
+            "acrName": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "runnerImage": {
+              "type": "string"
+            },
+            "maxRunners": {
+              "type": "int"
+            },
+            "minRunners": {
+              "type": "int"
+            },
+            "cpuCores": {
+              "type": "string"
+            },
+            "memorySize": {
+              "type": "string"
+            },
+            "infrastructureSubnetId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "isOrgScope": "[equals(parameters('runnerScope'), 'org')]",
+            "isVnet": "[not(empty(parameters('infrastructureSubnetId')))]",
+            "envName": "[format('{0}-env', parameters('runnerName'))]",
+            "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
+            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+            "identityResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('runnerIdentityName'))]",
+            "ownerName": "[if(variables('isOrgScope'), parameters('githubOwnerRepo'), first(split(parameters('githubOwnerRepo'), '/')))]",
+            "repoName": "[if(variables('isOrgScope'), '', last(split(parameters('githubOwnerRepo'), '/')))]",
+            "scalerMetadataBase": {
+              "owner": "[variables('ownerName')]",
+              "runnerScope": "[parameters('runnerScope')]",
+              "labels": "[parameters('runnerLabels')]",
+              "targetWorkflowQueueLength": "1",
+              "applicationID": ""
+            },
+            "scalerMetadata": "[if(variables('isOrgScope'), variables('scalerMetadataBase'), union(variables('scalerMetadataBase'), createObject('repos', variables('repoName'))))]",
+            "scopeEnv": "[if(variables('isOrgScope'), createArray(createObject('name', 'ORG_NAME', 'value', parameters('githubOwnerRepo'))), createArray(createObject('name', 'REPO_URL', 'value', concat('https://github.com/', parameters('githubOwnerRepo')))))]",
+            "baseEnv": [
+              {
+                "name": "RUNNER_SCOPE",
+                "value": "[parameters('runnerScope')]"
+              },
+              {
+                "name": "RUNNER_NAME_PREFIX",
+                "value": "[parameters('runnerName')]"
+              },
+              {
+                "name": "LABELS",
+                "value": "[parameters('runnerLabels')]"
+              },
+              {
+                "name": "EPHEMERAL",
+                "value": "true"
+              },
+              {
+                "name": "DISABLE_AUTO_UPDATE",
+                "value": "true"
+              },
+              {
+                "name": "ACCESS_TOKEN",
+                "secretRef": "github-pat"
+              }
+            ],
+            "containerEnv": "[concat(variables('scopeEnv'), variables('baseEnv'))]",
+            "vnetConfiguration": "[if(variables('isVnet'), createObject('infrastructureSubnetId', parameters('infrastructureSubnetId'), 'internal', false()), json('null'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('runnerIdentityName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('acrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Basic"
+              },
+              "properties": {
+                "adminUserEnabled": false,
+                "anonymousPullEnabled": false
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), variables('identityResourceId'), variables('acrPullRoleId'))]",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', parameters('acrName'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[variables('identityResourceId')]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]",
+                "principalId": "[reference(variables('identityResourceId'), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 7,
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('identityResourceId'), variables('keyVaultSecretsUserRoleId'))]",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                "[variables('identityResourceId')]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
+                "principalId": "[reference(variables('identityResourceId'), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[variables('envName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "vnetConfiguration": "[variables('vnetConfiguration')]"
+              }
+            },
+            {
+              "type": "Microsoft.App/jobs",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('runnerName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[variables('identityResourceId')]": {}
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('identityResourceId'), variables('keyVaultSecretsUserRoleId'))]",
+                "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), variables('identityResourceId'), variables('acrPullRoleId'))]"
+              ],
+              "properties": {
+                "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]",
+                "configuration": {
+                  "triggerType": "Event",
+                  "replicaTimeout": 1800,
+                  "replicaRetryLimit": 1,
+                  "registries": [
+                    {
+                      "server": "[format('{0}.azurecr.io', parameters('acrName'))]",
+                      "identity": "[variables('identityResourceId')]"
+                    }
+                  ],
+                  "secrets": [
+                    {
+                      "name": "github-pat",
+                      "keyVaultUrl": "[format('{0}secrets/github-pat', reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri)]",
+                      "identity": "[variables('identityResourceId')]"
+                    }
+                  ],
+                  "eventTriggerConfig": {
+                    "parallelism": 1,
+                    "replicaCompletionCount": 1,
+                    "scale": {
+                      "minExecutions": "[parameters('minRunners')]",
+                      "maxExecutions": "[parameters('maxRunners')]",
+                      "pollingInterval": 30,
+                      "rules": [
+                        {
+                          "name": "github-runner",
+                          "type": "github-runner",
+                          "metadata": "[variables('scalerMetadata')]",
+                          "auth": [
+                            {
+                              "secretRef": "github-pat",
+                              "triggerParameter": "personalAccessToken"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "[parameters('runnerName')]",
+                      "image": "[parameters('runnerImage')]",
+                      "env": "[variables('containerEnv')]",
+                      "resources": {
+                        "cpu": "[json(parameters('cpuCores'))]",
+                        "memory": "[parameters('memorySize')]"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "runnerJobId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/jobs', parameters('runnerName'))]"
+            },
+            "acrLoginServer": {
+              "type": "string",
+              "value": "[format('{0}.azurecr.io', parameters('acrName'))]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[parameters('keyVaultName')]"
+            },
+            "identityClientId": {
+              "type": "string",
+              "value": "[reference(variables('identityResourceId'), '2023-01-31').clientId]"
+            },
+            "runnerLabel": {
+              "type": "string",
+              "value": "[parameters('runnerLabels')]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    },
+    "acrLoginServer": {
+      "type": "string",
+      "value": "[reference('git-ape-runners-inner').outputs.acrLoginServer.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference('git-ape-runners-inner').outputs.keyVaultName.value]"
+    },
+    "runnerJobId": {
+      "type": "string",
+      "value": "[reference('git-ape-runners-inner').outputs.runnerJobId.value]"
+    },
+    "runnerLabel": {
+      "type": "string",
+      "value": "[reference('git-ape-runners-inner').outputs.runnerLabel.value]"
+    }
+  }
+}

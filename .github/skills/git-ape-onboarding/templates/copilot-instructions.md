@@ -298,6 +298,76 @@ Create two GitHub environments for protection rules:
 - Required reviewers (recommended — destructive action)
 - Deployment branches: `main` only (triggered on PR merge)
 
+## GitHub Actions Runners
+
+Git-Ape workflows run on **public GitHub-hosted runners by default** and can be
+switched to **private self-hosted runners** in your Azure subscription with a
+single repository variable — no workflow edits required.
+
+### The runner switch: `GIT_APE_RUNNER_LABEL`
+
+Every scaffolded workflow (`git-ape-plan`, `-deploy`, `-destroy`, `-verify`)
+resolves its runner like this:
+
+```yaml
+runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
+```
+
+| `GIT_APE_RUNNER_LABEL` | Effect |
+|------------------------|--------|
+| **unset** (default) | Jobs run on GitHub-hosted `ubuntu-latest`. No infrastructure. |
+| set to a label (default `git-ape-runner`) | Jobs target your self-hosted runners registered with that label. |
+
+```bash
+# Switch to private runners (after they are provisioned and online)
+gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
+# Clean fallback to GitHub-hosted runners
+gh variable delete GIT_APE_RUNNER_LABEL --repo <org>/<repo>
+```
+
+In multi-environment mode, set the variable per environment (`--env azure-deploy`)
+so only the environments that need private runners use them.
+
+### Runner types and platforms
+
+- **Public GitHub-hosted** — default; nothing to provision.
+- **Self-hosted (subscription)** — runners are Azure resources with outbound
+  internet. Control over image, region, and identity without a VNet.
+- **VNet-injected** — runners run inside a subnet you manage, for private
+  connectivity to Azure resources (private endpoints, no public egress except
+  to GitHub).
+
+Private runners are provisioned from on-demand reference IaC shipped with the
+onboarding skill at `templates/runners/`:
+
+| Platform | What it provisions |
+|----------|--------------------|
+| **ACI** | ARM `template.json` — a container group running an ephemeral runner. |
+| **ACA** | ARM `template.json` — a KEDA `github-runner`-scaled Container Apps Job (scale-to-zero). |
+| **AKS** | Actions Runner Controller (ARC) via Helm `values.yaml` (cluster created with a standard Git-Ape ARM deployment). |
+
+These templates are **not** auto-scaffolded — the public bootstrap stays the
+default. Run `/git-ape-onboarding` (Runner Selection step) to choose and
+provision them.
+
+### Runner security model
+
+- **Azure access uses a user-assigned managed identity, never stored keys.**
+- **The GitHub registration credential is the only secret** — source it from
+  Key Vault (`securestring` parameter or pre-created Kubernetes secret), never
+  inline it in a committed `parameters.json` or `values.yaml`.
+- **Ephemeral runners by default** — one job per registration, so no state leaks
+  between deployments.
+- The runner label (`git-ape-runner`) must equal `GIT_APE_RUNNER_LABEL`.
+
+### Drift workflow caveat
+
+`git-ape-drift.lock.yml` is a compiled GitHub Agentic Workflow (gh-aw) and does
+**not** honor `GIT_APE_RUNNER_LABEL`. To run continuous drift detection on a
+private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter and
+recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it carries an
+integrity hash).
+
 ## Security Baseline
 
 - Enable HTTPS-only for all web-facing resources
