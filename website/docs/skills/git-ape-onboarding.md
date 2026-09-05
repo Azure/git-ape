@@ -165,7 +165,8 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
 9. Scaffold workflow files and deployment standards into the user's working copy (see below).
 10. *(Optional)* Provision the drift detector engine credential (`COPILOT_GITHUB_TOKEN`) so the agentic drift workflow can run (see below).
 11. Capture compliance and Azure Policy preferences (see below).
-12. Verify federated credentials, role assignments, and secrets.
+12. **Run landing zone discovery** (see Step 12).
+13. Verify federated credentials, role assignments, and secrets.
 
 ### Step 9: Scaffold workflow files and deployment standards
 
@@ -291,6 +292,26 @@ After RBAC and environment setup, ask the user about compliance requirements and
      customized file), do NOT mutate it. Instead, print the captured
      preferences and a suggested patch in chat so the user can apply it.
    - In all cases, leave changes unstaged and let the user commit them.
+
+### Step 12: Landing Zone Discovery
+
+Run `/azure-landing-zone-discovery` against each onboarded subscription to populate `.azure/landing-zone-context.json`. This file is consumed by the requirements gatherer, template generator, and policy advisor so deployments are landing-zone-aware from the first run.
+
+```bash
+.github/skills/azure-landing-zone-discovery/scripts/discover-lz.sh \
+  --subscription "$AZURE_SUBSCRIPTION_ID" \
+  --output-file .azure/landing-zone-context.json
+```
+
+**Inspect the result:**
+
+```bash
+jq '.landingZoneDetection | {isLandingZone, confidence, confidenceScore}' .azure/landing-zone-context.json
+```
+
+- `confidence` = `high` or `medium` → commit `.azure/landing-zone-context.json` to the repo so the team shares the same topology view.
+- `confidence` = `low` or `none` → the workspace will deploy in standalone mode. Tell the user they can later run `inject-lz.sh` for manual injection if they know the tenant *is* ALZ-managed.
+- If discovery fails (e.g., no management group read permission), document the limitation and proceed without the context — the user can re-run discovery once permissions are granted.
 
 ## Mode: Enterprise Distribution (`.github-private`)
 

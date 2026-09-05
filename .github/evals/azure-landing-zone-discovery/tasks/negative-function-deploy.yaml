@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-function-deploy
+name: Negative — Plain function-app deployment (off-topic)
+description: A solo-subscription Function App deployment does not require landing-zone discovery.
+tags: [trigger, negative]
+inputs:
+  prompt: "Deploy a Python 3.12 Azure Function App on the Consumption plan in eastus, with an associated Storage Account."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-landing-zone-discovery/SKILL.md
+      mode: negative
+      threshold: 0.5

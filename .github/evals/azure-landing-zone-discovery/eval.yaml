@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Expanded-tier evaluation suite for the azure-landing-zone-discovery skill.
+# Validates trigger precision via the heuristic `trigger` grader plus
+# per-task answer_quality on positives.
+#
+# Run: waza run .github/evals/azure-landing-zone-discovery/eval.yaml
+
+name: azure-landing-zone-discovery-eval
+description: Trigger precision suite for azure-landing-zone-discovery.
+skill: azure-landing-zone-discovery
+version: "0.2"
+
+config:
+  # Expanded tier: 1 trial per task (cheap baseline). Promote to pilot
+  # (trials_per_task: 3) once the skill stabilises.
+  trials_per_task: 1
+  timeout_seconds: 120
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Skill should activate on landing-zone / ALZ prompts and stay quiet on unrelated Azure asks.
+
+graders:
+  # Budget grader: discovery wraps az + Resource Graph calls; flag runs
+  # that explode in tool calls or blow past reasonable wall time.
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 240000
+
+  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks only.
+  # Keeps judge-model errors from zeroing out the negative-task trigger check
+  # in the same leg.
+
+tasks:
+  - "tasks/*.yaml"
