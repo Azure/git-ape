@@ -292,6 +292,61 @@ For **ALL resources**:
 
 All other per-resource hardening (TLS versions, blob soft delete, threat detection, health probes, auto-scaling, etc.) is owned by the security analyzer in Step 3 and the policy advisor in Step 4 — they will flag anything missing with severity tags, and Critical / High findings are auto-applied or BLOCK the security gate.
 
+### 2.5. Apply Landing Zone Context (When Available)
+
+Before invoking the security/policy/preflight skills, check whether the workspace has discovered landing zone context at `.azure/landing-zone-context.json` (produced by `/azure-landing-zone-discovery`). When present, the template MUST respect the discovered tenant configuration.
+
+**Load the context once:**
+
+```bash
+LZ_CONTEXT_FILE=".azure/landing-zone-context.json"
+if [[ -f "$LZ_CONTEXT_FILE" ]]; then
+  LZ_CONFIDENCE=$(jq -r '.landingZoneDetection.confidence // "unknown"' "$LZ_CONTEXT_FILE")
+  LZ_ALLOWED_LOCATIONS=$(jq -r '.policies.allowedLocations[]? // empty' "$LZ_CONTEXT_FILE")
+  LZ_REQUIRED_TAGS=$(jq -r '.policies.requiredTags[]? // empty' "$LZ_CONTEXT_FILE")
+  LZ_LAW_ID=$(jq -r '.sharedServices.logAnalytics.id // empty' "$LZ_CONTEXT_FILE")
+  LZ_ACR_ID=$(jq -r '.sharedServices.containerRegistry.id // empty' "$LZ_CONTEXT_FILE")
+  LZ_HUB_VNET_ID=$(jq -r '.networking.hubs[0].id // empty' "$LZ_CONTEXT_FILE")
+  LZ_TOPOLOGY=$(jq -r '.networking.topology // "unknown"' "$LZ_CONTEXT_FILE")
+fi
+```
+
+**How to act on each field (gated by `landingZoneDetection.confidence`):**
+
+| Field | Action when `confidence` ≥ `medium` |
+|-------|--------------------------------------|
+| `policies.allowedLocations[]` | **Reject** the template if the target region is not in the list. Surface the allowed list to the user and ask them to pick one. |
+| `policies.requiredTags[]` | Inject each required tag as a parameter in the template; if the user didn't provide a value, ask before generating. Apply to all resources via `tags` block. |
+| `policies.denyEffects[]` | Cross-check template properties against the deny rules. If the template would be denied (e.g., public IP when `Deny-PublicIP` is enforced), flag it as a security-gate blocker before invoking the security analyzer. |
+| `policies.alzCanonicalAssignments[]` | Document the matched canonical ALZ policies in the deployment plan so the user understands the tenant baseline. |
+| `sharedServices.logAnalytics.id` | Wire `diagnosticSettings` for every resource that supports it to this workspace instead of creating a new one. |
+| `sharedServices.containerRegistry.id` | If deploying Container Apps / AKS, reference this ACR (with pull RBAC on the workload identity). Skip creating a new ACR unless the user explicitly asks. |
+| `networking.hubs[0].id` (when `topology` = `hub-spoke`) | Generate VNet peering from the workload spoke to the hub. Use the hub's resource group / subscription from the discovered ID. |
+| `networking.privateDnsZones[]` | When generating private endpoints, link them to the discovered private DNS zones for end-to-end name resolution. |
+
+**Confidence handling:**
+
+- `high` (≥70) — Apply all the above automatically. Note each LZ-driven decision in the deployment plan.
+- `medium` (40–69) — Surface the proposed LZ-driven choices to the user and ask to confirm before applying.
+- `low` (10–39) / `none` (<10) — Use **only** the policy fields (`allowedLocations`, `requiredTags`, `denyEffects`) when they are explicitly populated. Do **not** auto-wire shared services or hub peering — the topology may be misclassified.
+- Context missing — Skip this entire step; proceed with the user-provided values.
+
+**Surface in the deployment plan:**
+
+Add a "Landing Zone Compliance" subsection between "Security Configuration" and "Security Best Practices Analysis":
+
+```markdown
+### Landing Zone Compliance
+
+- **Confidence:** {high|medium|low|none} ({score}/100)
+- **Target subscription role:** {landing-zone|sandbox|standalone}
+- **Region check:** ✓ {region} is in `allowedLocations`
+- **Required tags applied:** Environment, Project, CostCenter
+- **Diagnostics:** routed to `{logAnalyticsId}` (shared)
+- **Hub peering:** {generated to hub-vnet-id | skipped — topology=flat}
+- **Policy gate check:** ✓ no template properties conflict with tenant `denyEffects`
+```
+
 ### 3. Analyze Security Best Practices (Per Resource)
 
 **Invoke skill:** `/azure-security-analyzer`

@@ -111,6 +111,7 @@ See [Installation & Prerequisites](./getting-started/installation) for every ins
 
 - [Deploy anything](./use-cases/deploy-anything)
 - [Security Analysis](./use-cases/security-analysis)
+- [Landing Zone-Aware Deployment](./use-cases/landing-zone-aware-deployment)
 - [CI/CD Pipeline](./use-cases/cicd-pipeline)
 - [Headless / Coding Agent Mode](./use-cases/headless-mode)
 

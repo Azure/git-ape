@@ -44,6 +44,7 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 
 | Skill | Description | Invocable |
 |-------|-------------|:---------:|
+| [Azure Landing Zone Discovery](./azure-landing-zone-discovery) | Auto-discover enterprise Azure landing zone topology — management groups, platform vs. application subscriptions, policy assignments, hub-spoke networking, and shared services — and write .azure/landing-zone-context.json. USE FOR: discovering the landing zone, mapping management groups, choosing a target subscription, connecting to a hub VNet or shared services, or manually injecting context for air-gapped/cross-tenant tenants. NOT FOR: deploying individual resources, CAF name lookups, or per-template policy compliance checks. | ✅ |
 | [Azure Stack Deploy](./azure-stack-deploy) | Run an Azure Deployment Stack create (subscription scope) for a prepared Git-Ape deployment artifact and write state.json (schemaVersion 1.0). Use locally so the result matches the CI deploy workflow. | ✅ |
 | [Azure Stack Destroy](./azure-stack-destroy) | Tear down a Git-Ape deployment by ID. Reads `state.json` under `.azure/deployments/<id>/` to delete the Azure Deployment Stack and purge soft-deleted Key Vault / Cognitive Services. Refuses to run without `state.json`. Use for any local CLI or VS Code Git-Ape teardown so the result matches the CI destroy workflow. | ✅ |
 
