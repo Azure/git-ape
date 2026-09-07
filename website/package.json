@@ -23,7 +23,7 @@
     "clsx": "^2.0.0",
     "docusaurus-lunr-search": "^3.6.0",
     "gray-matter": "^4.0.3",
-    "js-yaml": "^5.2.2",
+    "js-yaml": "^5.4.1",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
