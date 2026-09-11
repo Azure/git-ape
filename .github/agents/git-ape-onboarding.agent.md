@@ -43,7 +43,7 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
 
 ## Required user inputs (gated step-1)
 
-Before any state-changing command runs, you MUST surface a checklist of the required inputs in your first reply and wait for the user to supply any that are missing. Even when the user's opening prompt already names a few (e.g., repo + env + auth method), enumerate the full list so the user can fill the gaps in a single round-trip. At minimum, request the following **six** inputs (rendered as a numbered list, table, or explicit question block — never inferred silently):
+Before any state-changing command runs, you MUST surface a checklist of the required inputs in your first reply and wait for the user to supply any that are missing. Even when the user's opening prompt already names a few (e.g., repo + env + auth method), enumerate the full list so the user can fill the gaps in a single round-trip. At minimum, request the following **seven** inputs (rendered as a numbered list, table, or explicit question block — never inferred silently):
 
 1. **Target GitHub repository** — `<org>/<repo>` plus confirmation of the default branch (assume `main`; only change if the user explicitly says otherwise — never silently substitute `master`).
 2. **Onboarding mode** — single-environment vs multi-environment (dev/staging/prod). Even if the prompt names one, restate it explicitly for confirmation.
@@ -51,14 +51,15 @@ Before any state-changing command runs, you MUST surface a checklist of the requ
 4. **RBAC role model** — which role(s) to assign on subscription scope (`Contributor`, `Owner`, `User Access Administrator`, or a custom role). Default suggestion: `Contributor`.
 5. **Default Azure region** — primary region for the workload (e.g., `eastus`, `westus2`). Used for naming validation and federated credential auditing context.
 6. **Project / deployment name** — short slug used to name the App Registration (`sp-<project>-<env>`), federated credentials (`fc-<project>-<env>-main-branch`), and downstream Git-Ape deployments.
+7. **Runner type** — public GitHub-hosted (default, no infrastructure) or private self-hosted runners in the Azure subscription. If private, also capture the platform (ACI / ACA / AKS) and whether it must be VNet-injected. Default suggestion: **public to start** — private runners can be added later by setting one variable (`GIT_APE_RUNNER_LABEL`).
 
-Treat this as a **non-negotiable contract** for the gated first reply: regardless of how much the user pre-filled, the reply must explicitly enumerate ≥3 outstanding asks (and ideally the full list above) so the user sees exactly what's still needed. Do not race ahead to OIDC / federated-credential output until inputs 1–6 are supplied and Azure auth is confirmed.
+Treat this as a **non-negotiable contract** for the gated first reply: regardless of how much the user pre-filled, the reply must explicitly enumerate ≥3 outstanding asks (and ideally the full list above) so the user sees exactly what's still needed. Do not race ahead to OIDC / federated-credential output until inputs 1–7 are supplied and Azure auth is confirmed.
 
 ## Workflow
 
 1. Confirm target repository URL **and default branch** (input #1 above).
 2. Ask whether onboarding is single-environment or multi-environment (input #2).
-3. Confirm subscription target(s), RBAC role model, default region, and project name (inputs #3–#6).
+3. Confirm subscription target(s), RBAC role model, default region, project name, and runner type (inputs #3–#7).
 4. Validate prerequisites:
    - `az`, `gh`, `jq` installed
    - Azure authenticated (`az account show`)
@@ -71,9 +72,10 @@ Treat this as a **non-negotiable contract** for the gated first reply: regardles
    - macOS / Linux / WSL: `./scripts/scaffold-repo.sh`
    - Windows (PowerShell 7+): `pwsh ./scripts/scaffold-repo.ps1`
    Both scripts produce byte-identical output. Report which files were created vs skipped.
-9. Ask compliance framework and enforcement mode preferences (Step 10 in `/git-ape-onboarding` skill playbook).
+9. Ask compliance framework and enforcement mode preferences (Step 11 in `/git-ape-onboarding` skill playbook).
 10. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices. If the file was skipped by the scaffold step or lacks that section, surface the captured preferences in chat for manual integration instead of mutating the file.
-11. Summarize created/updated artifacts and next checks.
+11. Select the runner type (input #7). If private runners were chosen, point the user at `./templates/runners/<platform>/` for the reference IaC, have them provision it (sourcing the GitHub credential from Key Vault, never inlined), confirm the runner is online, and set the `GIT_APE_RUNNER_LABEL` variable. If public, leave the variable unset. (Step 12 in `/git-ape-onboarding` skill playbook.)
+12. Summarize created/updated artifacts and next checks.
 
 ## Output Requirements
 
