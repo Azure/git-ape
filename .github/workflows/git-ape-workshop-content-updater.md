@@ -54,7 +54,8 @@ steps:
       last_date() { git log -1 --format=%cs -- "$1" 2>/dev/null || true; }
       # Count workshop markdown files that mention a feature slug (read-only grep).
       refs_for() {
-        grep -rIl --include='*.md' -e "$1" "$WS" 2>/dev/null | wc -l | tr -d ' '
+        { grep -rIl --include='*.md' -e "$1" "$WS" 2>/dev/null || true; } \
+          | wc -l | tr -d ' '
       }
 
       {
@@ -74,8 +75,8 @@ steps:
         echo ""
         for d in "$WS"/track-*/; do
           [ -d "$d" ] || continue
-          labs=$(ls "$d"lab-*.md 2>/dev/null | wc -l | tr -d ' ')
-          deck=$(ls "$d"*_deck.md 2>/dev/null | head -1)
+          labs=$(find "$d" -maxdepth 1 -type f -name 'lab-*.md' | wc -l | tr -d ' ')
+          deck=$(find "$d" -maxdepth 1 -type f -name '*_deck.md' -print -quit)
           echo "- \`$d\` — ${labs} lab file(s); deck: \`${deck:-none}\`"
         done
         echo ""
