@@ -57,12 +57,15 @@ Progress indicator:
 
 ## Step 3: Resource availability gate
 
-Before generating any template, the agent runs an **availability check**:
+Before generating any template, the agent runs an **availability check** — the [`azure-resource-availability`](../../.github/skills/azure-resource-availability/SKILL.md) skill queries live Azure APIs (no guessing, no stale docs):
 
 - Is the region open for your subscription?
-- Is the Python 3.11 runtime supported in that region?
+- Is the Python 3.11 runtime supported in that region? (`az functionapp list-runtimes`)
 - Are the resource providers (`Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`) registered?
 - Are the proposed CAF names available (Function Apps and Storage have global uniqueness)?
+- For any VM-backed SKU, is it unrestricted in the region? (`az vm list-skus`)
+
+Results are saved to `.azure/deployments/<id>/availability-report.md` alongside the other artifacts (see Lab 3).
 
 If any check fails, the agent stops here with a specific fix — usually `az provider register --namespace <X> --wait` or "pick a different region". This is the most common place an attendee's first run can halt; it's by design.
 
@@ -133,7 +136,7 @@ Ready to deploy?
 
 ### If you have Azure access
 
-Type `yes`. The Resource Deployer runs `az stack sub create --action-on-unmanage deleteAll`. Deploy takes ~90 seconds.
+Type `yes`. The Resource Deployer runs `az stack sub create --action-on-unmanage deleteAll` — the same command whether it's invoked here in chat or run standalone via the [`azure-stack-deploy`](../../.github/skills/azure-stack-deploy/SKILL.md) skill. Deploy takes ~90 seconds.
 
 After deploy, an integration tester runs and reports HTTPS / managed-identity / App Insights checks plus a negative test for HTTP-to-HTTPS redirect.
 
@@ -165,6 +168,6 @@ Type `no`. You have already seen the key outputs above — Git-Ape generated the
 
 ## Going further
 
-Stage agents: `.github/agents/azure-{requirements-gatherer,template-generator,resource-deployer}.agent.md`. Security playbook: `.github/skills/azure-security-analyzer/SKILL.md`.
+Stage agents: `.github/agents/azure-{requirements-gatherer,template-generator,resource-deployer}.agent.md`. Security playbook: `.github/skills/azure-security-analyzer/SKILL.md`. Availability checks: `.github/skills/azure-resource-availability/SKILL.md`.
 
 **Next:** [Lab 3 — Explore Results](lab-03-explore-results.md)

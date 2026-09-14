@@ -144,3 +144,5 @@ You will see this in action in Lab 3 when we deliberately break a security contr
 - Template generator agent: `.github/agents/azure-template-generator.agent.md` (search for `inner scope` and `bestpractices`)
 - Deployer agent: `.github/agents/azure-resource-deployer.agent.md`
 - Security analyzer: `.github/skills/azure-security-analyzer/SKILL.md` (the evidence rule)
+- Schema lookups: `.github/skills/azure-rest-api-reference/SKILL.md` — the template generator uses this to verify every ARM property and API version before writing a resource block, instead of guessing from memory
+- Deploy primitive: `.github/skills/azure-stack-deploy/SKILL.md` — run it directly (`/azure-stack-deploy <deployment-id>`) if you want to re-deploy an existing deployment ID from a local terminal instead of through chat
