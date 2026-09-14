@@ -159,7 +159,7 @@ jobs:
       mode: ${{ steps.select.outputs.mode }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -315,7 +315,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -362,7 +362,7 @@ jobs:
 
       - name: Upload token comparison artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: waza-tokens-compare
           path: .waza-results/tokens-compare.json
@@ -405,7 +405,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -621,7 +621,7 @@ jobs:
 
       - name: Upload eval artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: waza-results-${{ matrix.skill }}-${{ matrix.model }}
           path: .waza-results/
@@ -645,21 +645,21 @@ jobs:
       pull-requests: write
     steps:
       - name: Download all eval artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           pattern: waza-results-*
           merge-multiple: false
 
       - name: Download token comparison artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: waza-tokens-compare
           path: artifacts/waza-tokens-compare
         continue-on-error: true
 
       - name: Aggregate and post comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PREPARE_MODE: ${{ needs.prepare.outputs.mode }}
           PREPARE_REASON: ${{ needs.prepare.outputs.reason }}
