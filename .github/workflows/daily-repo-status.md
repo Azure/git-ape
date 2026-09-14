@@ -20,14 +20,10 @@ permissions:
 network: defaults
 
 tools:
-  bash: false
-  cli-proxy: false
+  cli-proxy: true
   github:
-    # If in a public repo, setting `lockdown: false` allows
-    # reading issues, pull requests and comments from 3rd-parties
-    # If in a private repo this has no particular effect.
-    lockdown: false
-    min-integrity: none # This workflow is allowed to examine and comment on any issues
+    allowed-repos: [azure/git-ape]
+    min-integrity: approved
 
 safe-outputs:
   mentions: false
@@ -61,3 +57,10 @@ Create an upbeat daily status report for the repo as a GitHub issue.
 1. Gather recent activity from the repository
 2. Study the repository, its issues and its pull requests
 3. Create a new GitHub issue with your findings and insights
+
+## Required completion behavior
+
+- Do not delegate the report or safe-output call to a subagent.
+- Always call `create_issue` exactly once with the completed report before finishing.
+- Use the configured GitHub tools for reads; do not use the unauthenticated `gh` CLI.
+- If direct safe-output tools are not listed, use the configured `safeoutputs` CLI.
