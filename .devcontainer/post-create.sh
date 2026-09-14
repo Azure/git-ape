@@ -70,13 +70,34 @@ pids[armttk]=$!
 # waza — Microsoft CLI for evaluating AI agent skills
 # https://github.com/microsoft/waza
 (
+  waza_version="v0.38.7"
+  installed_version=""
   if command -v waza >/dev/null 2>&1; then
-    echo "waza already installed: $(waza --version 2>/dev/null || echo unknown)"
+    installed_version="$(waza --version 2>/dev/null | awk 'NF { print $NF; exit }' || true)"
+  fi
+
+  if [ "$installed_version" = "${waza_version#v}" ]; then
+    echo "waza ${installed_version} already installed, skipping"
   else
-    # The official install.sh auto-detects OS/arch, verifies the checksum,
-    # and installs to /usr/local/bin (or ~/bin if not writable).
-    # Use sudo so the binary lands in /usr/local/bin which is already on PATH.
-    curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | sudo bash
+    case "$(uname -m)" in
+      x86_64|amd64) waza_arch="amd64" ;;
+      aarch64|arm64) waza_arch="arm64" ;;
+      *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+    esac
+
+    waza_asset="waza-linux-${waza_arch}"
+    waza_base="https://github.com/microsoft/waza/releases/download/${waza_version}"
+    waza_tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$waza_tmp_dir"' EXIT
+
+    curl -fsSL -o "${waza_tmp_dir}/${waza_asset}" "${waza_base}/${waza_asset}"
+    curl -fsSL -o "${waza_tmp_dir}/checksums.txt" "${waza_base}/checksums.txt"
+    (
+      cd "$waza_tmp_dir"
+      grep " ${waza_asset}$" checksums.txt | sha256sum -c --status
+    )
+    sudo install -m 0755 "${waza_tmp_dir}/${waza_asset}" /usr/local/bin/waza
+    echo "installed $(waza --version)"
   fi
 ) >"$log_dir/waza.log" 2>&1 &
 pids[waza]=$!
