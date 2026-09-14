@@ -25,14 +25,14 @@
     "gray-matter": "^4.0.3",
     "js-yaml": "^5.4.1",
     "prism-react-renderer": "^2.3.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "typescript": "~7.0.2"
   },
   "browserslist": {
