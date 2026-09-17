@@ -7,7 +7,7 @@ description: |
   (LLM content regeneration) counterpart to the deterministic
   git-ape-workshop-sync.yml issue-filer and the git-ape-deck-build.yml renderer.
 
-strict: false
+strict: true
 
 on:
   # Weekly (fuzzy: gh-aw distributes the exact minute to avoid load spikes).
@@ -24,6 +24,10 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
+
+concurrency:
+  job-discriminator: ${{ github.run_id }}
 
 # Deterministic pre-step runs OUTSIDE the agent sandbox. It builds an
 # authoritative inventory of features vs. workshop coverage so the agent
@@ -50,7 +54,8 @@ steps:
       last_date() { git log -1 --format=%cs -- "$1" 2>/dev/null || true; }
       # Count workshop markdown files that mention a feature slug (read-only grep).
       refs_for() {
-        grep -rIl --include='*.md' -e "$1" "$WS" 2>/dev/null | wc -l | tr -d ' '
+        { grep -rIl --include='*.md' -e "$1" "$WS" 2>/dev/null || true; } \
+          | wc -l | tr -d ' '
       }
 
       {
@@ -70,8 +75,8 @@ steps:
         echo ""
         for d in "$WS"/track-*/; do
           [ -d "$d" ] || continue
-          labs=$(ls "$d"lab-*.md 2>/dev/null | wc -l | tr -d ' ')
-          deck=$(ls "$d"*_deck.md 2>/dev/null | head -1)
+          labs=$(find "$d" -maxdepth 1 -type f -name 'lab-*.md' | wc -l | tr -d ' ')
+          deck=$(find "$d" -maxdepth 1 -type f -name '*_deck.md' -print -quit)
           echo "- \`$d\` — ${labs} lab file(s); deck: \`${deck:-none}\`"
         done
         echo ""
@@ -151,12 +156,11 @@ tools:
     - "git status *"
     - "git ls-files *"
   github:
-    # Public repo: keep lockdown ON (the safe default). It sanitizes the
-    # untrusted issue/PR content this agent reads (issues/pull_requests
-    # toolsets), closing the cross-prompt-injection (XPIA) surface. Reading
-    # issues/PRs lets the agent find open workshop-sync issues and avoid
-    # opening duplicate content PRs.
-    lockdown: true
+    # Local mode uses the short-lived Actions token and requires no PAT.
+    # Restrict reads to this repository and retain integrity filtering for
+    # untrusted issue/PR content.
+    allowed-repos: [azure/git-ape]
+    min-integrity: approved
     toolsets: [issues, pull_requests]
   cache-memory:
     description: "Workshop coverage state — remembers prior assessments and the last-seen feature set to keep weekly runs idempotent and avoid re-proposing already-open work."
