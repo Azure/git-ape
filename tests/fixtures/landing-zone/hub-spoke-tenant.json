@@ -1,0 +1,96 @@
+{
+  "_comment": "Test fixture: enterprise hub-spoke tenant with full canonical ALZ accelerator topology (Platform/Landing zones/Sandbox/Decommissioned + Connectivity/Identity/Management + Corp/Online), platform subscriptions, deny + audit policies, canonical ALZ policy assignments, and shared services. Synthetic — for skill evals and downstream consumer tests. Expected detection: confidence=high.",
+  "discoveredAt": "2026-04-30T10:00:00Z",
+  "discoveryMethod": "auto",
+  "landingZoneDetection": {
+    "isLandingZone": true,
+    "confidence": "high",
+    "confidenceScore": 90,
+    "reference": "https://azure.github.io/Azure-Landing-Zones/accelerator/",
+    "matchedSignals": [
+      { "signal": "alz-top-level-mgs", "points": 30, "evidence": "4/4 canonical top-level MGs (Platform, Landing zones, Sandbox, Decommissioned)" },
+      { "signal": "platform-children", "points": 20, "evidence": "3/3 platform children (Connectivity, Identity, Management)" },
+      { "signal": "alz-lz-archetypes", "points": 10, "evidence": "Corp and Online MGs present under Landing zones" },
+      { "signal": "platform-subscriptions", "points": 10, "evidence": "3 platform subscription(s) classified" },
+      { "signal": "hub-spoke-topology", "points": 5, "evidence": "Hub VNet(s): vnet-hub-eastus" },
+      { "signal": "hub-in-connectivity-sub", "points": 5, "evidence": "Hub VNet sits in a connectivity-classified subscription" },
+      { "signal": "alz-canonical-policies", "points": 10, "evidence": "2 canonical ALZ policy assignment(s): Deny-PublicIP, Deploy-MDFC-Config" }
+    ],
+    "missingSignals": [],
+    "checks": {
+      "topLevelMgs": { "platform": true, "landingZones": true, "sandbox": true, "decommissioned": true },
+      "platformChildren": { "connectivity": true, "identity": true, "management": true },
+      "lzChildren": { "corp": true, "online": true },
+      "platformSubscriptionCount": 3,
+      "hubSpoke": true,
+      "hubInConnectivitySubscription": true,
+      "knownAlzPolicies": ["Deny-PublicIP", "Deploy-MDFC-Config"]
+    }
+  },
+  "managementGroups": {
+    "root": "Tenant Root Group",
+    "hasManagementGroups": true,
+    "hierarchy": [
+      { "id": "/providers/Microsoft.Management/managementGroups/contoso-root",       "name": "contoso-root",       "displayName": "Contoso Root",     "role": "root",            "parentId": null },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-platform",        "name": "mg-platform",        "displayName": "Platform",         "role": "platform",        "parentId": "/providers/Microsoft.Management/managementGroups/contoso-root" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-landing-zones",   "name": "mg-landing-zones",   "displayName": "Landing Zones",    "role": "landing-zones",   "parentId": "/providers/Microsoft.Management/managementGroups/contoso-root" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-sandbox",         "name": "mg-sandbox",         "displayName": "Sandbox",          "role": "sandbox",         "parentId": "/providers/Microsoft.Management/managementGroups/contoso-root" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-decommissioned",  "name": "mg-decommissioned",  "displayName": "Decommissioned",   "role": "decommissioned",  "parentId": "/providers/Microsoft.Management/managementGroups/contoso-root" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-connectivity",    "name": "mg-connectivity",    "displayName": "Connectivity",     "role": "connectivity",    "parentId": "/providers/Microsoft.Management/managementGroups/mg-platform" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-identity",        "name": "mg-identity",        "displayName": "Identity",         "role": "identity",        "parentId": "/providers/Microsoft.Management/managementGroups/mg-platform" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-management",      "name": "mg-management",      "displayName": "Management",       "role": "management",      "parentId": "/providers/Microsoft.Management/managementGroups/mg-platform" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-corp",            "name": "mg-corp",            "displayName": "Corp",             "role": "corp",            "parentId": "/providers/Microsoft.Management/managementGroups/mg-landing-zones" },
+      { "id": "/providers/Microsoft.Management/managementGroups/mg-online",          "name": "mg-online",          "displayName": "Online",           "role": "online",          "parentId": "/providers/Microsoft.Management/managementGroups/mg-landing-zones" }
+    ]
+  },
+  "subscriptions": {
+    "platform": [
+      { "id": "20000000-0000-0000-0000-000000000001", "name": "sub-connectivity-prod", "role": "connectivity", "mgPath": "mg-platform/mg-connectivity" },
+      { "id": "20000000-0000-0000-0000-000000000002", "name": "sub-identity-prod",     "role": "identity",     "mgPath": "mg-platform/mg-identity" },
+      { "id": "20000000-0000-0000-0000-000000000003", "name": "sub-management-prod",   "role": "management",   "mgPath": "mg-platform/mg-management" }
+    ],
+    "landingZones": [
+      { "id": "30000000-0000-0000-0000-000000000001", "name": "sub-app-dev",  "role": "landing-zone-dev",  "mgPath": "mg-landing-zones/mg-corp",   "environment": "dev"  },
+      { "id": "30000000-0000-0000-0000-000000000002", "name": "sub-app-prod", "role": "landing-zone-prod", "mgPath": "mg-landing-zones/mg-corp",   "environment": "prod" },
+      { "id": "30000000-0000-0000-0000-000000000003", "name": "sub-online-prod", "role": "landing-zone-prod", "mgPath": "mg-landing-zones/mg-online", "environment": "prod" }
+    ]
+  },
+  "sharedServices": {
+    "logAnalytics":      { "id": "/subscriptions/20000000-0000-0000-0000-000000000003/resourceGroups/rg-mgmt/providers/Microsoft.OperationalInsights/workspaces/log-platform-prod-eastus", "name": "log-platform-prod-eastus", "subscription": "sub-management-prod", "location": "eastus" },
+    "containerRegistry": { "id": "/subscriptions/20000000-0000-0000-0000-000000000003/resourceGroups/rg-mgmt/providers/Microsoft.ContainerRegistry/registries/crplatformprod",          "name": "crplatformprod",          "subscription": "sub-management-prod", "location": "eastus" },
+    "keyVault":          { "id": "/subscriptions/20000000-0000-0000-0000-000000000003/resourceGroups/rg-mgmt/providers/Microsoft.KeyVault/vaults/kv-platform-prod-eus",                 "name": "kv-platform-prod-eus",    "subscription": "sub-management-prod", "location": "eastus" }
+  },
+  "networking": {
+    "topology": "hub-spoke",
+    "hubs": [
+      { "id": "/subscriptions/20000000-0000-0000-0000-000000000001/resourceGroups/rg-hub-eastus/providers/Microsoft.Network/virtualNetworks/vnet-hub-eastus", "name": "vnet-hub-eastus", "subscription": "20000000-0000-0000-0000-000000000001", "location": "eastus", "addressPrefixes": ["10.0.0.0/16"] }
+    ],
+    "privateDnsZones": [
+      "privatelink.blob.core.windows.net",
+      "privatelink.vaultcore.azure.net",
+      "privatelink.azurewebsites.net"
+    ],
+    "peerings": []
+  },
+  "policies": {
+    "denyEffects": [
+      { "name": "Deny-PublicIP",       "scope": "/providers/Microsoft.Management/managementGroups/mg-landing-zones", "impact": "Blocks public IP creation in landing zone subscriptions" },
+      { "name": "Deny-Public-Storage", "scope": "/providers/Microsoft.Management/managementGroups/mg-landing-zones", "impact": "Blocks storage accounts with public network access" }
+    ],
+    "auditEffects": [
+      { "name": "Audit-Missing-Tags", "scope": "/providers/Microsoft.Management/managementGroups/mg-landing-zones", "impact": "Audits resources missing required tags" }
+    ],
+    "allowedLocations": ["eastus", "westus2", "westeurope"],
+    "requiredTags": ["Environment", "Project", "CostCenter"],
+    "alzCanonicalAssignments": ["Deny-PublicIP", "Deploy-MDFC-Config"]
+  },
+  "currentIdentity": {
+    "user": "user@example.com",
+    "tenantId": "10000000-0000-0000-0000-000000000000",
+    "currentSubscription": {
+      "id": "30000000-0000-0000-0000-000000000001",
+      "name": "sub-app-dev"
+    },
+    "roles": []
+  }
+}

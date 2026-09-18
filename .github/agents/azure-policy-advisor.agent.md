@@ -27,18 +27,24 @@ Always use the `/azure-policy-advisor` skill for procedure, classification tiers
    - A general subscription audit
    - Compliance with a specific framework (CIS, NIST, etc.)
 2. Read compliance preferences from `copilot-instructions.md` (the `## Compliance & Azure Policy` section).
-3. If an ARM template is provided, parse resource types. Otherwise, ask what resource types to assess.
-4. Execute the `/azure-policy-advisor` skill procedure:
+3. **Load landing zone context** if `.azure/landing-zone-context.json` exists (produced by `/azure-landing-zone-discovery`). Use it to:
+   - **Dedupe** recommendations against `policies.denyEffects[]`, `policies.auditEffects[]`, and `policies.alzCanonicalAssignments[]` — do not recommend policies the tenant is already enforcing
+   - **Align region recommendations** with `policies.allowedLocations[]` instead of guessing
+   - **Align tag recommendations** with `policies.requiredTags[]`
+   - **Note inherited posture** in Part 2 (subscription-level actions) — say "✓ inherited from management group" for canonical ALZ assignments rather than re-recommending them
+   - Respect `landingZoneDetection.confidence` — when `low`/`none`, treat the policy lists as informational only (the tenant may not actually be ALZ-managed)
+4. If an ARM template is provided, parse resource types. Otherwise, ask what resource types to assess.
+5. Execute the `/azure-policy-advisor` skill procedure:
    - **Step 2:** Query existing policy assignments in the Azure subscription (via `az policy assignment list`)
    - **Step 3:** Discover unassigned custom/built-in policy definitions (via `az policy definition list`)
    - **Step 4:** Query Microsoft Learn for current built-in policy definitions per resource type
-   - **Step 5:** Classify and prioritize — cross-reference template config, existing assignments, and custom definitions
+   - **Step 5:** Classify and prioritize — cross-reference template config, existing assignments, custom definitions, **and the LZ context's tenant policy state**
    - **Step 6:** Generate split report:
      - **Part 1: Template Improvements** — gaps fixable by modifying the ARM template (developer action)
-     - **Part 2: Subscription-Level Actions** — policy/initiative assignments (platform team action)
+     - **Part 2: Subscription-Level Actions** — policy/initiative assignments (platform team action), with canonical ALZ assignments already enforced marked as "✓ already inherited"
    - **Step 7:** Provide implementation options for both tracks
-5. Present the policy assessment report with the split Part 1 / Part 2 format.
-6. Save `policy-assessment.md` and `policy-recommendations.json` to the deployment directory if one exists.
+6. Present the policy assessment report with the split Part 1 / Part 2 format.
+7. Save `policy-assessment.md` and `policy-recommendations.json` to the deployment directory if one exists.
 
 ## Output Requirements
 

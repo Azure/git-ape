@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-naming-research
+name: Negative — CAF naming lookup (off-topic)
+description: A single-resource CAF abbreviation lookup belongs to `/azure-naming-research`, not landing-zone discovery.
+tags: [trigger, negative]
+inputs:
+  prompt: "What's the CAF abbreviation for an Azure Storage Account and what are the naming rules?"
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-landing-zone-discovery/SKILL.md
+      mode: negative
+      threshold: 0.5
