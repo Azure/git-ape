@@ -51,9 +51,10 @@ This skill configures:
 2. OIDC federated credentials for GitHub Actions
 3. RBAC role assignment(s) on subscription scope
 4. GitHub environments (`azure-deploy*`, `azure-destroy`)
-5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable
+5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable, plus the optional `GIT_APE_RUNNER_LABEL` variable that selects private runners
 6. Scaffolded GitHub Actions workflow files (`git-ape-plan.yml`, `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.{md,lock.yml}`) and deployment standards (`.github/copilot-instructions.md`) into the user's working copy
 7. *(Optional)* The `COPILOT_GITHUB_TOKEN` repository secret that powers the agentic drift-detection workflow (`git-ape-drift.lock.yml`) — only when the user opts into scheduled drift detection
+8. The GitHub Actions **runner type** the workflows run on — public GitHub-hosted (default), **hosted compute networking** (GitHub-managed runners with Azure private networking, requires GHEC), or self-hosted runners in your Azure subscription (ACI / ACA / AKS). On-demand IaC for private runners ships at `./templates/runners/`. ACA runners are deployed as a first-class **Git-Ape deployment** (`./templates/deployments/git-ape-runners/`) — Git-Ape deploying Git-Ape — so they get an architecture diagram, cost estimate, managed deploy, and single-command destroy.
 
 ## Prerequisites
 
@@ -143,12 +144,13 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
    - `fc-azure-deploy`    subject `"$OIDC_PREFIX:environment:azure-deploy"` (one per environment in multi-env mode)
    - `fc-azure-destroy`   subject `"$OIDC_PREFIX:environment:azure-destroy"`
 6. Assign RBAC on each target subscription.
-7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable.
+7. Set GitHub repo or environment secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable. (The `GIT_APE_RUNNER_LABEL` variable is set later in Step 12 only if private runners are chosen.)
 8. Create GitHub environments and branch policies when permissions allow.
 9. Scaffold workflow files and deployment standards into the user's working copy (see below).
 10. *(Optional)* Provision the drift detector engine credential (`COPILOT_GITHUB_TOKEN`) so the agentic drift workflow can run (see below).
 11. Capture compliance and Azure Policy preferences (see below).
-12. Verify federated credentials, role assignments, and secrets.
+12. Select the GitHub Actions runner type (public / hosted compute networking / self-hosted) and, if private runners are chosen, provision them and set `GIT_APE_RUNNER_LABEL` (see below).
+13. Verify federated credentials, role assignments, and secrets.
 
 ### Step 9: Scaffold workflow files and deployment standards
 
@@ -274,6 +276,415 @@ After RBAC and environment setup, ask the user about compliance requirements and
      customized file), do NOT mutate it. Instead, print the captured
      preferences and a suggested patch in chat so the user can apply it.
    - In all cases, leave changes unstaged and let the user commit them.
+
+### Step 12: Runner Selection & Provisioning (optional)
+
+Git-Ape workflows resolve their runner from a single variable:
+
+```yaml
+runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
+```
+
+Unset → public GitHub-hosted `ubuntu-latest` (the default; no infrastructure).
+Set to a label → private runners with that label. This is the **bootstrap model:
+start public, switch to private later with one variable.**
+
+1. **Ask the runner type:**
+   ```
+   What runner should the Git-Ape workflows run on?
+   - Public GitHub-hosted (recommended to start — no infrastructure)
+   - Hosted compute networking (GitHub-managed runners in your Azure VNet — requires GHEC)
+   - Self-hosted in my Azure subscription (you manage compute, image, scaling)
+   ```
+
+2. **If public (default):** do nothing. Leave `GIT_APE_RUNNER_LABEL` unset.
+   Onboarding is complete; the user can switch to private runners any time by
+   repeating this step.
+
+3. **If hosted compute networking:**
+   Follow the hosted compute sub-flow (Step 12a below).
+
+4. **If self-hosted:**
+   Follow the self-hosted sub-flow (Step 12b below).
+
+---
+
+### Step 12a: Hosted Compute Networking (GitHub-managed, Azure private networking)
+
+GitHub-hosted runners with Azure private networking. GitHub manages the compute
+(full Ubuntu images with `az`, `gh`, `jq`, `git` pre-installed), runners execute
+inside your Azure VNet for private connectivity.
+
+**Prerequisites:** GitHub Enterprise Cloud.
+
+**Reference:** [About networking for hosted compute products](https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/configuring-private-networking-for-hosted-compute-products/about-networking-for-hosted-compute-products-in-your-enterprise)
+
+#### a. Consolidate GitHub auth scopes first
+
+Before starting provisioning, authenticate with **all required scopes in one
+call** to avoid repeated auth prompts:
+
+```bash
+gh auth refresh -h github.com -s admin:org,admin:enterprise,manage_runners:org,read:enterprise,write:network_configurations
+```
+
+| Scope | Purpose |
+|-------|---------|
+| `admin:org` | Create org-level runner groups, assign repos |
+| `admin:enterprise` | Enterprise-level runner groups and hosted runners |
+| `manage_runners:org` | Create/manage hosted runners |
+| `read:enterprise` | Query enterprise metadata (databaseId, org membership) |
+| `write:network_configurations` | Create network configurations |
+
+#### b. Ask scope: organization or enterprise
+
+```
+Where should the network configuration live?
+- Enterprise level (shared across all orgs in the enterprise)
+- Organization level (scoped to this org only)
+```
+
+| Scope | `businessId` value | UI location |
+|-------|-------------------|-------------|
+| **Enterprise** | Enterprise `databaseId` (from GraphQL) | Enterprise Settings → Hosted compute networking |
+| **Organization** | Org numeric ID (REST: `.id` field) | Org Settings → Hosted compute networking |
+
+Query the needed ID:
+```bash
+# Enterprise databaseId (for enterprise scope):
+gh api graphql -f query='{enterprise(slug: "<slug>") { databaseId }}' --jq '.data.enterprise.databaseId'
+
+# Org numeric ID (for org scope):
+gh api orgs/<org> --jq '.id'
+```
+
+#### c. Provision Azure networking
+
+1. Create resource group and VNet with a `/28` subnet (minimum 16 IPs):
+   ```bash
+   az group create --name <rg> --location <region>
+   az network vnet create --name <vnet> --resource-group <rg> \
+     --address-prefix 10.0.0.0/16 --subnet-name snet-runners --subnet-prefix 10.0.0.0/28
+   ```
+
+2. Delegate subnet to `GitHub.Network/networkSettings`:
+   ```bash
+   az network vnet subnet update --name snet-runners --vnet-name <vnet> \
+     --resource-group <rg> --delegations GitHub.Network/networkSettings
+   ```
+
+3. Register `GitHub.Network` resource provider:
+   ```bash
+   az provider register --namespace GitHub.Network
+   # Wait until Registered:
+   az provider show --namespace GitHub.Network --query "registrationState" -o tsv
+   ```
+
+4. Create `GitHub.Network/networkSettings` resource:
+   ```bash
+   az rest --method PUT \
+     --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/GitHub.Network/networkSettings/<name>?api-version=2024-04-02" \
+     --body '{
+       "location": "<region>",
+       "properties": {
+         "businessId": "<enterprise-databaseId-or-org-id>",
+         "subnetId": "<full-subnet-resource-id>"
+       }
+     }'
+   ```
+   ⚠️ **`businessId` is immutable.** If wrong, you must delete and recreate.
+
+5. Extract the `GitHubId` tag from the resource — this is the ID GitHub uses:
+   ```bash
+   az rest --method GET \
+     --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/GitHub.Network/networkSettings/<name>?api-version=2024-04-02" \
+     --query "tags.GitHubId" -o tsv
+   ```
+
+#### d. Create GitHub network configuration
+
+Use the **`GitHubId` tag value** (NOT the Azure resource ID):
+
+```bash
+# Enterprise scope:
+gh api --method POST enterprises/<slug>/network-configurations \
+  -f name="<config-name>" -f compute_service="actions" \
+  -f network_settings_ids[]="<GitHubId-tag-value>"
+
+# Organization scope:
+gh api --method POST orgs/<org>/settings/network-configurations \
+  -f name="<config-name>" -f compute_service="actions" \
+  -f network_settings_ids[]="<GitHubId-tag-value>"
+```
+
+Save the returned `id` — needed for the runner group.
+
+#### e. Create runner group and hosted runner
+
+```bash
+# Enterprise scope:
+gh api --method POST enterprises/<slug>/actions/runner-groups \
+  -f name="<group-name>" -f visibility="selected" \
+  -F allows_public_repositories=false \
+  -f network_configuration_id="<network-config-id>"
+
+# Assign the org to the enterprise runner group:
+gh api --method PUT enterprises/<slug>/actions/runner-groups/<group-id>/organizations/<org-id>
+
+# For enterprise groups: also assign the repo at org level (inherited group ID):
+gh api orgs/<org>/actions/runner-groups --jq '.runner_groups[] | select(.name=="<group-name>") | .id'
+gh api --method PUT orgs/<org>/actions/runner-groups/<inherited-id>/repositories/<repo-id>
+```
+
+```bash
+# Query available images and sizes:
+gh api orgs/<org>/actions/hosted-runners/images/github-owned --jq '.images[] | {id, display_name, platform}'
+gh api orgs/<org>/actions/hosted-runners/machine-sizes --jq '.machine_specs[:5] | .[] | {id, cpu_cores, memory_gb}'
+
+# Create hosted runner (image IDs are NUMERIC, sizes are like "4-core"):
+echo '{"name":"<runner-name>","runner_group_id":<group-id>,"platform":"linux-x64","image":{"id":"<numeric-id>","source":"github"},"size":"4-core","maximum_runners":5}' | \
+  gh api --method POST enterprises/<slug>/actions/hosted-runners --input -
+```
+
+Wait for `status: "Ready"`:
+```bash
+gh api enterprises/<slug>/actions/hosted-runners --jq '.runners[] | {name, status}'
+```
+
+#### f. Set variable and verify
+
+```bash
+gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "<runner-name>"
+gh workflow run git-ape-verify.yml --repo <org>/<repo>
+```
+
+Confirm all steps pass — no custom image needed, GitHub provides everything.
+
+---
+
+### Step 12b: Self-Hosted Runners (ACI / ACA / AKS)
+
+Self-hosted runners run in your Azure subscription. You manage compute, image,
+scaling, and networking.
+
+1. **Ask the platform:**
+   ```
+   Which Azure platform should host the runners?
+   - ACA  — Azure Container Apps (event-driven, ephemeral, scale-to-zero) — RECOMMENDED
+   - ACI  — Azure Container Instances (simplest; a handful of runners)
+   - AKS  — Azure Kubernetes Service (Actions Runner Controller; large scale)
+   ```
+
+   **ACA is deployed as a Git-Ape deployment** (Git-Ape deploying Git-Ape), so the
+   runner infrastructure gets an architecture diagram, cost estimate, managed
+   deploy, and single-command destroy — see the ACA path directly below. **ACI**
+   and **AKS** use the imperative provisioning steps further down.
+
+#### ACA — deploy runners as a Git-Ape deployment (recommended)
+
+Instead of an imperative `az deployment group create`, scaffold the runner
+infrastructure as a first-class Git-Ape deployment and deploy it through the
+normal Git-Ape stack flow. The template is a subscription-scoped Deployment Stack,
+so destroy is a single idempotent command and the PAT lives in Key Vault (never in
+git or ARM parameters).
+
+1. **Scaffold the deployment artifact** into the working copy and set inputs:
+   ```bash
+   mkdir -p .azure/deployments/git-ape-runners
+   cp -R .github/skills/git-ape-onboarding/templates/deployments/git-ape-runners/. \
+     .azure/deployments/git-ape-runners/
+   # set githubOwnerRepo (+ any overrides) — NEVER put the PAT here:
+   $EDITOR .azure/deployments/git-ape-runners/parameters.json
+   ```
+   `template.json` creates, in one self-contained stack: the resource group, a
+   user-assigned identity, an ACR, an `AcrPull` role assignment, a Key Vault, a
+   `Key Vault Secrets User` role assignment, an ACA managed environment, and the
+   event-driven ACA Job.
+
+2. **Deploy the stack.** The first deploy runs on a public runner or locally,
+   because the private runner does not exist yet:
+   ```bash
+   /azure-stack-deploy git-ape-runners          # local (VS Code / terminal)
+   ```
+   In CI, open a PR that adds `.azure/deployments/git-ape-runners/`; the
+   `git-ape-deploy.yml` workflow deploys it on `ubuntu-latest` and writes
+   `state.json` plus the architecture/cost artifacts, exactly like any other
+   Git-Ape deployment.
+
+3. **Build & push the runner image** into the ACR the stack just created (the
+   stock `actions-runner` image lacks `az`/`gh`/`jq` and self-registration — see
+   the Dockerfile note in the imperative path below):
+   ```bash
+   ACR=$(jq -r '.acrLoginServer.value' .azure/deployments/git-ape-runners/state.json)
+   az acr build --registry "${ACR%%.*}" --image git-ape-runner:latest \
+     --file .github/skills/git-ape-onboarding/templates/runners/Dockerfile \
+     .github/skills/git-ape-onboarding/templates/runners/ --no-logs
+   ```
+
+4. **Write the GitHub PAT into Key Vault** — never in git, ARM params, or chat
+   output. Collect a long-lived fine-grained PAT exactly as in the imperative
+   "Collect a GitHub PAT" step below (never a short-lived registration token):
+   ```bash
+   KV=$(jq -r '.keyVaultName.value' .azure/deployments/git-ape-runners/state.json)
+   az keyvault secret set --vault-name "$KV" --name github-pat \
+     --value '<user-provided-PAT>' --output none
+   ```
+   The ACA Job reads it at runtime through a Key Vault secret reference
+   (`keyVaultUrl` + user-assigned `identity`), enabled by the in-template
+   `Key Vault Secrets User` role assignment.
+
+5. **Point workflows at the runner** — after this, re-deploys of this very stack
+   run on it (the self-hosting loop):
+   ```bash
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
+   ```
+
+6. **Destroy** with one command when no longer needed (tears down the whole stack
+   and purges the soft-deleted Key Vault):
+   ```bash
+   /azure-stack-destroy git-ape-runners
+   ```
+
+See `templates/deployments/git-ape-runners/README.md` for the full walkthrough and
+`templates/deployments/git-ape-runners/architecture.md` for the topology and
+bootstrap sequence.
+
+#### ACI / AKS — imperative provisioning
+
+1. **Build the custom runner image using ACR Tasks (cloud build).** The base
+   `ghcr.io/actions/actions-runner:latest` (GitHub's official runner image) does
+   **NOT** include `az`, `gh`, or `jq`, and ships no registration entrypoint.
+   Workflows fail with `Unable to locate executable file: az` — and on ACI/ACA
+   the runner never registers — without a custom image.
+
+   Always build via **ACR Tasks** (cloud build) — never local Docker. This
+   avoids Windows CRLF line-ending corruption of `entrypoint.sh` and eliminates
+   the need for a local Docker install.
+   ```bash
+   # Create ACR (one-time) — no --admin-enabled; use managed identity for pulls
+   az acr create --name <acr-name> --resource-group <rg> --location <region> --sku Basic
+
+   # Build and push image (runs in Azure, ~3 min, no local Docker needed)
+   # On Windows, add --no-logs to avoid a Unicode encoding crash in log streaming
+   az acr build --registry <acr-name> --image git-ape-runner:latest \
+     --file ./templates/runners/Dockerfile ./templates/runners/ --no-logs
+   ```
+   The `Dockerfile` at `./templates/runners/Dockerfile` extends the base runner
+   with all Git-Ape prerequisites (`az`, `gh`, `jq`, `git`) and an `entrypoint.sh`
+   that self-registers the runner on ACI/ACA (on AKS, ARC handles registration).
+   It includes a `sed` safety net that strips CRLF line endings from
+   `entrypoint.sh` at build time.
+
+   After the build, verify the image exists:
+   ```bash
+   az acr repository list --name <acr-name> -o table
+   ```
+
+2. **Create a managed identity and assign `AcrPull` role** for image pulls:
+   ```bash
+   # Create identity
+   az identity create --name id-git-ape-runner --resource-group <rg> --location <region>
+
+   # Get IDs
+   IDENTITY_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query id -o tsv)
+   PRINCIPAL_ID=$(az identity show --name id-git-ape-runner --resource-group <rg> --query principalId -o tsv)
+   ACR_ID=$(az acr show --name <acr-name> --query id -o tsv)
+
+   # Assign AcrPull role (may take 30–60s to propagate)
+   az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal \
+     --role AcrPull --scope $ACR_ID
+   ```
+   **Do NOT use ACR admin credentials** (`--admin-enabled true` + username/password).
+   Managed identity is the secure, recommended approach.
+
+3. **Collect a GitHub PAT from the user.** The ACA/ACI runner needs a
+   **long-lived GitHub Personal Access Token (PAT)** — NOT a short-lived
+   registration token from `POST /actions/runners/registration-token`.
+   Registration tokens expire in ~1 hour, but the KEDA `github-runner` scaler
+   continuously polls the Actions queue AND each ephemeral runner re-registers
+   on every scale-up, so a long-lived PAT is required.
+
+   **Ask the user to create a PAT** before deploying:
+   ```
+   The self-hosted runner needs a GitHub Personal Access Token (PAT) for
+   continuous queue polling and runner registration.
+
+   Please create a fine-grained PAT at:
+     https://github.com/settings/tokens?type=beta
+
+   Required permissions (scoped to the target repo):
+     - Actions: Read & Write
+     - Administration: Read & Write (for runner registration)
+
+   Alternatively, a classic PAT with the `repo` scope works.
+
+   Paste the token when prompted — it will only be passed to the deployment
+   and will not be stored or displayed.
+   ```
+
+   **Do NOT generate a registration token** via the GitHub API
+   (`POST repos/<org>/<repo>/actions/runners/registration-token`). These are
+   short-lived (~1 hour) and will cause the runner to fail with a 401 error
+   once expired. The KEDA scaler and ephemeral runner registration both need
+   a token that does not expire.
+
+   Never print the token value in chat output (see Safe-Execution Rules).
+
+4. **Deploy the runner infrastructure (ACI).** Use the ACI template
+   (`templates/runners/aci/template.json`) — ACA is covered by the Git-Ape-managed
+   path above. Pass the custom image, ACR server, managed identity, and
+   user-provided PAT:
+   ```bash
+   az deployment group create -g <rg> -f ./templates/runners/aci/template.json \
+     -p runnerImage='<acr-name>.azurecr.io/git-ape-runner:latest' \
+        acrServer='<acr-name>.azurecr.io' \
+        userAssignedIdentityId=$IDENTITY_ID \
+        githubOwnerRepo='<org>/<repo>' \
+        githubAccessToken='<user-provided-PAT>'
+   ```
+   - The ACA template's `registries` block automatically uses identity-based
+     auth when both `acrServer` and `userAssignedIdentityId` are set.
+   - The GitHub PAT is the only secret — for production, store it in Key Vault
+     and reference it; for initial setup, pass it directly at deploy time.
+     Never inline it in a committed `parameters.json`.
+   - For private networking, set the subnet parameter (`subnetId` for ACI,
+     `infrastructureSubnetId` for ACA, or a VNet node pool for AKS).
+   - For AKS, use `helm install` instead of ARM.
+   - **Note:** The ACA managed environment may take 1–2 minutes to fully
+     provision. If deploying step-by-step (not via ARM template), wait for the
+     environment's `provisioningState` to reach `Succeeded` before creating the
+     job.
+
+5. **Set `minExecutions=1`** (recommended) so at least one runner is always
+   warm and visible in GitHub Settings. Without this, KEDA scale-from-zero can
+   take 1–3 minutes on cold start, during which GitHub shows "No runners
+   configured":
+   ```bash
+   az containerapp job update --name git-ape-runner --resource-group <rg> --min-executions 1
+   ```
+   Leave at `0` only if you prefer true scale-to-zero and can tolerate cold-start
+   delays.
+
+6. **Confirm the runner is online** in *GitHub → Settings → Actions → Runners*
+   with the `git-ape-runner` label. (With `minExecutions=1`, a runner should
+   appear within 30–60 seconds of deployment.)
+
+7. **Set the variable** so workflows target it (repo-wide or per environment):
+   ```bash
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --body "git-ape-runner"
+   # per environment instead:
+   gh variable set GIT_APE_RUNNER_LABEL --repo <org>/<repo> --env azure-deploy --body "git-ape-runner"
+   ```
+   Clean fallback to GitHub-hosted runners is `gh variable delete GIT_APE_RUNNER_LABEL`.
+
+9. **Verify** by triggering `Git-Ape: Verify Setup` and confirming all steps
+    pass on the private runner (especially "Test OIDC login" which requires `az`).
+
+10. **Continuous drift detection** (`git-ape-drift.lock.yml`) is a compiled gh-aw
+    workflow and does NOT honor `GIT_APE_RUNNER_LABEL`. To move drift onto a
+    private runner, set `runs-on:` in the source `git-ape-drift.md` frontmatter
+    and recompile with `gh aw compile` — never hand-edit the `.lock.yml` (it
+    carries an integrity hash). The other four workflows need no recompile.
 
 ## Mode: Enterprise Distribution (`.github-private`)
 
@@ -432,7 +843,9 @@ OIDC, RBAC, environments, and workflows.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Summarize outcome (including scaffolded file counts) and suggest verification commands.
+10. Ask the runner type (and platform/scope if private), and — if private runners are chosen — provision the full stack. For **hosted compute networking**: consolidate gh auth scopes → ask org vs enterprise scope → provision Azure VNet + subnet → create GitHub.Network/networkSettings → create network config + runner group + hosted runner → assign repo → set `GIT_APE_RUNNER_LABEL` (Step 12a). For **self-hosted ACA (recommended)**: scaffold `.azure/deployments/git-ape-runners/` → deploy the subscription-scoped stack via `/azure-stack-deploy git-ape-runners` (first deploy on `ubuntu-latest`) → `az acr build` the runner image into the stack's ACR → `az keyvault secret set` the PAT (never a registration token) → set `GIT_APE_RUNNER_LABEL` (Step 12b, ACA path) — Git-Ape deploying Git-Ape. For **self-hosted ACI/AKS**: ask the user for a GitHub PAT → ACR (no admin) + cloud build via ACR Tasks (`--no-logs` on Windows) + managed identity with `AcrPull` role + ACI deployment with identity-based registry auth using user-provided PAT + `minExecutions=1` + `GIT_APE_RUNNER_LABEL` (Step 12b, imperative path).
+11. **Verify** by triggering `Git-Ape: Verify Setup` and confirming ALL steps pass on the private runner.
+12. Summarize outcome (including scaffolded file counts and the chosen runner type) and suggest verification commands.
 
 ### Enterprise distribution
 
@@ -444,6 +857,184 @@ OIDC, RBAC, environments, and workflows.
 6. Provide the verification commands and remind the user that each deploying repo still needs the repository CI/CD onboarding for Azure access.
 
 ## Known Gotchas
+
+### Self-hosted: registration tokens don't work for KEDA-based runners
+
+**Never use `POST repos/<org>/<repo>/actions/runners/registration-token`** to
+generate the `githubAccessToken` for ACA/ACI runners. Registration tokens are
+short-lived (~1 hour) and expire silently. Once expired:
+- The KEDA `github-runner` scaler can no longer poll the Actions queue
+- Each ephemeral runner fails to register on scale-up with a **401 Unauthorized**
+- Runners appear as `offline` in GitHub Settings
+
+The `githubAccessToken` parameter requires a **long-lived GitHub PAT** because:
+1. KEDA continuously polls the GitHub API every 30 seconds to detect queued jobs
+2. Each ephemeral runner re-registers itself on every scale-up event
+3. Both operations need a token that outlives any single job
+
+**Fix:** Always **ask the user** to create a fine-grained PAT
+(`https://github.com/settings/tokens?type=beta`) with **Actions (Read & Write)**
+and **Administration (Read & Write)** permissions scoped to the target repo. A
+classic PAT with the `repo` scope also works. Never generate a registration
+token programmatically — it will always fail after ~1 hour.
+
+### Hosted compute: `network_settings_ids` expects the GitHubId tag, not the Azure resource ID
+
+When creating a GitHub network configuration, the `network_settings_ids` field
+expects the **`GitHubId` tag value** (a SHA-256 hash assigned by GitHub to the
+Azure `GitHub.Network/networkSettings` resource), NOT the Azure resource ID path.
+
+```bash
+# ❌ WRONG — Azure resource ID
+-f network_settings_ids[]="/subscriptions/.../providers/GitHub.Network/networkSettings/my-resource"
+
+# ✅ CORRECT — GitHubId tag value from the Azure resource
+-f network_settings_ids[]="FA1AD85973374477AF8C49119ADEA731EFD4B9BD6B7764A8FCD6B036CBA796F3"
+```
+
+Extract the GitHubId after creating the Azure resource:
+```bash
+az rest --method GET \
+  --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/GitHub.Network/networkSettings/<name>?api-version=2024-04-02" \
+  --query "tags.GitHubId" -o tsv
+```
+
+### Hosted compute: `businessId` is immutable and scope-specific
+
+The `businessId` on `GitHub.Network/networkSettings` determines whether the
+resource works at enterprise or organization scope:
+- **Enterprise scope:** use the enterprise `databaseId` (query via GraphQL)
+- **Organization scope:** use the org's numeric ID (query via REST `.id` field)
+
+If wrong, the GitHub API returns `"The business ID is invalid or does not match"`.
+The property is **immutable** — you cannot update it; you must delete and recreate.
+
+### Hosted compute: repeated auth prompts from missing scopes
+
+The hosted compute provisioning flow requires **5 distinct GitHub token scopes**
+(`admin:org`, `admin:enterprise`, `manage_runners:org`, `read:enterprise`,
+`write:network_configurations`). If not collected upfront, each missing scope
+triggers a separate `gh auth refresh` device-code flow.
+
+**Fix:** Always consolidate auth at the start of Step 12a:
+```bash
+gh auth refresh -h github.com -s admin:org,admin:enterprise,manage_runners:org,read:enterprise,write:network_configurations
+```
+
+### Hosted compute: image and size IDs are GitHub-specific
+
+The hosted runners API uses **numeric image IDs** (e.g., `"2295"` = Ubuntu 24.04)
+and **GitHub-specific size IDs** (e.g., `"4-core"`, `"8-core"`), not Azure VM SKU
+names or Ubuntu version strings.
+
+Always query available options first:
+```bash
+gh api orgs/<org>/actions/hosted-runners/images/github-owned --jq '.images[] | {id, display_name}'
+gh api orgs/<org>/actions/hosted-runners/machine-sizes --jq '.machine_specs[:10] | .[] | {id, cpu_cores, memory_gb}'
+```
+
+### Default runner image lacks required tools (self-hosted only)
+
+The base image `ghcr.io/actions/actions-runner:latest` (GitHub's official runner)
+is a **minimal** self-hosted runner — it does NOT include `az`, `gh`, or `jq`, and
+ships no registration entrypoint. If you deploy without the custom image, the
+runner never registers on ACI/ACA and workflows fail with:
+
+```
+Error: Unable to locate executable file: az
+```
+
+**Fix:** Always build and use the custom image from `./templates/runners/Dockerfile`.
+The onboarding flow must:
+1. Create an ACR (`az acr create` — no `--admin-enabled`)
+2. Build the image via ACR Tasks (`az acr build --no-logs` on Windows)
+3. Create a managed identity with `AcrPull` role on the ACR
+4. Deploy the template with `acrServer`, `userAssignedIdentityId`, and `runnerImage`
+
+### KEDA scale-from-zero cold start
+
+With `minExecutions=0` (the default), KEDA's `github-runner` scaler polls the
+GitHub Actions queue every 30 seconds. On a fresh deployment or after long idle
+periods, the first job can wait 1–3 minutes before a runner spins up. During
+this time:
+- GitHub shows the job as "Waiting for a runner to pick up this job"
+- The Settings → Runners page shows "No runners configured" (ephemeral runners
+  only register while executing)
+
+**Fix:** Set `minExecutions=1` to keep one runner always warm. This costs
+~$30–50/month on the Consumption plan but eliminates cold-start delays and
+ensures a runner is always visible in GitHub Settings.
+
+### Windows CRLF corrupts `entrypoint.sh` (self-hosted only)
+
+When the `Dockerfile` build context is uploaded from a Windows checkout (where
+`git autocrlf` converts LF to CRLF), `entrypoint.sh` gets `\r\n` line endings.
+Linux interprets the shebang as `#!/usr/bin/env bash\r`, failing with:
+
+```
+'bash\r': No such file or directory
+```
+
+The runner container starts but never registers, and all executions fail
+immediately.
+
+**Fix (belt-and-suspenders):**
+1. The `Dockerfile` includes a `sed -i 's/\r$//'` line after `COPY entrypoint.sh`
+   that strips CRLF at build time — this is always safe and is a no-op on clean
+   LF files.
+2. Prefer **ACR Tasks** (cloud build) over local `docker build` — ACR Tasks run
+   in Linux and handle the context correctly.
+3. If building locally on Windows, ensure `.gitattributes` marks `*.sh` as
+   `text eol=lf`, or run `dos2unix entrypoint.sh` before building.
+
+### `az acr build` crashes on Windows (Unicode encoding)
+
+On Windows, `az acr build` may crash while streaming build logs with:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192'
+```
+
+This is a known Azure CLI bug — the `colorama` library on Windows can't encode
+Unicode characters (like `→`) in `apt-get` output. The build itself may or may
+not have completed in Azure before the crash.
+
+**Fix:** Always use `--no-logs` when running `az acr build` on Windows:
+```bash
+az acr build --registry <acr-name> --image git-ape-runner:latest \
+  --file ... ... --no-logs
+```
+The build runs in Azure regardless; `--no-logs` just skips the local log
+streaming. Verify success with `az acr repository list --name <acr-name>`.
+
+### ACA managed environment provisioning delay
+
+The `Microsoft.App/managedEnvironments` resource can take 1–2 minutes to
+provision. If you create the ACA job immediately after the environment, the
+deployment may fail with `ManagedEnvironmentNotProvisioned`.
+
+**Fix:** When deploying via ARM template (`az deployment group create`), the
+`dependsOn` in the template handles ordering automatically. When deploying
+step-by-step (e.g., `az containerapp env create` followed by
+`az containerapp job create`), poll the environment status first:
+```bash
+az containerapp env show --name <env-name> --resource-group <rg> \
+  --query "properties.provisioningState" -o tsv
+# Wait until "Succeeded" before creating the job
+```
+
+### Stale workflow files in target repos
+
+If the target repo was onboarded before the `GIT_APE_RUNNER_LABEL` pattern was
+introduced, its workflow files may have hardcoded `runs-on: ubuntu-latest`. The
+private runner will never pick up jobs because workflows don't request its label.
+
+**Fix:** The scaffold helper (`scaffold-repo.sh` / `.ps1`) skips existing files.
+To update stale workflows, the agent must either:
+1. Detect the stale pattern (`grep 'runs-on: ubuntu-latest'`) and offer to
+   update all 4 workflow files with the dynamic pattern, OR
+2. Advise the user to manually replace `runs-on: ubuntu-latest` with
+   `runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` in each job.
 
 ### GitHub Org Custom OIDC Subject Template (e.g. Azure org)
 
