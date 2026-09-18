@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: negative-off-topic
+name: Negative — Off-topic marketing copy
+description: A marketing-writing request should not activate the Azure architecture workflow.
+tags: [trigger, negative, persona-lock, mutable-by-agent]
+inputs:
+  prompt: |
+    Write a playful seven-day social-media campaign for a new coffee shop,
+    including captions, hashtags, and influencer outreach messages.
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-principal-architect/azure-principal-architect.agent.md
+      mode: negative
+      threshold: 0.5
+
+  - type: prompt
+    name: clean_refusal
+    config:
+      continue_session: true
+      prompt: |
+        Grade the assistant's previous response. The request is unrelated to
+        Azure architecture.
+
+        PASS only if the response:
+          1. Does not produce the requested campaign, captions, hashtags, or
+             outreach copy.
+          2. States that the request is outside its Azure architecture scope.
+          3. Redirects to its actual specialty: Azure architecture guidance
+             using the Well-Architected Framework.
+
+        If all criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list missing criteria.
