@@ -111,6 +111,8 @@ After deployment:
 - `state.json` is committed to the repo with deployment results
 - A deployment result comment is posted on the (now merged) PR
 
+> The CI job deploys via `az stack sub create --action-on-unmanage deleteAll` (an Azure Deployment Stack). Deploying the same artifact locally from VS Code or the terminal uses the **`azure-stack-deploy`** skill — same flags, same `state.json` schema, so local and pipeline deployments are interchangeable.
+
 ## Step 6: Verify the Deployment
 
 Check the committed state:

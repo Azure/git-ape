@@ -129,6 +129,7 @@ You will see this in action in Lab 3 when we deliberately break a security contr
 |---|---|---|
 | `MissingSubscriptionRegistration` | Provider not registered for the sub | `az provider register --namespace Microsoft.Sql --wait` (plus Microsoft.Web, Microsoft.KeyVault) |
 | `QuotaExceeded` for App Service Plans | Region quota at 100% | Re-run with different region |
+| `SkuNotAvailable` for a VM size or SKU | SKU is restricted or retired in that region | Ask `@git-ape` to run `/azure-resource-availability` for that SKU + region — it queries `az vm list-skus` and suggests unrestricted alternatives before you redeploy |
 | SQL deploy hangs > 5 minutes | SQL servers can take 4-6 minutes; nested deployment polls every 30s | Patient wait; check `az deployment sub show --name <id> --query "properties.provisioningState"` |
 | Web App responds 403 after deploy | Managed identity not yet propagated to Key Vault | Wait 60s, retry |
 | Tests fail: SQL connection refused | AAD-only auth + token still propagating | Wait 90s; verify with `az sql db show-connection-string` |

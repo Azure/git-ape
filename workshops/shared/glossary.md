@@ -47,4 +47,7 @@
 | `/azure-role-selector` | Recommends least-privilege RBAC roles for identities and resources. |
 | `/azure-policy-advisor` | Assesses templates against compliance frameworks and recommends policies. |
 | `/azure-resource-visualizer` | Generates Mermaid architecture diagrams from deployed resource groups. |
+| `/azure-resource-availability` | Validates VM SKU restrictions, runtime/Kubernetes version support, and subscription quota before a template is deployed. |
+| `/azure-stack-deploy` | Deploys a prepared Git-Ape artifact as a subscription-scoped Azure Deployment Stack and writes `state.json`. |
+| `/azure-stack-destroy` | Tears down a deployment by deleting its Azure Deployment Stack (`--action-on-unmanage deleteAll`) and purging soft-deleted resources. |
 | `/git-ape-onboarding` | Guided setup of OIDC, RBAC, GitHub environments, and secrets. |
