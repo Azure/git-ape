@@ -12,6 +12,8 @@ description: "Overview of all Git-Ape skills organized by deployment phase"
 
 Skills are focused capabilities invoked by agents at specific stages of the deployment workflow. Each skill handles one task.
 
+> 📇 See the [Skill Registry](./registry) for the full machine-readable catalog (first-party + community) with author and maturity metadata.
+
 ## Pre-Deploy Skills
 
 | Skill | Description | Invocable |

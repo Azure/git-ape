@@ -40,7 +40,7 @@ jobs:
       - name: Check for stale docs
         id: diff
         run: |
-          if git diff --quiet website/docs/; then
+          if git diff --quiet website/docs/ .github/skills/registry.json; then
             echo "stale=false" >> "$GITHUB_OUTPUT"
             echo "✅ Generated docs are up to date"
           else
@@ -48,7 +48,7 @@ jobs:
             echo "⚠️ Generated docs are stale"
             echo ""
             echo "Changed files:"
-            git diff --name-only website/docs/
+            git diff --name-only website/docs/ .github/skills/registry.json
           fi
 
       - name: Comment on PR if stale
@@ -57,7 +57,7 @@ jobs:
         with:
           script: |
             const { execSync } = require('child_process');
-            const changedFiles = execSync('git diff --name-only website/docs/')
+            const changedFiles = execSync('git diff --name-only website/docs/ .github/skills/registry.json')
               .toString()
               .trim()
               .split('\n')
