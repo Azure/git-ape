@@ -87,14 +87,17 @@ gh run list --workflow=git-ape-destroy.yml --limit 1
 gh run watch
 ```
 
+The workflow also supports manual `workflow_dispatch` with `confirm=destroy` as an emergency fallback.
+
 The workflow:
 
-1. Reads the resource group name from `state.json`
-2. Inventories all resources in the group
-3. Deletes subscription-scoped resources first (role assignments)
-4. Deletes the resource group
-5. Updates `state.json` and `metadata.json` to `destroyed`
-6. Commits the updated state to the repo
+1. Reads the stack name (`deploymentId`) and `stackId` from `state.json`
+2. Runs `az stack sub show` to inventory the stack's managed resources
+3. Runs `az stack sub delete --action-on-unmanage deleteAll` — removes every managed resource across all resource groups and subscription scope in one call
+4. Updates `state.json` and `metadata.json` to `destroyed`
+5. Commits the updated state to the repo
+
+If the stack is already gone, the workflow records `already-destroyed` and exits successfully, so re-runs are safe.
 
 ## Step 5: Verify Destruction
 
@@ -127,6 +130,27 @@ The deployment directory still exists with the full audit trail — template, se
 | **State update** | `state.json` and `metadata.json` updated to `destroyed` |
 | **Audit preservation** | All deployment artifacts preserved even after resources are deleted |
 | **Full lifecycle** | planning → deployed → destroy-requested → destroyed |
+
+## Step 6: Destroy Locally with the `azure-stack-destroy` Skill
+
+The CI workflow is the default path, but the same teardown is available locally. The `azure-stack-destroy` skill mirrors `git-ape-destroy.yml`, so local and CI destroys are interchangeable. It pairs with `azure-stack-deploy`, which creates the stack and writes `state.json` (schemaVersion 1.0).
+
+In Copilot Chat, ask:
+
+```text
+@git-ape destroy deployment deploy-XXXXXXXX-XXXXXX
+```
+
+The skill:
+
+1. Refuses to run without `state.json` under `.azure/deployments/<id>/`
+2. Deletes the stack with `az stack sub delete --action-on-unmanage deleteAll --bypass-stack-out-of-sync-error true`
+3. Purges soft-deleted Key Vault, Cognitive Services and similar resources, unless flagged `purgeProtected: true` in `state.json`
+4. Updates `state.json` and `metadata.json` to a terminal status
+
+Prefer it over raw `az group delete`: a stack can own several resource groups plus subscription-scope resources, and soft-deleted resources keep holding their names after a group delete.
+
+> **No Azure?** Read `.github/skills/azure-stack-destroy/SKILL.md` and trace which of the steps above apply to a sample `state.json`.
 
 ## Workshop Complete
 
@@ -161,20 +185,3 @@ az group delete --name <resource-group-name> --yes --no-wait
 - **Explore more skills:** Browse the [full skill catalog](https://github.com/Azure/git-ape)
 - **Architecture review:** Ask `@azure-principal-architect` to review any deployment
 - **Contribute:** Open a PR to improve workshop content or add new scenarios
-
-## Step 6: The destroy contract
-
-git-ape-destroy.yml triggers when metadata.json status flips to destroy-requested and the PR merges, OR via manual workflow_dispatch with confirm=destroy. Both require PR review.
-
-## Step 7: What the workflow does
-
-1. Reads state.json for the stack name.
-2. Runs az stack sub show to inventory managed resources.
-3. Runs az stack sub delete --action-on-unmanage deleteAll.
-4. Updates metadata.json status to destroyed; commits back.
-
-The --action-on-unmanage deleteAll flag removes every resource across all RGs, role assignments, policy assignments -- in one call. No orphans.
-
-## Step 8: Idempotency
-
-If the stack is already gone, the workflow records already-destroyed and exits 0. Safe to re-run.
