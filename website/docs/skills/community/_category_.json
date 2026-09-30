@@ -1,0 +1,8 @@
+{
+  "label": "Community Skills",
+  "position": 99,
+  "link": {
+    "type": "generated-index",
+    "description": "Third-party skills contributed by the community."
+  }
+}
