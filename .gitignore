@@ -2,6 +2,7 @@
 .env
 .azure/*
 !.azure/deployments/
+!.azure/landing-zone-context.json
 
 # Extension build artifacts
 extension/package.json

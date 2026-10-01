@@ -186,6 +186,7 @@ Skills are invoked by agents at specific stages. Each skill handles one focused 
 |-------|-------|---------|
 | **Pre-Deploy** | `/azure-rest-api-reference` | Look up ARM property schemas and API versions. **Mandatory before any template generation.** |
 | | `/azure-naming-research` | CAF abbreviation lookup, naming constraint validation |
+| | `/azure-landing-zone-discovery` | Discover ALZ topology (management groups, platform subscriptions, hub-spoke networking, policy gates) with a confidence score |
 | | `/azure-resource-availability` | SKU restrictions, version support, API compatibility, quota |
 | | `/azure-security-analyzer` | Per-resource security assessment with blocking gate |
 | | `/azure-policy-advisor` | Azure Policy compliance recommendations against CIS, NIST, or general best-practice frameworks |
@@ -208,7 +209,7 @@ graph TD
     U --> S1
 
     S1["<b>Stage 1: Requirements</b><br/>Requirements Gatherer interviews user"]
-    SK1["/azure-naming-research<br/>/azure-resource-availability"]
+    SK1["/azure-naming-research<br/>/azure-resource-availability<br/>/azure-landing-zone-discovery"]
 
     S1 -. skills .-> SK1
     S1 --> S2

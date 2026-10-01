@@ -73,7 +73,8 @@ Treat this as a **non-negotiable contract** for the gated first reply: regardles
    Both scripts produce byte-identical output. Report which files were created vs skipped.
 9. Ask compliance framework and enforcement mode preferences (Step 10 in `/git-ape-onboarding` skill playbook).
 10. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices. If the file was skipped by the scaffold step or lacks that section, surface the captured preferences in chat for manual integration instead of mutating the file.
-11. Summarize created/updated artifacts and next checks.
+11. **Run landing zone discovery** against each onboarded subscription using `/azure-landing-zone-discovery`. This populates `.azure/landing-zone-context.json` with the tenant's management group hierarchy, platform subscriptions, hub-spoke networking, and policy gates so the requirements gatherer, template generator, and policy advisor can be landing-zone-aware on the very first deployment. If discovery reports `confidence` = `low`/`none`, tell the user the workspace will deploy in standalone mode and document how to fall back to manual injection.
+12. Summarize created/updated artifacts and next checks.
 
 ## Output Requirements
 
