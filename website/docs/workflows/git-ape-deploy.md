@@ -36,7 +36,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Detect deployments to execute |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Steps** | 2 |
 
 ### `deploy`
@@ -44,7 +44,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Deploy: ${{ matrix.deployment_id }} |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Environment** | `azure-deploy` |
 | **Depends On** | `detect-deployments` |
 | **Steps** | 17 |
@@ -95,7 +95,7 @@ concurrency:
 jobs:
   detect-deployments:
     name: Detect deployments to execute
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       deployment_ids: ${{ steps.find.outputs.deployment_ids }}
       has_deployments: ${{ steps.find.outputs.has_deployments }}
@@ -139,7 +139,7 @@ jobs:
     name: "Deploy: ${{ matrix.deployment_id }}"
     needs: [detect-deployments]
     if: needs.detect-deployments.outputs.has_deployments == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     environment: azure-deploy
     strategy:
       matrix:
