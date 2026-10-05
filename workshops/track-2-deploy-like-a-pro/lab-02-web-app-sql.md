@@ -144,3 +144,4 @@ You will see this in action in Lab 3 when we deliberately break a security contr
 - Template generator agent: `.github/agents/azure-template-generator.agent.md` (search for `inner scope` and `bestpractices`)
 - Deployer agent: `.github/agents/azure-resource-deployer.agent.md`
 - Security analyzer: `.github/skills/azure-security-analyzer/SKILL.md` (the evidence rule)
+- Property/schema lookups the generator uses before writing any resource: `.github/skills/azure-rest-api-reference/SKILL.md`

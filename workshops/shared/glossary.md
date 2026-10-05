@@ -28,6 +28,7 @@
 | Agent | What It Does |
 |-------|-------------|
 | **@git-ape** | Main orchestrator. Coordinates the full deployment workflow: gather requirements, generate template, validate security, deploy, test. |
+| **Requirements Gatherer** | Sub-agent invoked by `@git-ape` first. Identifies the target subscription/tenant, loads CAF naming standards, and interviews you (or parses an issue body in headless mode) for deployment details before any template is generated. Experimental — not a production gate on its own. |
 | **@azure-principal-architect** | Reviews deployments against the WAF five pillars. Provides architecture recommendations and trade-off analysis. |
 | **@azure-policy-advisor** | Assesses ARM templates against Azure Policy frameworks (CIS, NIST). Recommends policy assignments. |
 | **@azure-iac-exporter** | Exports existing Azure resources to ARM templates. Brings live infrastructure under IaC management. |
@@ -47,4 +48,8 @@
 | `/azure-role-selector` | Recommends least-privilege RBAC roles for identities and resources. |
 | `/azure-policy-advisor` | Assesses templates against compliance frameworks and recommends policies. |
 | `/azure-resource-visualizer` | Generates Mermaid architecture diagrams from deployed resource groups. |
+| `/azure-resource-availability` | Validates SKU/region availability, runtime/service versions, API versions, and subscription quota against live Azure APIs before deployment. |
+| `/azure-rest-api-reference` | Looks up exact ARM/REST property schemas and the latest stable API version for a resource type — no Azure connection required. |
+| `/azure-stack-deploy` | Deploys a prepared artifact as a subscription-scoped Azure Deployment Stack and writes `state.json`. Same primitive used by `git-ape-deploy.yml`. |
+| `/azure-stack-destroy` | Tears down a deployment by deleting its Azure Deployment Stack in one call, then purges soft-deleted Key Vault/Cognitive Services resources. Same primitive used by `git-ape-destroy.yml`. |
 | `/git-ape-onboarding` | Guided setup of OIDC, RBAC, GitHub environments, and secrets. |

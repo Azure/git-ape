@@ -105,11 +105,13 @@ Run the drift detector again:
 ## What's Next?
 
 - **Track 3:** [Platform Engineering](../track-3-platform-engineering/) — CI/CD pipelines, headless mode, multi-environment, policy compliance (90 min)
-- **Clean up:** Delete the workshop resources:
+- **Clean up:** Tear down the workshop deployment with the **`/azure-stack-destroy`** skill (same `az stack sub delete --action-on-unmanage deleteAll` primitive as the CI destroy workflow — it also purges any soft-deleted Key Vault left over from Lab 2):
 
-```bash
-az group delete --name rg-inventoryapp-dev-eastus --yes --no-wait
+```text
+/azure-stack-destroy <deployment-id>
 ```
+
+> Track 3 Lab 6 walks through the full PR-driven destroy lifecycle and the local `/azure-stack-destroy` skill in depth.
 
 ## Step 6: Drift severity
 

@@ -57,10 +57,10 @@ Progress indicator:
 
 ## Step 3: Resource availability gate
 
-Before generating any template, the agent runs an **availability check**:
+Before generating any template, the agent invokes the **`/azure-resource-availability`** skill to run an **availability check** against live Azure APIs:
 
 - Is the region open for your subscription?
-- Is the Python 3.11 runtime supported in that region?
+- Is the Python 3.11 runtime supported in that region? (`az functionapp list-runtimes`)
 - Are the resource providers (`Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`) registered?
 - Are the proposed CAF names available (Function Apps and Storage have global uniqueness)?
 
@@ -165,6 +165,6 @@ Type `no`. You have already seen the key outputs above — Git-Ape generated the
 
 ## Going further
 
-Stage agents: `.github/agents/azure-{requirements-gatherer,template-generator,resource-deployer}.agent.md`. Security playbook: `.github/skills/azure-security-analyzer/SKILL.md`.
+Stage agents: `.github/agents/azure-{requirements-gatherer,template-generator,resource-deployer}.agent.md`. Security playbook: `.github/skills/azure-security-analyzer/SKILL.md`. Availability checks: `.github/skills/azure-resource-availability/SKILL.md`.
 
 **Next:** [Lab 3 — Explore Results](lab-03-explore-results.md)

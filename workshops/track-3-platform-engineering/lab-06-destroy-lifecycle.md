@@ -89,12 +89,13 @@ gh run watch
 
 The workflow:
 
-1. Reads the resource group name from `state.json`
-2. Inventories all resources in the group
-3. Deletes subscription-scoped resources first (role assignments)
-4. Deletes the resource group
-5. Updates `state.json` and `metadata.json` to `destroyed`
-6. Commits the updated state to the repo
+1. Reads `state.json` to find the deployment stack name (`deploymentId`) and `stackId`
+2. Calls `az stack sub show` to inventory the stack's managed resources across every resource group and subscription scope
+3. Calls `az stack sub delete --action-on-unmanage deleteAll` — a single idempotent call that removes every resource the stack manages (resource groups, role assignments, policy assignments), with no RG-by-RG sweep needed
+4. Updates `state.json` and `metadata.json` to `destroyed` (or `already-destroyed` if the stack was already gone)
+5. Commits the updated state to the repo
+
+> The stack is the single unit of lifecycle. One delete call cleans up everything the stack manages, no orphans, and it's safe to re-run (see Step 8).
 
 ## Step 5: Verify Destruction
 
@@ -134,27 +135,19 @@ The deployment directory still exists with the full audit trail — template, se
 
 ### Clean Up Remaining Resources
 
-If you have other workshop resources still deployed:
+If you have other workshop deployments still standing, use the **`/azure-stack-destroy`** skill rather than `az group delete` directly — it's the only path that also purges soft-deleted Key Vaults/Cognitive Services and covers resources at subscription scope (role/policy assignments) that a plain resource-group delete would miss:
 
-**Bash / macOS / Linux:**
+```text
+/azure-stack-destroy <deployment-id>
+```
+
+Or from the command line:
 
 ```bash
-# List all workshop resource groups
-az group list --query "[?starts_with(name, 'rg-')].name" -o tsv
-
-# Delete each one
-az group delete --name <resource-group-name> --yes --no-wait
+.github/skills/azure-stack-destroy/scripts/destroy-stack.sh --deployment-id "<deployment-id>" --yes
 ```
 
-**PowerShell / Windows:**
-
-```powershell
-# List all workshop resource groups
-az group list --query "[?starts_with(name, 'rg-')].name" -o tsv
-
-# Delete each one
-az group delete --name <resource-group-name> --yes --no-wait
-```
+> Only fall back to `az group delete --name <rg> --yes --no-wait` for resource groups you created by hand outside Git-Ape (no matching `state.json`) — never for a Git-Ape-managed deployment, since it skips the soft-delete purge and any subscription-scope cleanup.
 
 ### What's Next?
 
@@ -164,17 +157,12 @@ az group delete --name <resource-group-name> --yes --no-wait
 
 ## Step 6: The destroy contract
 
-git-ape-destroy.yml triggers when metadata.json status flips to destroy-requested and the PR merges, OR via manual workflow_dispatch with confirm=destroy. Both require PR review.
+`git-ape-destroy.yml` triggers when `metadata.json` status flips to `destroy-requested` and the PR merges, OR via manual `workflow_dispatch` with `confirm=destroy`. Both require PR review.
 
-## Step 7: What the workflow does
+## Step 7: Same primitive, local or CI
 
-1. Reads state.json for the stack name.
-2. Runs az stack sub show to inventory managed resources.
-3. Runs az stack sub delete --action-on-unmanage deleteAll.
-4. Updates metadata.json status to destroyed; commits back.
-
-The --action-on-unmanage deleteAll flag removes every resource across all RGs, role assignments, policy assignments -- in one call. No orphans.
+The exact same `az stack sub delete --action-on-unmanage deleteAll --bypass-stack-out-of-sync-error true` call backs both this CI workflow and the local **`/azure-stack-destroy`** skill used above — so a local teardown and a PR-merge teardown always produce the same result.
 
 ## Step 8: Idempotency
 
-If the stack is already gone, the workflow records already-destroyed and exits 0. Safe to re-run.
+If the stack is already gone, the workflow (and the skill) records `already-destroyed` and exits 0. Safe to re-run.
