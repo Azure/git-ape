@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+name: azure-principal-architect-agent-eval
+description: Validate WAF architecture reviews, trade-off analysis, and read-only scope.
+version: "0.1"
+
+config:
+  trials_per_task: 2
+  timeout_seconds: 120
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+  skill_directories: ["."]
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Agent should activate for Azure architecture guidance and stay within its advisory scope.
+
+graders:
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 30
+      max_duration_ms: 240000
+
+  # The production agent uses VS Code tool IDs while copilot-sdk reports SDK
+  # short names. Suppress waza's implicit cross-taxonomy allowlist here; task-
+  # specific safety assertions use the SDK names that appear in transcripts.
+  - type: tool_constraint
+    name: _suppress_auto_inject
+    config:
+      reject_tools:
+        - tool: "^___never_matches___$"
+
+tasks:
+  - "tasks/*.yaml"
