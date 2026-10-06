@@ -1,0 +1,14 @@
+{
+  "deploymentId": "git-ape-runners",
+  "timestamp": "",
+  "status": "initialized",
+  "scope": "subscription",
+  "region": "eastus",
+  "project": "git-ape",
+  "environment": "prod",
+  "deployMethod": "stack",
+  "resourceGroup": "rg-git-ape-runners",
+  "resourceGroups": ["rg-git-ape-runners"],
+  "description": "Git-Ape self-hosted GitHub Actions runners (ACA event-driven job) managed as a first-class Git-Ape deployment. Provides the private runner that executes future Git-Ape workflows — Git-Ape deploying Git-Ape.",
+  "createdBy": "git-ape-onboarding"
+}
