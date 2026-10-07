@@ -304,7 +304,7 @@ command_intent() {
 artifact_mapping() {
   case "$1" in
     requirements.json) echo $'observation\tinput' ;;
-    intent.json|intent-status.json) echo $'approval\tsupporting' ;;
+    authorization.json|intent.json|intent-status.json) echo $'approval\tsupporting' ;;
     template.json) echo $'execution\toutput' ;;
     parameters.json) echo $'execution\tinput' ;;
     architecture.md) echo $'observation\treport' ;;
@@ -597,7 +597,7 @@ command_evidence() {
     '{name:"git-ape",version:$version,identity:$identity,invocation_id:$invocation}')
   local records="[]" count=0 name mapping evidence_type role path digest result media record_tmp record_fp
   local artifact_paths=()
-  for name in architecture-live.md architecture.md availability-report.md cost-estimate.json deployment.log error.log execution-graph.json intent-status.json intent.json metadata.json parameters.json policy-assessment.md policy-recommendations.json preflight-report.md requirements.json security-analysis.md security-gate.json state.json template.json tests.json trace-validation.json waf-review.md; do
+  for name in architecture-live.md architecture.md authorization.json availability-report.md cost-estimate.json deployment.log error.log execution-graph.json intent-status.json intent.json metadata.json parameters.json policy-assessment.md policy-recommendations.json preflight-report.md requirements.json security-analysis.md security-gate.json state.json template.json tests.json trace-validation.json waf-review.md; do
     [[ -f "$deployment_dir/$name" ]] && artifact_paths+=("$deployment_dir/$name")
   done
   if [[ -d "$deployment_dir/traces" ]]; then

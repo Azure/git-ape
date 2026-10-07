@@ -52,6 +52,7 @@ MAPPINGS=(
   "records/references/aerp-evidence-bundle-v1.schema.json:.github/git-ape/records/references/aerp-evidence-bundle-v1.schema.json"
   "../../git-ape-records/references/git-ape-execution-graph-v1.schema.json:.github/git-ape/records/references/git-ape-execution-graph-v1.schema.json"
   "../../git-ape-records/references/git-ape-execution-trace-v1.schema.json:.github/git-ape/records/references/git-ape-execution-trace-v1.schema.json"
+  "../../git-ape-records/references/git-ape-deployment-authorization-v1.schema.json:.github/git-ape/records/references/git-ape-deployment-authorization-v1.schema.json"
   "records/git-ape-deploy-graph-v1.json:.github/git-ape/records/graphs/git-ape-deploy-v1.json"
   "../../git-ape-isee/scripts/verify-bindings.sh:.github/git-ape/isee/verify-bindings.sh"
   "../../git-ape-isee/scripts/adopt-existing.sh:.github/git-ape/isee/adopt-existing.sh"
@@ -108,7 +109,7 @@ if [ "$skipped" -gt 0 ]; then
         src_rel="workflows/${path##*/}" ;;
       .github/git-ape/records/references/*)
         case "${path##*/}" in
-          git-ape-execution-*)
+          git-ape-*)
             src_rel="../../git-ape-records/references/${path##*/}" ;;
           *)
             src_rel="records/references/${path##*/}" ;;

@@ -43,6 +43,12 @@ to `execution-graph.json` and archived as
 `execution-graphs/<run-id>-<run-attempt>.json`; workflow step outcomes produce
 explicit node and transition events in an immutable per-attempt trace.
 
+The `deployment_authorized` node is backed by `authorization.json`. The
+workflow resolves the triggering commit to exactly one merged pull request
+targeting `main` and requires an effective approval before Azure execution.
+Direct pushes, ambiguous commit associations, and unapproved merges are
+recorded as rejected authorization attempts and fail closed.
+
 Native validation checks:
 
 - the trace is bound to the exact graph bytes;

@@ -96,6 +96,7 @@ JSON
 
 printf '%s\n' '{"status":"succeeded","deploymentId":"demo"}' > .azure/deployments/demo/state.json
 printf '%s\n' '{"status":"passed","resources":[]}' > .azure/deployments/demo/tests.json
+printf '%s\n' '{"schemaVersion":"git-ape-deployment-authorization/v1","status":"verified","authorizationType":"merged-pull-request","repository":"Azure/git-ape","trigger":{"event":"push","actor":"test","commitSha":"abc123"},"pullRequest":{"number":1,"url":"https://github.com/Azure/git-ape/pull/1","baseBranch":"main","headBranch":"test","author":"test","mergedAt":"2026-10-05T11:59:00Z","mergedBy":"maintainer","mergeCommitSha":"abc123"},"review":{"decision":"approved","approvals":[{"login":"reviewer","submittedAt":"2026-10-05T11:58:00Z","commitId":"abc123"}]},"verifiedAt":"2026-10-05T12:00:00Z","verifier":"github-actions","reason":null}' > .azure/deployments/demo/authorization.json
 mkdir -p .azure/deployments/demo/execution-graphs
 cp .github/git-ape/records/graphs/git-ape-deploy-v1.json \
   .azure/deployments/demo/execution-graph.json
@@ -120,8 +121,8 @@ cat > .azure/deployments/demo/events.json <<'JSON'
   {"id":"edge-validation-security","type":"transition","from":"template_validated","to":"security_gate","recordedAt":"2026-10-05T12:00:07Z","evidence":["template-validation"]},
   {"id":"node-security","type":"node","node":"security_gate","status":"completed","recordedAt":"2026-10-05T12:00:08Z","evidence":["security-analysis.md"],"result":"passed"},
   {"id":"edge-security-authorized","type":"transition","from":"security_gate","to":"deployment_authorized","recordedAt":"2026-10-05T12:00:09Z","evidence":["security-result"]},
-  {"id":"node-authorized","type":"node","node":"deployment_authorized","status":"completed","recordedAt":"2026-10-05T12:00:10Z","evidence":["merged-pull-request"],"result":"approved"},
-  {"id":"edge-authorized-deploy","type":"transition","from":"deployment_authorized","to":"deployment_executed","recordedAt":"2026-10-05T12:00:11Z","evidence":["merge-approval"]},
+  {"id":"node-authorized","type":"node","node":"deployment_authorized","status":"completed","recordedAt":"2026-10-05T12:00:10Z","evidence":["authorization.json"],"result":"verified-merged-pull-request"},
+  {"id":"edge-authorized-deploy","type":"transition","from":"deployment_authorized","to":"deployment_executed","recordedAt":"2026-10-05T12:00:11Z","evidence":["authorization-receipt"]},
   {"id":"node-deploy","type":"node","node":"deployment_executed","status":"completed","recordedAt":"2026-10-05T12:00:12Z","evidence":["state.json"],"result":"succeeded"},
   {"id":"edge-deploy-tests","type":"transition","from":"deployment_executed","to":"integration_tests","recordedAt":"2026-10-05T12:00:13Z","evidence":["deployment-state"]},
   {"id":"node-tests","type":"node","node":"integration_tests","status":"completed","recordedAt":"2026-10-05T12:00:14Z","evidence":["tests.json"],"result":"passed"},
@@ -174,12 +175,32 @@ test "$(jq -r .status .azure/deployments/demo/trace-validations/failed-run.json)
 test "$(jq -r '.events[-1].node' .azure/deployments/demo/traces/failed-run.json)" = "integration_tests"
 test "$(jq -r '.events[-1].status' .azure/deployments/demo/traces/failed-run.json)" = "failed"
 
+jq '.[0:11] | map(if .id == "node-authorized" then
+  .status = "failed" | .result = "rejected-no-associated-merged-pull-request"
+  else . end)' \
+  .azure/deployments/demo/events.json > .azure/deployments/demo/rejected-authorization-events.json
+bash .github/git-ape/records/git-ape-records.sh trace \
+  --graph .azure/deployments/demo/execution-graphs/run-1.json \
+  --events .azure/deployments/demo/rejected-authorization-events.json \
+  --output .azure/deployments/demo/traces/rejected-authorization.json \
+  --validation-output .azure/deployments/demo/trace-validations/rejected-authorization.json \
+  --invocation-id rejected-authorization \
+  --workflow git-ape-deploy \
+  --identity git-ape:test \
+  --outcome failed >/dev/null
+test "$(jq -r .status .azure/deployments/demo/trace-validations/rejected-authorization.json)" = "passed"
+test "$(jq -r '.events[-1].node' .azure/deployments/demo/traces/rejected-authorization.json)" = "deployment_authorized"
+test "$(jq -r '.events[-1].status' .azure/deployments/demo/traces/rejected-authorization.json)" = "failed"
+
 rm -f .azure/deployments/demo/traces/invalid.json \
   .azure/deployments/demo/trace-validations/invalid.json \
   .azure/deployments/demo/invalid-events.json \
   .azure/deployments/demo/traces/failed-run.json \
   .azure/deployments/demo/trace-validations/failed-run.json \
   .azure/deployments/demo/failed-events.json \
+  .azure/deployments/demo/traces/rejected-authorization.json \
+  .azure/deployments/demo/trace-validations/rejected-authorization.json \
+  .azure/deployments/demo/rejected-authorization-events.json \
   .azure/deployments/demo/events.json
 
 cat > .azure/deployments/demo/node-only-events.json <<'JSON'
@@ -230,6 +251,7 @@ test "$(jq -r .independentlyVerified .azure/deployments/demo/evidence-status.jso
 test "$(jq '[.records[].artifacts[].path | select(. == "traces/run-1.json")] | length' .azure/deployments/demo/evidence/bundles/run-1.json)" = "1"
 test "$(jq '[.records[].artifacts[].path | select(. == "trace-validations/run-1.json")] | length' .azure/deployments/demo/evidence/bundles/run-1.json)" = "1"
 test "$(jq '[.records[].artifacts[].path | select(. == "execution-graphs/run-1.json")] | length' .azure/deployments/demo/evidence/bundles/run-1.json)" = "1"
+test "$(jq '[.records[].artifacts[].path | select(. == "authorization.json")] | length' .azure/deployments/demo/evidence/bundles/run-1.json)" = "1"
 bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null
 test "$(jq -r .mode .azure/deployments/demo/governance-status.json)" = "standalone"
 

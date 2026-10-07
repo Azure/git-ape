@@ -90,8 +90,8 @@
     "node": "deployment_authorized",
     "status": "completed",
     "recordedAt": "2026-10-05T12:00:10Z",
-    "evidence": ["merged-pull-request"],
-    "result": "merge-to-main"
+    "evidence": ["authorization.json"],
+    "result": "verified-merged-pull-request"
   },
   {
     "id": "edge-authorized-deploy",
@@ -99,7 +99,7 @@
     "from": "deployment_authorized",
     "to": "deployment_executed",
     "recordedAt": "2026-10-05T12:00:11Z",
-    "evidence": ["merge-approval"]
+    "evidence": ["authorization-receipt"]
   },
   {
     "id": "node-deploy",

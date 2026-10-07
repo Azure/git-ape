@@ -59,10 +59,17 @@ artifacts:
 
 ```text
 execution-graph.json
+authorization.json
 execution-graphs/<run-id>-<run-attempt>.json
 traces/<run-id>-<run-attempt>.json
 trace-validations/<run-id>-<run-attempt>.json
 ```
+
+Before Azure execution, the workflow resolves the triggering commit to exactly
+one merged pull request targeting `main` and verifies that the pull request has
+an effective approval. Direct pushes, ambiguous commit associations, and
+unapproved merges fail closed. The resulting `authorization.json` records the
+actual pull request, merge commit, approvers, trigger, and verification time.
 
 The trace validator rejects undeclared nodes or transitions, missing transition
 receipts, graph digest drift, malformed node-transition-node ordering,

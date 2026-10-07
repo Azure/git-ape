@@ -21,7 +21,7 @@
     {"from": "azure_login", "to": "template_validated", "requiredEvidence": ["azure-session"]},
     {"from": "template_validated", "to": "security_gate", "requiredEvidence": ["template-validation"]},
     {"from": "security_gate", "to": "deployment_authorized", "requiredEvidence": ["security-result"]},
-    {"from": "deployment_authorized", "to": "deployment_executed", "requiredEvidence": ["merge-approval"]},
+    {"from": "deployment_authorized", "to": "deployment_executed", "requiredEvidence": ["authorization-receipt"]},
     {"from": "deployment_executed", "to": "integration_tests", "requiredEvidence": ["deployment-state"]},
     {"from": "integration_tests", "to": "state_recorded", "requiredEvidence": ["test-results"]}
   ]

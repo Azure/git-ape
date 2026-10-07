@@ -7,6 +7,7 @@
 - **records:** preserve onboarding and deployment Intent as native ADRP-compatible drafts
 - **records:** emit immutable AERP-compatible Evidence bundles without requiring ISEE
 - **tracing:** capture graph-bound workflow execution traces and validate required transition receipts
+- **governance:** fail closed unless a deployment commit is an approved pull-request merge, with a persisted authorization receipt
 - **isee:** adopt existing Git-Ape Intent and Evidence after installing the optional suite
 - **governance:** enforce exact Intent, Structure, manifest, and deployment artifact bindings
 

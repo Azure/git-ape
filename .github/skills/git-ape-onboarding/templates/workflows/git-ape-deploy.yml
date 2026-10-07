@@ -4,9 +4,9 @@
 # Runs the actual ARM deployment, captures outputs, and runs integration tests.
 #
 # NOTE: There is intentionally no `/deploy` comment trigger. A comment author's
-# authorization cannot be reliably verified from the workflow, so deployment is
-# gated solely on merge to main (which already requires PR review + approval via
-# branch protection).
+# authorization cannot be reliably verified from the workflow. Every triggering
+# commit is resolved to an approved pull-request merge targeting main; direct
+# pushes and unapproved merges fail closed before Azure execution.
 
 name: "Git-Ape: Deploy"
 
@@ -285,6 +285,149 @@ jobs:
             fi
             echo "Security scan passed — no errors found"
           fi
+
+      - name: Verify merged PR authorization
+        id: authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          TRIGGER_ACTOR: ${{ github.actor }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          AUTHORIZATION="$DEPLOY_DIR/authorization.json"
+          VERIFIED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          API_ROOT="${GITHUB_API_URL:-https://api.github.com}"
+          API_HEADERS=(
+            -H "Accept: application/vnd.github+json"
+            -H "Authorization: Bearer $GH_TOKEN"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          PULLS=$(curl --fail --silent --show-error \
+            "${API_HEADERS[@]}" \
+            "$API_ROOT/repos/$REPOSITORY/commits/$COMMIT_SHA/pulls?per_page=100")
+          MATCHES=$(jq --arg sha "$COMMIT_SHA" \
+            '[.[] | select(
+              .merged_at != null and
+              .base.ref == "main" and
+              .merge_commit_sha == $sha
+            )]' <<<"$PULLS")
+          MATCH_COUNT=$(jq 'length' <<<"$MATCHES")
+
+          if [[ "$MATCH_COUNT" -ne 1 ]]; then
+            REASON="no-associated-merged-pull-request"
+            [[ "$MATCH_COUNT" -gt 1 ]] && REASON="ambiguous-associated-merged-pull-request"
+            jq -n \
+              --arg verifiedAt "$VERIFIED_AT" \
+              --arg repository "$REPOSITORY" \
+              --arg commitSha "$COMMIT_SHA" \
+              --arg event "$TRIGGER_EVENT" \
+              --arg actor "$TRIGGER_ACTOR" \
+              --arg reason "$REASON" \
+              '{
+                schemaVersion:"git-ape-deployment-authorization/v1",
+                status:"rejected",
+                authorizationType:null,
+                repository:$repository,
+                trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+                pullRequest:null,
+                review:null,
+                verifiedAt:$verifiedAt,
+                verifier:"github-actions",
+                reason:$reason
+              }' > "$AUTHORIZATION"
+            echo "authorization_result=rejected-$REASON" >> "$GITHUB_OUTPUT"
+            echo "::error::Deployment authorization rejected: commit $COMMIT_SHA is not the unique merge commit of a pull request targeting main."
+            exit 1
+          fi
+
+          PR=$(jq '.[0]' <<<"$MATCHES")
+          PR_NUMBER=$(jq -r '.number' <<<"$PR")
+          REVIEWS=$(curl --fail --silent --show-error \
+            "${API_HEADERS[@]}" \
+            "$API_ROOT/repos/$REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100")
+          EFFECTIVE_APPROVALS=$(jq '
+            [
+              .[]
+              | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")
+            ]
+            | sort_by(.user.login, .submitted_at)
+            | group_by(.user.login)
+            | map(last)
+            | map(select(.state == "APPROVED"))
+            | map({login:.user.login,submittedAt:.submitted_at,commitId:.commit_id})
+          ' <<<"$REVIEWS")
+          APPROVAL_COUNT=$(jq 'length' <<<"$EFFECTIVE_APPROVALS")
+
+          if [[ "$APPROVAL_COUNT" -lt 1 ]]; then
+            jq -n \
+              --arg verifiedAt "$VERIFIED_AT" \
+              --arg repository "$REPOSITORY" \
+              --arg commitSha "$COMMIT_SHA" \
+              --arg event "$TRIGGER_EVENT" \
+              --arg actor "$TRIGGER_ACTOR" \
+              --argjson pr "$PR" \
+              '{
+                schemaVersion:"git-ape-deployment-authorization/v1",
+                status:"rejected",
+                authorizationType:"merged-pull-request",
+                repository:$repository,
+                trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+                pullRequest:{
+                  number:$pr.number,
+                  url:$pr.html_url,
+                  baseBranch:$pr.base.ref,
+                  headBranch:$pr.head.ref,
+                  author:$pr.user.login,
+                  mergedAt:$pr.merged_at,
+                  mergedBy:$pr.merged_by.login,
+                  mergeCommitSha:$pr.merge_commit_sha
+                },
+                review:{decision:"review-required",approvals:[]},
+                verifiedAt:$verifiedAt,
+                verifier:"github-actions",
+                reason:"merged-pull-request-has-no-effective-approval"
+              }' > "$AUTHORIZATION"
+            echo "authorization_result=rejected-missing-approval" >> "$GITHUB_OUTPUT"
+            echo "::error::Deployment authorization rejected: pull request #$PR_NUMBER has no effective approval."
+            exit 1
+          fi
+
+          jq -n \
+            --arg verifiedAt "$VERIFIED_AT" \
+            --arg repository "$REPOSITORY" \
+            --arg commitSha "$COMMIT_SHA" \
+            --arg event "$TRIGGER_EVENT" \
+            --arg actor "$TRIGGER_ACTOR" \
+            --argjson pr "$PR" \
+            --argjson approvals "$EFFECTIVE_APPROVALS" \
+            '{
+              schemaVersion:"git-ape-deployment-authorization/v1",
+              status:"verified",
+              authorizationType:"merged-pull-request",
+              repository:$repository,
+              trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+              pullRequest:{
+                number:$pr.number,
+                url:$pr.html_url,
+                baseBranch:$pr.base.ref,
+                headBranch:$pr.head.ref,
+                author:$pr.user.login,
+                mergedAt:$pr.merged_at,
+                mergedBy:$pr.merged_by.login,
+                mergeCommitSha:$pr.merge_commit_sha
+              },
+              review:{decision:"approved",approvals:$approvals},
+              verifiedAt:$verifiedAt,
+              verifier:"github-actions",
+              reason:null
+            }' > "$AUTHORIZATION"
+          echo "authorization_result=verified-merged-pull-request" >> "$GITHUB_OUTPUT"
+          echo "pull_request_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Verified deployment authorization from approved pull request #$PR_NUMBER"
 
       - name: Deploy to Azure (Deployment Stack)
         id: deploy
@@ -632,6 +775,8 @@ jobs:
           AZURE_LOGIN_OUTCOME: ${{ steps.azure_login.outcome }}
           VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
           SECURITY_OUTCOME: ${{ steps.scan_gate.outcome }}
+          AUTHORIZATION_OUTCOME: ${{ steps.authorization.outcome }}
+          AUTHORIZATION_RESULT: ${{ steps.authorization.outputs.authorization_result }}
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
           DEPLOY_RESULT: ${{ steps.deploy.outputs.deploy_status }}
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
@@ -661,6 +806,7 @@ jobs:
           RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           TRACE_OUTCOME="failed"
           if [[ "$DEPLOY_RESULT" == "succeeded" &&
+                "$AUTHORIZATION_OUTCOME" == "success" &&
                 "$STATE_OUTCOME" == "success" &&
                 "$TESTS_RESULT" != "failed" ]]; then
             TRACE_OUTCOME="succeeded"
@@ -673,6 +819,8 @@ jobs:
             --arg login "$AZURE_LOGIN_OUTCOME" \
             --arg validate "$VALIDATE_OUTCOME" \
             --arg security "$SECURITY_OUTCOME" \
+            --arg authorization "$AUTHORIZATION_OUTCOME" \
+            --arg authorizationResult "$AUTHORIZATION_RESULT" \
             --arg deploy "$DEPLOY_OUTCOME" \
             --arg deployResult "$DEPLOY_RESULT" \
             --arg tests "$TESTS_OUTCOME" \
@@ -692,10 +840,7 @@ jobs:
               node("azure_login";$login;"";["github-oidc"]),
               node("template_validated";$validate;"";["template.json","parameters.json"]),
               node("security_gate";$security;"";["template-analyzer"]),
-              (if $security == "success" then
-                {id:"node-deployment_authorized",type:"node",node:"deployment_authorized",status:"completed",
-                 recordedAt:$recordedAt,evidence:["merged-pull-request"],result:"merge-to-main"}
-               else null end),
+              node("deployment_authorized";$authorization;$authorizationResult;["authorization.json"]),
               node("deployment_executed";$deploy;$deployResult;["state.json"]),
               node("integration_tests";$tests;$testsResult;["tests.json"]),
               node("state_recorded";$state;$deployResult;["state.json","tests.json"])
@@ -708,7 +853,7 @@ jobs:
               elif $to == "template_validated" then ["azure-session"]
               elif $to == "security_gate" then ["template-validation"]
               elif $to == "deployment_authorized" then ["security-result"]
-              elif $to == "deployment_executed" then ["merge-approval"]
+              elif $to == "deployment_executed" then ["authorization-receipt"]
               elif $to == "integration_tests" then ["deployment-state"]
               elif $to == "state_recorded" then ["test-results"]
               else [] end;
@@ -835,6 +980,7 @@ jobs:
           cp "$DEPLOY_DIR/intent-status.json" /tmp/intent-status.json 2>/dev/null || true
           cp "$DEPLOY_DIR/evidence-status.json" /tmp/evidence-status.json 2>/dev/null || true
           cp "$DEPLOY_DIR/governance-status.json" /tmp/governance-status.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/authorization.json" /tmp/authorization.json 2>/dev/null || true
           cp "$DEPLOY_DIR/execution-graph.json" /tmp/execution-graph.json 2>/dev/null || true
           mkdir -p /tmp/git-ape-execution-graphs
           cp "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" /tmp/git-ape-execution-graphs/graph.json 2>/dev/null || true
@@ -856,6 +1002,7 @@ jobs:
           cp /tmp/intent-status.json "$DEPLOY_DIR/intent-status.json" 2>/dev/null || true
           cp /tmp/evidence-status.json "$DEPLOY_DIR/evidence-status.json" 2>/dev/null || true
           cp /tmp/governance-status.json "$DEPLOY_DIR/governance-status.json" 2>/dev/null || true
+          cp /tmp/authorization.json "$DEPLOY_DIR/authorization.json" 2>/dev/null || true
           cp /tmp/execution-graph.json "$DEPLOY_DIR/execution-graph.json" 2>/dev/null || true
           mkdir -p "$DEPLOY_DIR/execution-graphs"
           cp /tmp/git-ape-execution-graphs/graph.json "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" 2>/dev/null || true
@@ -870,6 +1017,7 @@ jobs:
           [[ -f "$DEPLOY_DIR/intent-status.json" ]] && git add "$DEPLOY_DIR/intent-status.json"
           [[ -f "$DEPLOY_DIR/evidence-status.json" ]] && git add "$DEPLOY_DIR/evidence-status.json"
           [[ -f "$DEPLOY_DIR/governance-status.json" ]] && git add "$DEPLOY_DIR/governance-status.json"
+          [[ -f "$DEPLOY_DIR/authorization.json" ]] && git add "$DEPLOY_DIR/authorization.json"
           [[ -f "$DEPLOY_DIR/execution-graph.json" ]] && git add "$DEPLOY_DIR/execution-graph.json"
           [[ -f "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json"
           [[ -f "$DEPLOY_DIR/traces/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/traces/$INVOCATION_ID.json"

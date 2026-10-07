@@ -68,6 +68,7 @@ $mappings = @(
     @{ Src = 'records/references/aerp-evidence-bundle-v1.schema.json'; Dst = '.github/git-ape/records/references/aerp-evidence-bundle-v1.schema.json' }
     @{ Src = '../../git-ape-records/references/git-ape-execution-graph-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-execution-graph-v1.schema.json' }
     @{ Src = '../../git-ape-records/references/git-ape-execution-trace-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-execution-trace-v1.schema.json' }
+    @{ Src = '../../git-ape-records/references/git-ape-deployment-authorization-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-deployment-authorization-v1.schema.json' }
     @{ Src = 'records/git-ape-deploy-graph-v1.json'; Dst = '.github/git-ape/records/graphs/git-ape-deploy-v1.json' }
     @{ Src = '../../git-ape-isee/scripts/verify-bindings.sh'; Dst = '.github/git-ape/isee/verify-bindings.sh' }
     @{ Src = '../../git-ape-isee/scripts/adopt-existing.sh'; Dst = '.github/git-ape/isee/adopt-existing.sh' }
@@ -121,7 +122,7 @@ if ($skipped -gt 0) {
                 $srcRel = "workflows/$([System.IO.Path]::GetFileName($path))"
             }
             '^\.github/git-ape/records/references/' {
-                if ([System.IO.Path]::GetFileName($path) -like 'git-ape-execution-*') {
+                if ([System.IO.Path]::GetFileName($path) -like 'git-ape-*') {
                     $srcRel = "../../git-ape-records/references/$([System.IO.Path]::GetFileName($path))"
                 } else {
                     $srcRel = "records/references/$([System.IO.Path]::GetFileName($path))"

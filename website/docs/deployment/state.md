@@ -87,6 +87,7 @@ stateDiagram-v2
 │   ├── deployment.log                 # Deployment progress
 │   ├── tests.json                     # Test results
 │   ├── execution-graph.json            # Declared deploy workflow graph
+│   ├── authorization.json              # Verified merged-PR authorization receipt
 │   ├── execution-graphs/                # Exact graph bytes used per attempt
 │   │   └── <run-id>-<run-attempt>.json
 │   ├── traces/                          # Immutable observed execution paths
@@ -128,7 +129,9 @@ isee-adoption.json       # Adoption report for pre-existing records
 The trace and state artifacts answer different questions. `state.json` records
 the Azure deployment result and remains the destroy lifecycle source of truth.
 The execution trace records which Git-Ape workflow nodes and transitions were
-observed. Trace failure does not rewrite Azure state or trigger rollback, but
+observed. `authorization.json` records whether the triggering commit was
+verified as an approved pull-request merge; a direct push fails before Azure
+execution. Trace failure does not rewrite Azure state or trigger rollback, but
 the workflow reports the missing or invalid trace as a separate failure.
 
 
