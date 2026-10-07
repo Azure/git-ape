@@ -329,6 +329,21 @@ When a deployment fails, **never weaken security controls to fix it**. Specifica
 
 **All security reports and assessments produced by Git-Ape agents and skills MUST be factually accurate and verifiable against the actual ARM template or Azure resource configuration.**
 
+## Portable Intent and Evidence
+
+- Always preserve substantive onboarding and deployment Intent in an
+  `ape-decision-record/v1` draft. Do not leave Intent only in chat history.
+- Draft Intent is unratified and non-authoritative until an authorized ADRP
+  workflow ratifies it.
+- Always emit an `aerp-evidence-bundle/v1` bundle after execution, including
+  failed attempts when artifacts exist.
+- Native Evidence status is `generated`. Use `verified` only after an installed
+  AERP implementation validates the bundle and verifies every artifact digest.
+- Git-Ape record emission uses `.github/git-ape/records/git-ape-records.sh` and
+  must work without Ape Context, ISEE plugins, or profile CLIs.
+- `state.json` remains the source of truth for Azure deploy/destroy lifecycle;
+  record status is stored separately.
+
 ## Compliance & Azure Policy
 
 ### Compliance Frameworks

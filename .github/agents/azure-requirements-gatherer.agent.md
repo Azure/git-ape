@@ -171,6 +171,11 @@ cat .azure/deployments/{selected}/requirements.json
 ### 2. Collect Core Requirements
 
 For **ALL resource types**, gather:
+- **Intent:** Capture why the workload is needed, the desired outcome, named
+  stakeholders, non-negotiable constraints, and the security/cost/compliance/
+  operations criteria that will determine whether the result is acceptable.
+  This material must be preserved in the `intent` object of
+  `requirements.json`; do not leave it only in conversation history.
 - **Name:** Use **azure-naming-research skill** to ensure CAF compliance:
   1. Research CAF abbreviation for the resource type
   2. Apply workspace naming conventions from copilot-instructions.md
@@ -386,6 +391,25 @@ Resource 3 (App Insights) → Resource 2 (Function App)
     "displayName": "{tenantDisplayName}",
     "domain": "{tenantDomain}"
   },
+  "intent": {
+    "problem": "{problem this deployment solves}",
+    "outcome": "{desired result}",
+    "stakeholders": ["{stakeholder}"],
+    "concerns": ["security", "cost", "compliance", "operations"],
+    "drivers": [
+      {
+        "name": "{driver name}",
+        "category": "security|cost|compliance|operations|architecture|product|other",
+        "criterion": "{observable acceptance criterion}",
+        "source_refs": []
+      }
+    ],
+    "scope": ["{in-scope area}"],
+    "risks": ["{known risk}"],
+    "proceed": ["{actions agents may take without another decision}"],
+    "always_ask": ["deploy Azure resources"],
+    "never": ["bypass a blocking security gate"]
+  },
   "resources": [
     {
       "type": "Microsoft.Web/sites",
@@ -401,6 +425,14 @@ Resource 3 (App Insights) → Resource 2 (Function App)
   "estimatedCost": 0.40
 }
 ```
+
+After writing `requirements.json`, invoke `/git-ape-records intent` to create:
+
+- `.azure/deployments/{deployment-id}/intent.json`
+- `.azure/deployments/{deployment-id}/intent-status.json`
+
+The record must remain `draft` with `ratification: null`. Capturing Intent is
+normal Git-Ape behavior and must not depend on an ISEE plugin or profile CLI.
 
 ## Constraints
 

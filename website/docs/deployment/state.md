@@ -79,11 +79,22 @@ stateDiagram-v2
 ├── deploy-20260218-143022/           # Successful deployment
 │   ├── metadata.json                  # Deployment metadata
 │   ├── requirements.json              # User requirements
+│   ├── intent.json                    # Portable draft ADRP Intent
+│   ├── intent-status.json             # Draft authority and source status
 │   ├── template.json                  # ARM template
 │   ├── parameters.json                # Template parameters
 │   ├── architecture.md                # Mermaid architecture diagram
 │   ├── deployment.log                 # Deployment progress
-│   └── tests.json                     # Test results
+│   ├── tests.json                     # Test results
+│   ├── execution-graph.json            # Declared deploy workflow graph
+│   ├── execution-graphs/                # Exact graph bytes used per attempt
+│   │   └── <run-id>-<run-attempt>.json
+│   ├── traces/                          # Immutable observed execution paths
+│   │   └── <run-id>-<run-attempt>.json
+│   ├── trace-validations/               # Native graph-conformance reports
+│   │   └── <run-id>-<run-attempt>.json
+│   ├── evidence-status.json           # Latest Evidence lifecycle pointer
+│   └── evidence/bundles/              # Immutable AERP Evidence bundles
 │
 ├── deploy-20260218-151030/           # Failed deployment
 │   ├── metadata.json
@@ -96,11 +107,29 @@ stateDiagram-v2
 └── deploy-20260218-163500/           # Rolled back deployment
     ├── metadata.json
     ├── requirements.json
+    ├── intent.json
+    ├── intent-status.json
     ├── template.json
     ├── architecture.md
     ├── deployment.log
-    └── rollback.log                   # Rollback actions
+    ├── rollback.log                    # Rollback actions
+    ├── evidence-status.json
+    └── evidence/bundles/
 ```
+
+Optional ISEE adoption adds:
+
+```text
+isee-bindings.json       # Exact Intent, Structure, manifest, and artifact bindings
+governance-status.json   # Latest preflight result
+isee-adoption.json       # Adoption report for pre-existing records
+```
+
+The trace and state artifacts answer different questions. `state.json` records
+the Azure deployment result and remains the destroy lifecycle source of truth.
+The execution trace records which Git-Ape workflow nodes and transitions were
+observed. Trace failure does not rewrite Azure state or trigger rollback, but
+the workflow reports the missing or invalid trace as a separate failure.
 
 
 

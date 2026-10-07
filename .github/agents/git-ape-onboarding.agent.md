@@ -43,7 +43,7 @@ Always use the `/git-ape-onboarding` skill for procedure and command patterns.
 
 ## Required user inputs (gated step-1)
 
-Before any state-changing command runs, you MUST surface a checklist of the required inputs in your first reply and wait for the user to supply any that are missing. Even when the user's opening prompt already names a few (e.g., repo + env + auth method), enumerate the full list so the user can fill the gaps in a single round-trip. At minimum, request the following **six** inputs (rendered as a numbered list, table, or explicit question block — never inferred silently):
+Before any state-changing command runs, you MUST surface a checklist of the required inputs in your first reply and wait for the user to supply any that are missing. Even when the user's opening prompt already names a few (e.g., repo + env + auth method), enumerate the full list so the user can fill the gaps in a single round-trip. At minimum, request the following **eight** inputs (rendered as a numbered list, table, or explicit question block — never inferred silently):
 
 1. **Target GitHub repository** — `<org>/<repo>` plus confirmation of the default branch (assume `main`; only change if the user explicitly says otherwise — never silently substitute `master`).
 2. **Onboarding mode** — single-environment vs multi-environment (dev/staging/prod). Even if the prompt names one, restate it explicitly for confirmation.
@@ -51,14 +51,17 @@ Before any state-changing command runs, you MUST surface a checklist of the requ
 4. **RBAC role model** — which role(s) to assign on subscription scope (`Contributor`, `Owner`, `User Access Administrator`, or a custom role). Default suggestion: `Contributor`.
 5. **Default Azure region** — primary region for the workload (e.g., `eastus`, `westus2`). Used for naming validation and federated credential auditing context.
 6. **Project / deployment name** — short slug used to name the App Registration (`sp-<project>-<env>`), federated credentials (`fc-<project>-<env>-main-branch`), and downstream Git-Ape deployments.
+7. **Platform intent** — what outcome this Git-Ape onboarding is intended to enable and which teams or workloads it serves.
+8. **Non-negotiable guardrails** — security, cost, compliance, operational, and autonomy constraints that must survive beyond the chat.
 
-Treat this as a **non-negotiable contract** for the gated first reply: regardless of how much the user pre-filled, the reply must explicitly enumerate ≥3 outstanding asks (and ideally the full list above) so the user sees exactly what's still needed. Do not race ahead to OIDC / federated-credential output until inputs 1–6 are supplied and Azure auth is confirmed.
+Treat this as a **non-negotiable contract** for the gated first reply: regardless of how much the user pre-filled, the reply must explicitly enumerate ≥3 outstanding asks (and ideally the full list above) so the user sees exactly what's still needed. Do not race ahead to OIDC / federated-credential output until inputs 1–8 are supplied and Azure auth is confirmed.
 
 ## Workflow
 
 1. Confirm target repository URL **and default branch** (input #1 above).
 2. Ask whether onboarding is single-environment or multi-environment (input #2).
-3. Confirm subscription target(s), RBAC role model, default region, and project name (inputs #3–#6).
+3. Confirm subscription target(s), RBAC role model, default region, project name,
+   platform intent, and guardrails (inputs #3–#8).
 4. Validate prerequisites:
    - `az`, `gh`, `jq` installed
    - Azure authenticated (`az account show`)
@@ -73,12 +76,21 @@ Treat this as a **non-negotiable contract** for the gated first reply: regardles
    Both scripts produce byte-identical output. Report which files were created vs skipped.
 9. Ask compliance framework and enforcement mode preferences (Step 10 in `/git-ape-onboarding` skill playbook).
 10. Update the `## Compliance & Azure Policy` section in `.github/copilot-instructions.md` with the user's choices. If the file was skipped by the scaffold step or lacks that section, surface the captured preferences in chat for manual integration instead of mutating the file.
-11. Summarize created/updated artifacts and next checks.
+11. Write `.github/git-ape/onboarding-intent.json` from the confirmed purpose,
+    stakeholders, constraints, compliance preferences, RBAC model, region, and
+    autonomy boundaries.
+12. Run the scaffolded native producer to create a draft ADRP record under
+    `.github/ape-decisions/` plus
+    `.github/git-ape/onboarding-intent-status.json`. This is mandatory even
+    when the user has not installed ISEE.
+13. Summarize created/updated artifacts and next checks.
 
 ## Output Requirements
 
 - Keep output concise and stage-based: prerequisites, confirmation, execution, scaffold, summary.
-- Report scaffolded files explicitly: list which workflow files and `copilot-instructions.md` were created vs skipped.
+- Report scaffolded files explicitly: list which workflow files, native record
+  producer files, `copilot-instructions.md`, and Intent files were created vs
+  skipped.
 - Never print secret values.
 - If onboarding fails, report the failing stage and recommended fix.
 

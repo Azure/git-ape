@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "git-ape-execution-graph/v1",
+  "graphId": "git-ape-deploy/v1",
+  "entryNode": "intent_captured",
+  "successTerminal": "state_recorded",
+  "ordered": true,
+  "nodes": [
+    {"id": "intent_captured", "requiredForSuccess": true},
+    {"id": "governance_preflight", "requiredForSuccess": true},
+    {"id": "azure_login", "requiredForSuccess": true},
+    {"id": "template_validated", "requiredForSuccess": true},
+    {"id": "security_gate", "requiredForSuccess": true},
+    {"id": "deployment_authorized", "requiredForSuccess": true},
+    {"id": "deployment_executed", "requiredForSuccess": true},
+    {"id": "integration_tests", "requiredForSuccess": true},
+    {"id": "state_recorded", "requiredForSuccess": true}
+  ],
+  "edges": [
+    {"from": "intent_captured", "to": "governance_preflight", "requiredEvidence": ["intent-record"]},
+    {"from": "governance_preflight", "to": "azure_login", "requiredEvidence": ["governance-status"]},
+    {"from": "azure_login", "to": "template_validated", "requiredEvidence": ["azure-session"]},
+    {"from": "template_validated", "to": "security_gate", "requiredEvidence": ["template-validation"]},
+    {"from": "security_gate", "to": "deployment_authorized", "requiredEvidence": ["security-result"]},
+    {"from": "deployment_authorized", "to": "deployment_executed", "requiredEvidence": ["merge-approval"]},
+    {"from": "deployment_executed", "to": "integration_tests", "requiredEvidence": ["deployment-state"]},
+    {"from": "integration_tests", "to": "state_recorded", "requiredEvidence": ["test-results"]}
+  ]
+}

@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-intent-capture
+name: Positive - Preserve deployment Intent
+description: Native Git-Ape should persist requirements as a draft ADRP record without requiring ISEE.
+tags: [trigger, positive]
+inputs:
+  prompt: "Use Git-Ape's native record producer to capture deployment intent from .azure/deployments/demo/requirements.json. Create intent.json and intent-status.json before template generation; I have not installed ISEE."
+  files:
+    - path: .azure/deployments/demo/requirements.json
+      content: |
+        {
+          "deploymentId": "demo",
+          "environment": "test",
+          "intent": {
+            "decision_id": "ADR-GIT-APE-DEMO",
+            "title": "Deploy demo safely",
+            "problem": "Deploy a safe demonstration workload.",
+            "outcome": "A reviewable test deployment.",
+            "alternatives": [
+              {
+                "id": "git-ape-managed-execution",
+                "title": "Use Git-Ape",
+                "description": "Use guarded execution."
+              }
+            ]
+          }
+        }
+    - path: .github/git-ape/records/git-ape-records.sh
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        test "${1:-}" = "intent"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --output) output="$2"; shift 2 ;;
+            --status-output) status="$2"; shift 2 ;;
+            *) shift ;;
+          esac
+        done
+        mkdir -p "$(dirname "$output")"
+        printf '%s\n' '{"schema_version":"ape-decision-record/v1","status":"draft","ratification":null}' > "$output"
+        printf '%s\n' '{"status":"draft","authoritative":false,"independentlyVerified":false}' > "$status"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-records/SKILL.md
+      mode: positive
+      threshold: 0.5
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the previous response. PASS only if it:
+        1. Uses or names either the scaffolded
+           `.github/git-ape/records/git-ape-records.sh intent` path or the
+           plugin-source `.github/skills/git-ape-records/scripts/git-ape-records.sh intent` path.
+        2. Creates both `intent.json` and `intent-status.json`.
+        3. Describes the Intent as draft/unratified, not authoritative.
+        4. Does not install or require ADRP, AERP, Ape Context, or Python.
+        If all criteria are met, call `set_waza_grade_pass`; otherwise call
+        `set_waza_grade_fail` and identify the missing criteria.

@@ -22,7 +22,7 @@ Git-Ape can automate the entire setup for you, or you can run each step manually
 | **[Automated](#automated-onboarding)** | You want the fastest path. Copilot Chat runs every command for you. |
 | **[Manual](#manual-setup)** | You want to understand each component, or your organization requires manual approval of identity and RBAC changes. |
 
-Both paths produce the same result: an Entra ID App Registration with OIDC federated credentials, RBAC role assignments, and GitHub environments with the required secrets.
+Both paths produce the same result: an Entra ID App Registration with OIDC federated credentials, RBAC role assignments, GitHub environments with the required secrets, and a portable draft record of the platform Intent captured during onboarding.
 
 :::info[Workflow scaffolding is part of onboarding]
 Git-Ape's CI/CD workflows ship as **canonical templates** inside the onboarding skill at `.github/skills/git-ape-onboarding/templates/workflows/`. After identity, secrets, and environments are configured, the `/git-ape-onboarding` flow runs the scaffold script (`scaffold-repo.sh` / `scaffold-repo.ps1`) to copy these templates into your repository's `.github/workflows/` directory as ready-to-run `.yml` files. The scaffold uses **skip-with-notice on collision** — it never overwrites a customized file. Alongside the workflows, the scaffold also drops a `.github/copilot-instructions.md` deployment-standards file.
@@ -113,13 +113,16 @@ or:
 /git-ape-onboarding
 ```
 
-The skill collects five inputs (or uses sensible defaults):
+The skill collects the deployment and governance inputs it needs, including:
 
 1. **GitHub repository URL** — for example, `https://github.com/your-org/your-repo`
 2. **Entra ID App Registration name** — for example, `sp-git-ape-your-repo`
 3. **Mode** — single or multi-environment
 4. **Azure subscription(s)** — defaults to your current `az` subscription
 5. **RBAC role(s)** — Contributor (default) or Contributor + User Access Administrator
+6. **Default Azure region**
+7. **Platform purpose and desired outcome**
+8. **Non-negotiable security, cost, compliance, operational, and autonomy guardrails**
 
 ### Example: single environment
 
@@ -134,6 +137,34 @@ The skill collects five inputs (or uses sensible defaults):
 ```
 
 After the skill finishes, skip to [Verify your setup](#verify-setup).
+
+### Onboarding Intent artifacts
+
+Onboarding always persists the confirmed platform purpose and guardrails,
+whether or not ISEE is installed:
+
+```text
+.github/git-ape/onboarding-intent.json
+.github/git-ape/onboarding-intent-status.json
+.github/ape-decisions/ADR-GIT-APE-<PROJECT>.v1.json
+```
+
+The decision record is an ADRP-compatible **draft**. Onboarding does not grant
+authority or ratify it. Installing ISEE later allows ADRP to validate and
+ratify the same record without recreating the captured Intent.
+
+The scaffold also installs:
+
+```text
+.github/git-ape/records/git-ape-records.sh
+.github/git-ape/records/references/
+.github/git-ape/isee/verify-bindings.sh
+.github/git-ape/isee/adopt-existing.sh
+.github/git-ape/isee/bindings.schema.json
+```
+
+The native producer uses only Bash, `jq`, and SHA-256 tooling. The ISEE scripts
+remain inert until governance is explicitly adopted.
 
 ---
 

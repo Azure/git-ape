@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-required-governance
+name: Positive - Adopt ratified Intent as required
+description: Required adoption must bind an explicit ratified record and require profile tooling.
+tags: [trigger, positive]
+inputs:
+  prompt: "What exact command and validation behavior should I expect when putting deployment demo under required ISEE governance with .github/ape-decisions/ADR-DEMO.ratified.json? Do not execute it yet."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-isee/SKILL.md
+      mode: positive
+      threshold: 0.5
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the previous response. PASS only if it:
+        1. Uses required mode and the explicit ratified Intent path.
+        2. States that the adoption command authoritatively validates that the
+           ADRP Intent is ratified; naming `--require-ratified` is preferred
+           but an unambiguous equivalent explanation passes.
+        3. States that the adoption command requires AERP validation and
+           artifact verification of existing bundles.
+        4. Does not silently install missing profile CLIs or refresh stale fingerprints.
+        If all criteria are met, call `set_waza_grade_pass`; otherwise call
+        `set_waza_grade_fail` and identify the missing criteria.
