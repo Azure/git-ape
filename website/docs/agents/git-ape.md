@@ -159,6 +159,7 @@ Coordinate the deployment of Azure resources by delegating to specialized subage
 **Skills (invoked during workflow):**
 - `/azure-rest-api-reference` — ARM template property schemas, required fields, valid values, and latest stable API versions. **Must be invoked before generating or modifying any ARM template resource.**
 - `/azure-naming-research` — CAF abbreviation lookup and naming validation
+- `/azure-landing-zone-discovery` — Discover Azure Landing Zone topology (management groups, platform subscriptions, hub-spoke networking, policy gates) and emit `.azure/landing-zone-context.json` with a confidence score (high/medium/low/none). Consumed by requirements gatherer, template generator, and policy advisor.
 - `/azure-security-analyzer` — Per-resource security best practices assessment
 - `/azure-policy-advisor` - assess the template against Azure Policy compliance 
 - `/azure-deployment-preflight` — What-if analysis and preflight validation
@@ -167,6 +168,38 @@ Coordinate the deployment of Azure resources by delegating to specialized subage
 - `/azure-resource-visualizer` — Live Azure resource group diagramming
 - `/azure-role-selector` — Least-privilege RBAC role recommendations
 - `/azure-cost-estimator` — Real-time cost estimation via Azure Retail Prices API
+
+## Stage 0: Landing Zone Context (Pre-Flight)
+
+**Before starting any deployment**, check whether the workspace has a discovered landing zone topology at `.azure/landing-zone-context.json`. This file is produced by the `/azure-landing-zone-discovery` skill and lets the requirements gatherer, template generator, and policy advisor route workloads correctly, respect tenant policy gates, and reuse shared services.
+
+**Flow:**
+
+```bash
+LZ_CONTEXT_FILE=".azure/landing-zone-context.json"
+if [[ -f "$LZ_CONTEXT_FILE" ]]; then
+  LZ_CONFIDENCE=$(jq -r '.landingZoneDetection.confidence // "unknown"' "$LZ_CONTEXT_FILE")
+  LZ_SCORE=$(jq -r '.landingZoneDetection.confidenceScore // 0' "$LZ_CONTEXT_FILE")
+  LZ_AGE_DAYS=$(( ($(date +%s) - $(date -r "$LZ_CONTEXT_FILE" +%s)) / 86400 ))
+  echo "✓ Landing zone context: confidence=$LZ_CONFIDENCE (score $LZ_SCORE/100), age $LZ_AGE_DAYS days"
+  [[ $LZ_AGE_DAYS -gt 7 ]] && echo "⚠️  Context is stale — consider re-running /azure-landing-zone-discovery"
+else
+  echo "ℹ️  No landing zone context — workspace will deploy in standalone mode."
+  echo "   Run /azure-landing-zone-discovery to enable LZ-aware deployments."
+fi
+```
+
+**How to act on the result:**
+
+| Situation | Action |
+|-----------|--------|
+| Context missing | Proceed standalone. Show one-line hint suggesting `/azure-landing-zone-discovery` for ALZ-managed tenants. Do **not** force discovery — many users deploy into solo subscriptions. |
+| Context present, `confidence` = `high` | Trust auto-classification. Pass the path to every subagent (requirements gatherer, template generator, policy advisor). |
+| Context present, `confidence` = `medium` | Pass it through, but tell subagents to confirm matched/missing signals with the user before applying ALZ-specific behavior (hub peering, shared diagnostics). |
+| Context present, `confidence` = `low`/`none` | Pass it through for the policy/region data only. Subagents must treat tenant as standalone unless the user explicitly opts in. |
+| Context older than 7 days | Surface the staleness warning; offer to re-run discovery. |
+
+**Propagation:** Every downstream subagent receives the path `.azure/landing-zone-context.json`. They are responsible for parsing the parts they need (subscriptions, policies, shared services, hubs) and respecting the confidence bucket.
 
 ## Pre-Deployment Drift Check (Optional)
 
@@ -212,10 +245,14 @@ Coordinate the deployment of Azure resources by delegating to specialized subage
 
 ## Workflow Stages
 
+> **Pre-flight:** Always run the **Stage 0: Landing Zone Context** check above before Stage 1. If the context exists, every downstream subagent must read it.
+
 ### Stage 1: Requirements Gathering
 **Delegate to:** `azure-requirements-gatherer`
 
-The gatherer will interview the user to collect:
+The gatherer will:
+- **Read `.azure/landing-zone-context.json`** if present (Stage 0). Use the LZ context to auto-route the deployment to the right subscription, surface tenant policy gates, and pre-fill shared service references. Respect the `landingZoneDetection.confidence` bucket: `high` = trust; `medium` = confirm with user; `low`/`none` = treat as standalone.
+- Interview the user to collect:
 - Resource type (Function App, Storage Account, SQL Database, etc.)
 - SKU/tier and sizing requirements
 - Region and resource group details

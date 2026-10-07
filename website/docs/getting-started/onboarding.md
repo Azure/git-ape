@@ -121,6 +121,11 @@ The skill collects five inputs (or uses sensible defaults):
 4. **Azure subscription(s)** — defaults to your current `az` subscription
 5. **RBAC role(s)** — Contributor (default) or Contributor + User Access Administrator
 
+After OIDC/RBAC setup the playbook runs two final steps:
+
+- **Compliance & Azure Policy preferences** — captured in `.github/copilot-instructions.md`
+- **Landing zone discovery** — runs [`/azure-landing-zone-discovery`](/docs/use-cases/landing-zone-aware-deployment) against each onboarded subscription to populate `.azure/landing-zone-context.json`. This lets the requirements gatherer, template generator, and policy advisor be landing-zone-aware from the first deployment.
+
 ### Example: single environment
 
 ```text

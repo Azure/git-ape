@@ -39,6 +39,27 @@ Then write the frontmatter and body following the template below. No further reg
 
 The directory name **must** match the `name:` field in frontmatter.
 
+### Helper scripts: ship both shells
+
+When a skill shells out to a helper script in `scripts/`, follow this cross-shell parity convention:
+
+- **User-invocable skills that ship helper scripts SHOULD provide both a `.sh` (bash) and a `.ps1` (PowerShell) port.** A user invoking a skill from VS Code Copilot Chat may be on Windows, macOS, or Linux, so a bash-only helper silently fails for Windows users who do not have `git-bash` on `PATH`. The two ports must accept equivalent flags and produce byte-compatible output (same JSON schema, same files).
+- **CI-only / deployment skills MAY ship `.sh` only** when they are invoked exclusively from a known runner (e.g. a GitHub Actions workflow that pins `ubuntu-latest`). Document the assumption in the skill body.
+- The repository baseline is a Bash-compatible shell (`git-bash` on Windows; see the [README prerequisites](https://github.com/Azure/git-ape#prerequisites)). The `.ps1` ports remove that dependency for native Windows users.
+
+Existing skills that follow the dual-shell pattern — use them as references:
+
+| Skill | Scripts |
+|-------|---------|
+| [`azure-stack-deploy`](https://github.com/Azure/git-ape/tree/main/.github/skills/azure-stack-deploy/scripts) | `deploy-stack.sh` + `deploy-stack.ps1` |
+| [`azure-stack-destroy`](https://github.com/Azure/git-ape/tree/main/.github/skills/azure-stack-destroy/scripts) | `destroy-stack.sh` + `destroy-stack.ps1` |
+| [`git-ape-onboarding`](https://github.com/Azure/git-ape/tree/main/.github/skills/git-ape-onboarding/scripts) | `scaffold-repo.sh` + `scaffold-repo.ps1` |
+| [`azure-landing-zone-discovery`](https://github.com/Azure/git-ape/tree/main/.github/skills/azure-landing-zone-discovery/scripts) | `discover-lz.sh` + `discover-lz.ps1`, `inject-lz.sh` + `inject-lz.ps1` |
+
+When you document the invocation in `SKILL.md`, show **both** shells as sibling fenced blocks — a ` ```bash ` block and a ` ```powershell ` block — so the agent can pick the right one for the host OS.
+
+
+
 ## SKILL.md template
 
 ```markdown
