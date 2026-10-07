@@ -5,7 +5,7 @@ tools: [vscode, execute, read, agent, edit, search, web, 'azure-mcp/*', 'microso
 argument-hint: "Describe what Azure resources to deploy"
 agents: ["Azure Requirements Gatherer", "Azure Template Generator", "Azure Resource Deployer", "Azure IaC Exporter", "Azure Principal Architect", "Git-Ape Onboarding", "Azure Policy Advisor"]
 user-invocable: true
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus 4.8 (copilot)
 ---
 
 ## Warning
