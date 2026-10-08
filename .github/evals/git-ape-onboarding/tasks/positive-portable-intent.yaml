@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-portable-intent
+name: Positive - Persist onboarding Intent
+description: Onboarding guidance must explain how platform purpose and guardrails are preserved without ISEE.
+tags: [trigger, positive]
+inputs:
+  prompt: "Before I onboard: which portable Intent artifacts will Git-Ape create for the platform purpose and non-negotiable guardrails if I do not have ISEE installed? Do not execute onboarding yet."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: positive
+      threshold: 0.5
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the previous response. PASS only if it states that onboarding:
+        1. Writes `.github/git-ape/onboarding-intent.json`.
+        2. Creates a draft ADRP record under `.github/decisions/`.
+        3. Writes `.github/git-ape/onboarding-intent-status.json`.
+        4. Uses the native Bash producer and does not require ISEE.
+        If all criteria are met, call `set_waza_grade_pass`; otherwise call
+        `set_waza_grade_fail` and identify the missing criteria.

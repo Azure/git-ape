@@ -33,7 +33,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 |----------|-------|
 | **Display Name** | Verify Git-Ape configuration |
 | **Runs On** | `ubuntu-latest` |
-| **Steps** | 6 |
+| **Steps** | 7 |
 
 
 
@@ -107,6 +107,25 @@ jobs:
           fi
 
           echo "missing=$MISSING" >> "$GITHUB_OUTPUT"
+
+      - name: Verify portable record tooling and governance
+        env:
+          GIT_APE_ISEE_REQUIRED: ${{ vars.GIT_APE_ISEE_REQUIRED }}
+        run: |
+          PRODUCER=".github/git-ape/records/git-ape-records.sh"
+          VERIFY=".github/git-ape/isee/verify-bindings.sh"
+          [[ -f "$PRODUCER" ]] || { echo "::error::Missing native record producer: $PRODUCER"; exit 1; }
+          [[ -f "$VERIFY" ]] || { echo "::error::Missing optional governance verifier: $VERIFY"; exit 1; }
+          bash -n "$PRODUCER"
+          bash -n "$VERIFY"
+          chmod +x "$VERIFY"
+
+          shopt -s nullglob
+          DEPLOYMENTS=(.azure/deployments/*)
+          for DEPLOY_DIR in "${DEPLOYMENTS[@]}"; do
+            [[ -d "$DEPLOY_DIR" ]] || continue
+            "$VERIFY" --deployment-id "${DEPLOY_DIR##*/}"
+          done
 
       - name: Test OIDC login
         id: login

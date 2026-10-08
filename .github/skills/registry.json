@@ -172,11 +172,37 @@
       "source": null
     },
     {
+      "name": "git-ape-isee",
+      "tier": "first-party",
+      "description": "Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; bind one or more ratified ADRP Intent records; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution.",
+      "path": ".github/skills/git-ape-isee",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-isee",
+      "userInvocable": true,
+      "author": "Microsoft",
+      "license": "MIT",
+      "version": null,
+      "maturity": "stable",
+      "source": null
+    },
+    {
       "name": "git-ape-onboarding",
       "tier": "first-party",
       "description": "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation.",
       "path": ".github/skills/git-ape-onboarding",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-onboarding",
+      "userInvocable": true,
+      "author": "Microsoft",
+      "license": "MIT",
+      "version": null,
+      "maturity": "stable",
+      "source": null
+    },
+    {
+      "name": "git-ape-records",
+      "tier": "first-party",
+      "description": "Run Git-Ape's native Bash producer to save draft ADRP Intent, create and validate structured execution traces, and emit immutable AERP Evidence. USE FOR: save deployment intent; create intent.json; record a declared workflow path; validate transition receipts; emit portable evidence; fingerprint native records without ISEE. DO NOT USE FOR: ratifying Intent, authoring ASRP Structure, independently verifying Evidence, or deploying Azure resources.",
+      "path": ".github/skills/git-ape-records",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-records",
       "userInvocable": true,
       "author": "Microsoft",
       "license": "MIT",

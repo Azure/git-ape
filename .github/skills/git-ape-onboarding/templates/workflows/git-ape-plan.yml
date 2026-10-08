@@ -396,8 +396,52 @@ jobs:
           echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
           echo "deploy_dir=$DEPLOY_DIR" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure portable Intent record
+        run: |
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          PRODUCER=".github/git-ape/records/git-ape-records.sh"
+          [[ -f "$PRODUCER" ]] || { echo "::error::Git-Ape record producer missing: $PRODUCER"; exit 1; }
+          if [[ -f "$DEPLOY_DIR/intent.json" ]]; then
+            [[ -f "$DEPLOY_DIR/intent-status.json" ]] || {
+              echo "::error::Intent exists without intent-status.json; regenerate it explicitly from requirements.json."
+              exit 1
+            }
+            if [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
+              if command -v sha256sum >/dev/null; then
+                CURRENT_SOURCE_DIGEST=$(sha256sum "$DEPLOY_DIR/requirements.json" | awk '{print "sha256:" $1}')
+              else
+                CURRENT_SOURCE_DIGEST=$(shasum -a 256 "$DEPLOY_DIR/requirements.json" | awk '{print "sha256:" $1}')
+              fi
+              RECORDED_SOURCE_DIGEST=$(jq -r '.sourceDigest // empty' "$DEPLOY_DIR/intent-status.json")
+              [[ "$CURRENT_SOURCE_DIGEST" == "$RECORDED_SOURCE_DIGEST" ]] || {
+                echo "::error::requirements.json changed after Intent capture. Review the change and regenerate the draft Intent explicitly."
+                exit 1
+              }
+            fi
+          elif [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
+            bash "$PRODUCER" intent \
+              --source "$DEPLOY_DIR/requirements.json" \
+              --output "$DEPLOY_DIR/intent.json" \
+              --status-output "$DEPLOY_DIR/intent-status.json"
+          else
+            echo "::error::Neither intent.json nor requirements.json exists for $DEPLOYMENT_ID"
+            exit 1
+          fi
+
+      - name: Apply optional ISEE governance
+        id: governance
+        continue-on-error: true
+        env:
+          GIT_APE_ISEE_REQUIRED: ${{ vars.GIT_APE_ISEE_REQUIRED }}
+        run: |
+          VERIFY=".github/git-ape/isee/verify-bindings.sh"
+          [[ -f "$VERIFY" ]] || { echo "::error::Git-Ape ISEE verifier missing: $VERIFY"; exit 1; }
+          chmod +x "$VERIFY"
+          "$VERIFY" --deployment-id "$DEPLOYMENT_ID"
+
       - name: Azure Login (OIDC)
         id: azure_login
+        if: steps.governance.outcome == 'success'
         continue-on-error: true
         uses: azure/login@v3
         with:
@@ -484,6 +528,7 @@ jobs:
         if: always()
         env:
           DEPLOYMENT_ID: ${{ matrix.deployment_id }}
+          GOVERNANCE_OUTCOME: ${{ steps.governance.outcome }}
           AZURE_LOGIN_OUTCOME: ${{ steps.azure_login.outcome }}
           VALIDATION_STATUS: ${{ steps.validate.outputs.validation_status }}
           VALIDATION_ERROR: ${{ steps.validate.outputs.validation_error }}
@@ -511,6 +556,7 @@ jobs:
 
           jq -n \
             --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg governanceOutcome "$GOVERNANCE_OUTCOME" \
             --arg azureLoginOutcome "$AZURE_LOGIN_OUTCOME" \
             --arg validationStatus "$FINAL_VALIDATION_STATUS" \
             --arg validationError "$VALIDATION_ERROR" \
@@ -518,6 +564,7 @@ jobs:
             --arg whatifResult "$WHATIF_RESULT" \
             '{
               deploymentId: $deploymentId,
+              governanceOutcome: $governanceOutcome,
               azureLoginOutcome: $azureLoginOutcome,
               validationStatus: $validationStatus,
               validationError: $validationError,
@@ -543,6 +590,12 @@ jobs:
         if: steps.whatif.outputs.whatif_status == 'failed'
         run: |
           echo "::error::What-if analysis failed — deployment would not succeed. See the PR comment for the full output."
+          exit 1
+
+      - name: Governance gate
+        if: steps.governance.outcome == 'failure'
+        run: |
+          echo "::error::ISEE governance preflight failed. Azure login and planning were blocked."
           exit 1
 
   plan-comment:
@@ -640,6 +693,7 @@ jobs:
             const whatifStatus = azure.whatifStatus || 'skipped';
             const whatifResult = azure.whatifResult || '';
             const azureLoginOutcome = azure.azureLoginOutcome || '';
+            const governanceOutcome = azure.governanceOutcome || 'success';
             const scanStatus = local.scanStatus || 'skipped';
             const scanErrors = local.scanErrors || '0';
             const scanWarnings = local.scanWarnings || '0';
@@ -656,6 +710,15 @@ jobs:
             const architectureContent = local.architectureContent || '';
 
             let comment = `## Git-Ape Plan: \`${deploymentId}\`\n\n`;
+
+            if (governanceOutcome === 'success') {
+              comment += `### ✅ Governance Preflight: Passed\n\n`;
+            } else if (governanceOutcome === 'failure') {
+              comment += `### ❌ ISEE Governance: Blocked\n\n`;
+              comment += `> The deployment failed its configured governance preflight. Azure login was not attempted.\n\n`;
+            } else {
+              comment += `### ⚠️ Governance Preflight: Not Run\n\n`;
+            }
 
             if (validationStatus === 'passed') {
               comment += `### ✅ Template Validation: Passed\n\n`;

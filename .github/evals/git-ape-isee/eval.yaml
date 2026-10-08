@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+name: git-ape-isee-eval
+description: Trigger precision and safety for adopting existing Git-Ape records into optional ISEE governance.
+skill: git-ape-isee
+version: "0.1"
+
+config:
+  trials_per_task: 1
+  timeout_seconds: 120
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: The skill should govern and adopt existing records without changing standalone behavior.
+
+graders:
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 35
+      max_duration_ms: 180000
+
+tasks:
+  - "tasks/*.yaml"

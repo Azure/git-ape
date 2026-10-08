@@ -62,6 +62,17 @@ $mappings = @(
     @{ Src = 'workflows/git-ape-verify.yml';      Dst = '.github/workflows/git-ape-verify.yml' }
     @{ Src = 'workflows/git-ape-drift.md';        Dst = '.github/workflows/git-ape-drift.md' }
     @{ Src = 'workflows/git-ape-drift.lock.yml';  Dst = '.github/workflows/git-ape-drift.lock.yml' }
+    @{ Src = '../../git-ape-records/scripts/git-ape-records.sh'; Dst = '.github/git-ape/records/git-ape-records.sh' }
+    @{ Src = 'records/references/ape-decision-record-v1.schema.json'; Dst = '.github/git-ape/records/references/ape-decision-record-v1.schema.json' }
+    @{ Src = 'records/references/aerp-evidence-record-v1.schema.json'; Dst = '.github/git-ape/records/references/aerp-evidence-record-v1.schema.json' }
+    @{ Src = 'records/references/aerp-evidence-bundle-v1.schema.json'; Dst = '.github/git-ape/records/references/aerp-evidence-bundle-v1.schema.json' }
+    @{ Src = '../../git-ape-records/references/git-ape-execution-graph-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-execution-graph-v1.schema.json' }
+    @{ Src = '../../git-ape-records/references/git-ape-execution-trace-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-execution-trace-v1.schema.json' }
+    @{ Src = '../../git-ape-records/references/git-ape-deployment-authorization-v1.schema.json'; Dst = '.github/git-ape/records/references/git-ape-deployment-authorization-v1.schema.json' }
+    @{ Src = 'records/git-ape-deploy-graph-v1.json'; Dst = '.github/git-ape/records/graphs/git-ape-deploy-v1.json' }
+    @{ Src = '../../git-ape-isee/scripts/verify-bindings.sh'; Dst = '.github/git-ape/isee/verify-bindings.sh' }
+    @{ Src = '../../git-ape-isee/scripts/adopt-existing.sh'; Dst = '.github/git-ape/isee/adopt-existing.sh' }
+    @{ Src = '../../../schemas/git-ape-isee-bindings-v1.schema.json'; Dst = '.github/git-ape/isee/bindings.schema.json' }
     @{ Src = 'copilot-instructions.md';           Dst = '.github/copilot-instructions.md' }
 )
 
@@ -109,6 +120,26 @@ if ($skipped -gt 0) {
             }
             '^\.github/workflows/' {
                 $srcRel = "workflows/$([System.IO.Path]::GetFileName($path))"
+            }
+            '^\.github/git-ape/records/references/' {
+                if ([System.IO.Path]::GetFileName($path) -like 'git-ape-*') {
+                    $srcRel = "../../git-ape-records/references/$([System.IO.Path]::GetFileName($path))"
+                } else {
+                    $srcRel = "records/references/$([System.IO.Path]::GetFileName($path))"
+                }
+            }
+            '^\.github/git-ape/records/graphs/' {
+                $srcRel = 'records/git-ape-deploy-graph-v1.json'
+            }
+            '^\.github/git-ape/records/' {
+                $srcRel = "../../git-ape-records/scripts/$([System.IO.Path]::GetFileName($path))"
+            }
+            '^\.github/git-ape/isee/' {
+                if ([System.IO.Path]::GetFileName($path) -eq 'bindings.schema.json') {
+                    $srcRel = '../../../schemas/git-ape-isee-bindings-v1.schema.json'
+                } else {
+                    $srcRel = "../../git-ape-isee/scripts/$([System.IO.Path]::GetFileName($path))"
+                }
             }
             default {
                 $srcRel = $path

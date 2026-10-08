@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azure.github.io/git-ape/schemas/git-ape-deployment-authorization-v1.schema.json",
+  "title": "Git-Ape Deployment Authorization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "authorizationType",
+    "repository",
+    "trigger",
+    "pullRequest",
+    "review",
+    "verifiedAt",
+    "verifier",
+    "reason"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "git-ape-deployment-authorization/v1"
+    },
+    "status": {
+      "enum": ["verified", "rejected"]
+    },
+    "authorizationType": {
+      "type": ["string", "null"],
+      "enum": ["merged-pull-request", null]
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "actor", "commitSha"],
+      "properties": {
+        "event": {"type": "string", "minLength": 1},
+        "actor": {"type": "string", "minLength": 1},
+        "commitSha": {"type": "string", "minLength": 1}
+      }
+    },
+    "pullRequest": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "url",
+        "baseBranch",
+        "headBranch",
+        "author",
+        "mergedAt",
+        "mergedBy",
+        "mergeCommitSha"
+      ],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "url": {"type": "string", "minLength": 1},
+        "baseBranch": {"type": "string", "minLength": 1},
+        "headBranch": {"type": "string", "minLength": 1},
+        "author": {"type": "string", "minLength": 1},
+        "mergedAt": {"type": "string", "minLength": 1},
+        "mergedBy": {"type": "string", "minLength": 1},
+        "mergeCommitSha": {"type": "string", "minLength": 1}
+      }
+    },
+    "review": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["decision", "approvals"],
+      "properties": {
+        "decision": {
+          "enum": ["approved", "review-required"]
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["login", "submittedAt", "commitId"],
+            "properties": {
+              "login": {"type": "string", "minLength": 1},
+              "submittedAt": {"type": "string", "minLength": 1},
+              "commitId": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "verifiedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verifier": {
+      "const": "github-actions"
+    },
+    "reason": {
+      "type": ["string", "null"]
+    }
+  }
+}

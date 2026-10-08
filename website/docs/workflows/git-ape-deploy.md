@@ -47,7 +47,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | **Runs On** | `ubuntu-latest` |
 | **Environment** | `azure-deploy` |
 | **Depends On** | `detect-deployments` |
-| **Steps** | 17 |
+| **Steps** | 25 |
 
 
 
@@ -63,9 +63,9 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 # Runs the actual ARM deployment, captures outputs, and runs integration tests.
 #
 # NOTE: There is intentionally no `/deploy` comment trigger. A comment author's
-# authorization cannot be reliably verified from the workflow, so deployment is
-# gated solely on merge to main (which already requires PR review + approval via
-# branch protection).
+# authorization cannot be reliably verified from the workflow. Every triggering
+# commit is resolved to an approved pull-request merge targeting main; direct
+# pushes and unapproved merges fail closed before Azure execution.
 
 name: "Git-Ape: Deploy"
 
@@ -152,6 +152,7 @@ jobs:
     # preventing script injection.
     env:
       DEPLOYMENT_ID: ${{ matrix.deployment_id }}
+      INVOCATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - uses: actions/checkout@v6
@@ -181,7 +182,55 @@ jobs:
           echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
           echo "deploy_dir=$DEPLOY_DIR" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure portable Intent record
+        id: intent
+        run: |
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          PRODUCER=".github/git-ape/records/git-ape-records.sh"
+          [[ -f "$PRODUCER" ]] || {
+            echo "::error::Git-Ape record producer missing: $PRODUCER"
+            exit 1
+          }
+          if [[ -f "$DEPLOY_DIR/intent.json" ]]; then
+            [[ -f "$DEPLOY_DIR/intent-status.json" ]] || {
+              echo "::error::Intent exists without intent-status.json; regenerate it explicitly from requirements.json."
+              exit 1
+            }
+            if [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
+              if command -v sha256sum >/dev/null; then
+                CURRENT_SOURCE_DIGEST=$(sha256sum "$DEPLOY_DIR/requirements.json" | awk '{print "sha256:" $1}')
+              else
+                CURRENT_SOURCE_DIGEST=$(shasum -a 256 "$DEPLOY_DIR/requirements.json" | awk '{print "sha256:" $1}')
+              fi
+              RECORDED_SOURCE_DIGEST=$(jq -r '.sourceDigest // empty' "$DEPLOY_DIR/intent-status.json")
+              [[ "$CURRENT_SOURCE_DIGEST" == "$RECORDED_SOURCE_DIGEST" ]] || {
+                echo "::error::requirements.json changed after Intent capture. Review the change and regenerate the draft Intent explicitly."
+                exit 1
+              }
+            fi
+            echo "Intent record matches its captured source; preserving it."
+          elif [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
+            bash "$PRODUCER" intent \
+              --source "$DEPLOY_DIR/requirements.json" \
+              --output "$DEPLOY_DIR/intent.json" \
+              --status-output "$DEPLOY_DIR/intent-status.json"
+          else
+            echo "::error::Neither intent.json nor requirements.json exists for $DEPLOYMENT_ID"
+            exit 1
+          fi
+
+      - name: Apply optional ISEE governance
+        id: governance
+        env:
+          GIT_APE_ISEE_REQUIRED: ${{ vars.GIT_APE_ISEE_REQUIRED }}
+        run: |
+          VERIFY=".github/git-ape/isee/verify-bindings.sh"
+          [[ -f "$VERIFY" ]] || { echo "::error::Git-Ape ISEE verifier missing: $VERIFY"; exit 1; }
+          chmod +x "$VERIFY"
+          "$VERIFY" --deployment-id "$DEPLOYMENT_ID"
+
       - name: Azure Login (OIDC)
+        id: azure_login
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -229,6 +278,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Validate before deploy (stack)
+        id: validate
         env:
           # location comes from parameters.json (attacker-controllable) — route it
           # through env so it can't be inlined into the run script (injection).
@@ -294,6 +344,149 @@ jobs:
             fi
             echo "Security scan passed — no errors found"
           fi
+
+      - name: Verify merged PR authorization
+        id: authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          TRIGGER_ACTOR: ${{ github.actor }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          AUTHORIZATION="$DEPLOY_DIR/authorization.json"
+          VERIFIED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          API_ROOT="${GITHUB_API_URL:-https://api.github.com}"
+          API_HEADERS=(
+            -H "Accept: application/vnd.github+json"
+            -H "Authorization: Bearer $GH_TOKEN"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          PULLS=$(curl --fail --silent --show-error \
+            "${API_HEADERS[@]}" \
+            "$API_ROOT/repos/$REPOSITORY/commits/$COMMIT_SHA/pulls?per_page=100")
+          MATCHES=$(jq --arg sha "$COMMIT_SHA" \
+            '[.[] | select(
+              .merged_at != null and
+              .base.ref == "main" and
+              .merge_commit_sha == $sha
+            )]' <<<"$PULLS")
+          MATCH_COUNT=$(jq 'length' <<<"$MATCHES")
+
+          if [[ "$MATCH_COUNT" -ne 1 ]]; then
+            REASON="no-associated-merged-pull-request"
+            [[ "$MATCH_COUNT" -gt 1 ]] && REASON="ambiguous-associated-merged-pull-request"
+            jq -n \
+              --arg verifiedAt "$VERIFIED_AT" \
+              --arg repository "$REPOSITORY" \
+              --arg commitSha "$COMMIT_SHA" \
+              --arg event "$TRIGGER_EVENT" \
+              --arg actor "$TRIGGER_ACTOR" \
+              --arg reason "$REASON" \
+              '{
+                schemaVersion:"git-ape-deployment-authorization/v1",
+                status:"rejected",
+                authorizationType:null,
+                repository:$repository,
+                trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+                pullRequest:null,
+                review:null,
+                verifiedAt:$verifiedAt,
+                verifier:"github-actions",
+                reason:$reason
+              }' > "$AUTHORIZATION"
+            echo "authorization_result=rejected-$REASON" >> "$GITHUB_OUTPUT"
+            echo "::error::Deployment authorization rejected: commit $COMMIT_SHA is not the unique merge commit of a pull request targeting main."
+            exit 1
+          fi
+
+          PR=$(jq '.[0]' <<<"$MATCHES")
+          PR_NUMBER=$(jq -r '.number' <<<"$PR")
+          REVIEWS=$(curl --fail --silent --show-error \
+            "${API_HEADERS[@]}" \
+            "$API_ROOT/repos/$REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100")
+          EFFECTIVE_APPROVALS=$(jq '
+            [
+              .[]
+              | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")
+            ]
+            | sort_by(.user.login, .submitted_at)
+            | group_by(.user.login)
+            | map(last)
+            | map(select(.state == "APPROVED"))
+            | map({login:.user.login,submittedAt:.submitted_at,commitId:.commit_id})
+          ' <<<"$REVIEWS")
+          APPROVAL_COUNT=$(jq 'length' <<<"$EFFECTIVE_APPROVALS")
+
+          if [[ "$APPROVAL_COUNT" -lt 1 ]]; then
+            jq -n \
+              --arg verifiedAt "$VERIFIED_AT" \
+              --arg repository "$REPOSITORY" \
+              --arg commitSha "$COMMIT_SHA" \
+              --arg event "$TRIGGER_EVENT" \
+              --arg actor "$TRIGGER_ACTOR" \
+              --argjson pr "$PR" \
+              '{
+                schemaVersion:"git-ape-deployment-authorization/v1",
+                status:"rejected",
+                authorizationType:"merged-pull-request",
+                repository:$repository,
+                trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+                pullRequest:{
+                  number:$pr.number,
+                  url:$pr.html_url,
+                  baseBranch:$pr.base.ref,
+                  headBranch:$pr.head.ref,
+                  author:$pr.user.login,
+                  mergedAt:$pr.merged_at,
+                  mergedBy:$pr.merged_by.login,
+                  mergeCommitSha:$pr.merge_commit_sha
+                },
+                review:{decision:"review-required",approvals:[]},
+                verifiedAt:$verifiedAt,
+                verifier:"github-actions",
+                reason:"merged-pull-request-has-no-effective-approval"
+              }' > "$AUTHORIZATION"
+            echo "authorization_result=rejected-missing-approval" >> "$GITHUB_OUTPUT"
+            echo "::error::Deployment authorization rejected: pull request #$PR_NUMBER has no effective approval."
+            exit 1
+          fi
+
+          jq -n \
+            --arg verifiedAt "$VERIFIED_AT" \
+            --arg repository "$REPOSITORY" \
+            --arg commitSha "$COMMIT_SHA" \
+            --arg event "$TRIGGER_EVENT" \
+            --arg actor "$TRIGGER_ACTOR" \
+            --argjson pr "$PR" \
+            --argjson approvals "$EFFECTIVE_APPROVALS" \
+            '{
+              schemaVersion:"git-ape-deployment-authorization/v1",
+              status:"verified",
+              authorizationType:"merged-pull-request",
+              repository:$repository,
+              trigger:{event:$event,actor:$actor,commitSha:$commitSha},
+              pullRequest:{
+                number:$pr.number,
+                url:$pr.html_url,
+                baseBranch:$pr.base.ref,
+                headBranch:$pr.head.ref,
+                author:$pr.user.login,
+                mergedAt:$pr.merged_at,
+                mergedBy:$pr.merged_by.login,
+                mergeCommitSha:$pr.merge_commit_sha
+              },
+              review:{decision:"approved",approvals:$approvals},
+              verifiedAt:$verifiedAt,
+              verifier:"github-actions",
+              reason:null
+            }' > "$AUTHORIZATION"
+          echo "authorization_result=verified-merged-pull-request" >> "$GITHUB_OUTPUT"
+          echo "pull_request_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Verified deployment authorization from approved pull request #$PR_NUMBER"
 
       - name: Deploy to Azure (Deployment Stack)
         id: deploy
@@ -550,6 +743,7 @@ jobs:
           echo "rollback_status=$ROLLBACK_STATUS" >> "$GITHUB_OUTPUT"
 
       - name: Save deployment state
+        id: state
         if: always()
         env:
           # Pass step outputs through env so JSON payloads can't break shell quoting
@@ -612,6 +806,214 @@ jobs:
               runUrl: $runUrl
             }' > "$DEPLOY_DIR/state.json"
 
+      - name: Save integration test results
+        id: test_results
+        if: always()
+        env:
+          TEST_STATUS: ${{ steps.tests.outputs.test_status }}
+          TEST_RESOURCES: ${{ steps.tests.outputs.resources }}
+          TEST_ENDPOINTS: ${{ steps.tests.outputs.test_endpoints }}
+        run: |
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          RESOURCES="${TEST_RESOURCES:-[]}"
+          echo "$RESOURCES" | jq empty >/dev/null 2>&1 || RESOURCES="[]"
+          jq -n \
+            --arg status "${TEST_STATUS:-skipped}" \
+            --arg endpoints "${TEST_ENDPOINTS:-}" \
+            --argjson resources "$RESOURCES" \
+            '{status:$status,resources:$resources,endpoints:$endpoints}' \
+            > "$DEPLOY_DIR/tests.json"
+
+      - name: Capture and validate structured execution trace
+        id: trace
+        if: always()
+        continue-on-error: true
+        env:
+          INTENT_OUTCOME: ${{ steps.intent.outcome }}
+          GOVERNANCE_OUTCOME: ${{ steps.governance.outcome }}
+          AZURE_LOGIN_OUTCOME: ${{ steps.azure_login.outcome }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          SECURITY_OUTCOME: ${{ steps.scan_gate.outcome }}
+          AUTHORIZATION_OUTCOME: ${{ steps.authorization.outcome }}
+          AUTHORIZATION_RESULT: ${{ steps.authorization.outputs.authorization_result }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          DEPLOY_RESULT: ${{ steps.deploy.outputs.deploy_status }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          TESTS_RESULT: ${{ steps.tests.outputs.test_status }}
+          STATE_OUTCOME: ${{ steps.state.outcome }}
+        run: |
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          PRODUCER=".github/git-ape/records/git-ape-records.sh"
+          GRAPH_SOURCE=".github/git-ape/records/graphs/git-ape-deploy-v1.json"
+          GRAPH="$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json"
+          EVENTS="$DEPLOY_DIR/.trace-events-$INVOCATION_ID.json"
+          TRACE="$DEPLOY_DIR/traces/$INVOCATION_ID.json"
+          VALIDATION="$DEPLOY_DIR/trace-validations/$INVOCATION_ID.json"
+
+          [[ -n "$DEPLOY_DIR" && -d "$DEPLOY_DIR" ]] || {
+            echo "::error::Cannot capture trace because the deployment directory was not resolved."
+            exit 1
+          }
+          [[ -f "$PRODUCER" && -f "$GRAPH_SOURCE" ]] || {
+            echo "::error::Git-Ape trace producer or deployment graph is missing."
+            exit 1
+          }
+          mkdir -p "$DEPLOY_DIR/execution-graphs" "$DEPLOY_DIR/traces" "$DEPLOY_DIR/trace-validations"
+          cp "$GRAPH_SOURCE" "$GRAPH"
+          cp "$GRAPH" "$DEPLOY_DIR/execution-graph.json"
+
+          RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          TRACE_OUTCOME="failed"
+          if [[ "$DEPLOY_RESULT" == "succeeded" &&
+                "$AUTHORIZATION_OUTCOME" == "success" &&
+                "$STATE_OUTCOME" == "success" &&
+                "$TESTS_RESULT" != "failed" ]]; then
+            TRACE_OUTCOME="succeeded"
+          fi
+
+          jq -n \
+            --arg recordedAt "$RECORDED_AT" \
+            --arg intent "$INTENT_OUTCOME" \
+            --arg governance "$GOVERNANCE_OUTCOME" \
+            --arg login "$AZURE_LOGIN_OUTCOME" \
+            --arg validate "$VALIDATE_OUTCOME" \
+            --arg security "$SECURITY_OUTCOME" \
+            --arg authorization "$AUTHORIZATION_OUTCOME" \
+            --arg authorizationResult "$AUTHORIZATION_RESULT" \
+            --arg deploy "$DEPLOY_OUTCOME" \
+            --arg deployResult "$DEPLOY_RESULT" \
+            --arg tests "$TESTS_OUTCOME" \
+            --arg testsResult "$TESTS_RESULT" \
+            --arg state "$STATE_OUTCOME" '
+            def attempted($value): $value != "" and $value != "skipped";
+            def status($value): if $value == "success" then "completed" else "failed" end;
+            def node($id; $outcome; $result; $evidence):
+              if attempted($outcome) then
+                {id:("node-" + $id),type:"node",node:$id,
+                 status:(if $result == "failed" then "failed" else status($outcome) end),
+                 recordedAt:$recordedAt,evidence:$evidence,result:(if $result == "" then null else $result end)}
+              else null end;
+            ([
+              node("intent_captured";$intent;"";["intent.json","intent-status.json"]),
+              node("governance_preflight";$governance;"";["governance-status.json"]),
+              node("azure_login";$login;"";["github-oidc"]),
+              node("template_validated";$validate;"";["template.json","parameters.json"]),
+              node("security_gate";$security;"";["template-analyzer"]),
+              node("deployment_authorized";$authorization;$authorizationResult;["authorization.json"]),
+              node("deployment_executed";$deploy;$deployResult;["state.json"]),
+              node("integration_tests";$tests;$testsResult;["tests.json"]),
+              node("state_recorded";$state;$deployResult;["state.json","tests.json"])
+            ] | map(select(. != null))) as $candidates |
+            (($candidates | map(.status) | index("failed")) // ($candidates | length - 1)) as $last |
+            ($candidates[0:($last + 1)]) as $nodes |
+            def receipt($to):
+              if $to == "governance_preflight" then ["intent-record"]
+              elif $to == "azure_login" then ["governance-status"]
+              elif $to == "template_validated" then ["azure-session"]
+              elif $to == "security_gate" then ["template-validation"]
+              elif $to == "deployment_authorized" then ["security-result"]
+              elif $to == "deployment_executed" then ["authorization-receipt"]
+              elif $to == "integration_tests" then ["deployment-state"]
+              elif $to == "state_recorded" then ["test-results"]
+              else [] end;
+            [range(0; $nodes | length) as $i |
+              $nodes[$i],
+              (if $i < (($nodes | length) - 1) then
+                {id:("transition-" + $nodes[$i].node + "-" + $nodes[$i + 1].node),
+                 type:"transition",from:$nodes[$i].node,to:$nodes[$i + 1].node,
+                 recordedAt:$recordedAt,evidence:receipt($nodes[$i + 1].node)}
+               else empty end)]
+          ' > "$EVENTS"
+
+          if ! bash "$PRODUCER" trace \
+            --graph "$GRAPH" \
+            --events "$EVENTS" \
+            --output "$TRACE" \
+            --validation-output "$VALIDATION" \
+            --invocation-id "$INVOCATION_ID" \
+            --workflow "git-ape-deploy" \
+            --identity "github-actions:${{ github.repository }}/.github/workflows/git-ape-deploy.yml" \
+            --outcome "$TRACE_OUTCOME"; then
+            rm -f "$EVENTS"
+            echo "::error::Structured execution trace failed conformance validation."
+            exit 1
+          fi
+          rm -f "$EVENTS"
+
+      - name: Emit portable Evidence
+        id: evidence
+        if: always()
+        continue-on-error: true
+        env:
+          STACK_ID: ${{ steps.deploy.outputs.stack_id }}
+          ENVIRONMENT: ${{ steps.params.outputs.environment }}
+        run: |
+          DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          PRODUCER=".github/git-ape/records/git-ape-records.sh"
+          BUNDLE="$DEPLOY_DIR/evidence/bundles/$INVOCATION_ID.json"
+          TARGET="${STACK_ID:-azure-subscription:${{ vars.AZURE_SUBSCRIPTION_ID }}}"
+          VERSION=$(jq -r '.version // "unknown"' plugin.json)
+          DECISION_ARGS=()
+          STRUCTURE_ARGS=()
+          GOVERNANCE_MODE="standalone"
+          if [[ -f "$DEPLOY_DIR/isee-bindings.json" ]]; then
+            GOVERNANCE_MODE=$(jq -r '.governanceMode' "$DEPLOY_DIR/isee-bindings.json")
+            while IFS= read -r PATH_VALUE; do
+              DECISION_ARGS+=(--decision "$PATH_VALUE")
+            done < <(jq -r '.intentRecords[].path' "$DEPLOY_DIR/isee-bindings.json")
+            while IFS= read -r PATH_VALUE; do
+              STRUCTURE_ARGS+=(--structure "$PATH_VALUE")
+            done < <(jq -r '.structureRecords[].path' "$DEPLOY_DIR/isee-bindings.json")
+          elif [[ -f "$DEPLOY_DIR/intent.json" ]]; then
+            DECISION_ARGS+=(--decision "$DEPLOY_DIR/intent.json")
+          fi
+
+          if ! bash "$PRODUCER" evidence \
+            --deployment-dir "$DEPLOY_DIR" \
+            --output "$BUNDLE" \
+            --status-output "$DEPLOY_DIR/evidence-status.json" \
+            --identity "github-actions:${{ github.repository }}/.github/workflows/git-ape-deploy.yml" \
+            --target "$TARGET" \
+            --producer-version "$VERSION" \
+            --invocation-id "$INVOCATION_ID" \
+            --environment "$ENVIRONMENT" \
+            "${DECISION_ARGS[@]}" \
+            "${STRUCTURE_ARGS[@]}"; then
+            jq -n \
+              --arg reason "Git-Ape failed to emit portable Evidence" \
+              '{schemaVersion:"git-ape-record-status/v1",recordType:"evidence",status:"failed",profile:"aerp-evidence-bundle/v1",bundle:null,fingerprint:null,authoritative:false,independentlyVerified:false,reason:$reason}' \
+              > "$DEPLOY_DIR/evidence-status.json"
+            exit 1
+          fi
+
+          if command -v aerp >/dev/null; then
+            if aerp validate "$BUNDLE" >/dev/null &&
+               aerp verify "$BUNDLE" --artifact-root "$DEPLOY_DIR" >/dev/null; then
+              jq '.status = "verified" |
+                  .authoritative = true |
+                  .independentlyVerified = true |
+                  .reason = "Validated and verified by the installed AERP implementation."' \
+                "$DEPLOY_DIR/evidence-status.json" > "$DEPLOY_DIR/evidence-status.json.tmp"
+              mv "$DEPLOY_DIR/evidence-status.json.tmp" "$DEPLOY_DIR/evidence-status.json"
+            else
+              jq '.status = "failed" |
+                  .authoritative = false |
+                  .independentlyVerified = false |
+                  .reason = "Independent AERP validation or verification failed."' \
+                "$DEPLOY_DIR/evidence-status.json" > "$DEPLOY_DIR/evidence-status.json.tmp"
+              mv "$DEPLOY_DIR/evidence-status.json.tmp" "$DEPLOY_DIR/evidence-status.json"
+              exit 1
+            fi
+          elif [[ "$GOVERNANCE_MODE" == "required" ]]; then
+            jq '.status = "failed" |
+                .authoritative = false |
+                .independentlyVerified = false |
+                .reason = "Required ISEE governance needs the AERP CLI for independent verification."' \
+              "$DEPLOY_DIR/evidence-status.json" > "$DEPLOY_DIR/evidence-status.json.tmp"
+            mv "$DEPLOY_DIR/evidence-status.json.tmp" "$DEPLOY_DIR/evidence-status.json"
+            exit 1
+          fi
+
       - name: Commit deployment state
         if: always()
         run: |
@@ -632,6 +1034,20 @@ jobs:
           # Stash the updated state and metadata files before switching branches
           cp "$DEPLOY_DIR/state.json" /tmp/state.json 2>/dev/null || true
           cp "$DEPLOY_DIR/metadata.json" /tmp/metadata.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/tests.json" /tmp/tests.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/intent.json" /tmp/intent.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/intent-status.json" /tmp/intent-status.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/evidence-status.json" /tmp/evidence-status.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/governance-status.json" /tmp/governance-status.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/authorization.json" /tmp/authorization.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/execution-graph.json" /tmp/execution-graph.json 2>/dev/null || true
+          mkdir -p /tmp/git-ape-execution-graphs
+          cp "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" /tmp/git-ape-execution-graphs/graph.json 2>/dev/null || true
+          mkdir -p /tmp/git-ape-evidence
+          cp "$DEPLOY_DIR/evidence/bundles/$INVOCATION_ID.json" /tmp/git-ape-evidence/bundle.json 2>/dev/null || true
+          mkdir -p /tmp/git-ape-traces /tmp/git-ape-trace-validations
+          cp "$DEPLOY_DIR/traces/$INVOCATION_ID.json" /tmp/git-ape-traces/trace.json 2>/dev/null || true
+          cp "$DEPLOY_DIR/trace-validations/$INVOCATION_ID.json" /tmp/git-ape-trace-validations/validation.json 2>/dev/null || true
 
           # Ensure we push to main regardless of which ref was checked out
           git fetch origin main
@@ -640,8 +1056,32 @@ jobs:
           # Restore the updated state and metadata files onto main
           cp /tmp/state.json "$DEPLOY_DIR/state.json" 2>/dev/null || true
           cp /tmp/metadata.json "$DEPLOY_DIR/metadata.json" 2>/dev/null || true
+          cp /tmp/tests.json "$DEPLOY_DIR/tests.json" 2>/dev/null || true
+          cp /tmp/intent.json "$DEPLOY_DIR/intent.json" 2>/dev/null || true
+          cp /tmp/intent-status.json "$DEPLOY_DIR/intent-status.json" 2>/dev/null || true
+          cp /tmp/evidence-status.json "$DEPLOY_DIR/evidence-status.json" 2>/dev/null || true
+          cp /tmp/governance-status.json "$DEPLOY_DIR/governance-status.json" 2>/dev/null || true
+          cp /tmp/authorization.json "$DEPLOY_DIR/authorization.json" 2>/dev/null || true
+          cp /tmp/execution-graph.json "$DEPLOY_DIR/execution-graph.json" 2>/dev/null || true
+          mkdir -p "$DEPLOY_DIR/execution-graphs"
+          cp /tmp/git-ape-execution-graphs/graph.json "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" 2>/dev/null || true
+          mkdir -p "$DEPLOY_DIR/evidence/bundles"
+          cp /tmp/git-ape-evidence/bundle.json "$DEPLOY_DIR/evidence/bundles/$INVOCATION_ID.json" 2>/dev/null || true
+          mkdir -p "$DEPLOY_DIR/traces" "$DEPLOY_DIR/trace-validations"
+          cp /tmp/git-ape-traces/trace.json "$DEPLOY_DIR/traces/$INVOCATION_ID.json" 2>/dev/null || true
+          cp /tmp/git-ape-trace-validations/validation.json "$DEPLOY_DIR/trace-validations/$INVOCATION_ID.json" 2>/dev/null || true
 
-          git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json"
+          git add "$DEPLOY_DIR/state.json" "$DEPLOY_DIR/metadata.json" "$DEPLOY_DIR/tests.json"
+          [[ -f "$DEPLOY_DIR/intent.json" ]] && git add "$DEPLOY_DIR/intent.json"
+          [[ -f "$DEPLOY_DIR/intent-status.json" ]] && git add "$DEPLOY_DIR/intent-status.json"
+          [[ -f "$DEPLOY_DIR/evidence-status.json" ]] && git add "$DEPLOY_DIR/evidence-status.json"
+          [[ -f "$DEPLOY_DIR/governance-status.json" ]] && git add "$DEPLOY_DIR/governance-status.json"
+          [[ -f "$DEPLOY_DIR/authorization.json" ]] && git add "$DEPLOY_DIR/authorization.json"
+          [[ -f "$DEPLOY_DIR/execution-graph.json" ]] && git add "$DEPLOY_DIR/execution-graph.json"
+          [[ -f "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/execution-graphs/$INVOCATION_ID.json"
+          [[ -f "$DEPLOY_DIR/traces/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/traces/$INVOCATION_ID.json"
+          [[ -f "$DEPLOY_DIR/trace-validations/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/trace-validations/$INVOCATION_ID.json"
+          [[ -f "$DEPLOY_DIR/evidence/bundles/$INVOCATION_ID.json" ]] && git add "$DEPLOY_DIR/evidence/bundles/$INVOCATION_ID.json"
           git diff --cached --quiet || git commit -m "git-ape: update state for $DEPLOYMENT_ID [$STATUS]"
           git push || { echo "::error::Failed to push state update to main"; exit 1; }
 
@@ -652,6 +1092,7 @@ jobs:
           DEPLOY_ERROR: ${{ steps.deploy.outputs.deploy_error }}
           TEST_ENDPOINTS: ${{ steps.tests.outputs.test_endpoints }}
           RESOURCES_JSON: ${{ steps.tests.outputs.resources }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
         with:
           script: |
             const deploymentId = process.env.DEPLOYMENT_ID;
@@ -663,6 +1104,7 @@ jobs:
             const resources = process.env.RESOURCES_JSON || '';
             const testEndpoints = process.env.TEST_ENDPOINTS || '';
             const deployError = process.env.DEPLOY_ERROR || '';
+            const evidenceOutcome = process.env.EVIDENCE_OUTCOME || 'skipped';
 
             // Build the comment body
             let body = `## Git-Ape Deploy: \`${deploymentId}\`\n\n`;
@@ -671,6 +1113,7 @@ jobs:
               body += `### ✅ Deployment Succeeded\n\n`;
               body += `- **Duration:** ${duration}\n`;
               body += `- **Workflow Run:** [View logs](${runUrl})\n\n`;
+              body += `- **Portable Evidence:** ${evidenceOutcome === 'success' ? '✅ emitted' : '❌ emission or verification failed'}\n\n`;
 
               if (testEndpoints) body += `### Endpoints\n\n${testEndpoints}\n\n`;
 
@@ -785,6 +1228,18 @@ jobs:
                 core.info(`Created tracking issue #${issue.number} for merged-PR deployment failure`);
               }
             }
+
+      - name: Enforce Evidence emission
+        if: always() && steps.evidence.outcome == 'failure'
+        run: |
+          echo "::error::Azure execution state was preserved, but portable Evidence emission or verification failed."
+          exit 1
+
+      - name: Enforce execution trace validation
+        if: always() && steps.trace.outcome == 'failure'
+        run: |
+          echo "::error::Azure execution state was preserved, but the structured execution trace was missing or invalid."
+          exit 1
 
       - name: Notify via Slack
         if: always()

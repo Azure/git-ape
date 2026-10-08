@@ -54,6 +54,8 @@ This skill configures:
 5. Required GitHub secrets (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`) and the `AZURE_SUBSCRIPTION_ID` variable
 6. Scaffolded GitHub Actions workflow files (`git-ape-plan.yml`, `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.{md,lock.yml}`) and deployment standards (`.github/copilot-instructions.md`) into the user's working copy
 7. *(Optional)* The `COPILOT_GITHUB_TOKEN` repository secret that powers the agentic drift-detection workflow (`git-ape-drift.lock.yml`) — only when the user opts into scheduled drift detection
+8. The dependency-free Git-Ape record producer and versioned ADRP/AERP schema snapshots under `.github/git-ape/records/`
+9. A portable draft Intent record containing the purpose and guardrails supplied during onboarding
 
 ## Prerequisites
 
@@ -148,7 +150,8 @@ OIDC_PREFIX="repository_owner_id:<OWNER_ID>:repository_id:<REPO_ID>"
 9. Scaffold workflow files and deployment standards into the user's working copy (see below).
 10. *(Optional)* Provision the drift detector engine credential (`COPILOT_GITHUB_TOKEN`) so the agentic drift workflow can run (see below).
 11. Capture compliance and Azure Policy preferences (see below).
-12. Verify federated credentials, role assignments, and secrets.
+12. Persist onboarding Intent (see below).
+13. Verify federated credentials, role assignments, and secrets.
 
 ### Step 9: Scaffold workflow files and deployment standards
 
@@ -156,6 +159,11 @@ The GitHub Actions workflows that power Git-Ape (`git-ape-plan.yml`,
 `-deploy.yml`, `-destroy.yml`, `-verify.yml`, `-drift.md`, `-drift.lock.yml`)
 and the deployment standards file (`.github/copilot-instructions.md`) ship
 as templates inside this skill at `./templates/`.
+
+The scaffold also installs `.github/git-ape/records/git-ape-records.sh` and
+its versioned schema references. The producer uses only Git-Ape's existing
+Bash, `jq`, and SHA-256 tooling and must remain available whether or not any
+ISEE plugin is installed.
 
 After identity, secrets, and environments are configured, run the scaffold
 helper to copy these templates into the user's working copy. Two parity
@@ -189,6 +197,37 @@ The helper:
 
 If the user already had a custom `.github/copilot-instructions.md`, the
 scaffold step skips it. Step 11 (below) handles that case explicitly.
+
+### Step 12: Persist onboarding Intent
+
+Intent captured during onboarding is durable product input, not disposable
+chat context. After scaffolding:
+
+1. Write `.github/git-ape/onboarding-intent.json` containing:
+   - project name and target environments;
+   - desired platform outcome;
+   - stakeholders and scope;
+   - security, cost, compliance, and operational drivers;
+   - non-negotiable constraints;
+   - autonomy rules (`proceed`, `always_ask`, `never`);
+   - the selected compliance and policy posture.
+2. Generate the draft record:
+
+   ```bash
+   PROJECT_SLUG="<uppercase-project-slug>"
+   bash .github/git-ape/records/git-ape-records.sh intent \
+     --source .github/git-ape/onboarding-intent.json \
+     --output ".github/decisions/ADR-GIT-APE-${PROJECT_SLUG}.v1.json" \
+     --status-output .github/git-ape/onboarding-intent-status.json
+   ```
+
+3. Report the record as **draft and unratified**. Never claim that onboarding
+   alone grants decision authority.
+
+This step is mandatory for Git-Ape-only onboarding. `.github/decisions/` is the
+shared canonical decision-record location used by Git-Ape and Ape Context.
+Ape Context and ADRP may later enrich, review, and ratify the same portable
+record.
 
 ### Step 10: (Optional) Onboard the drift detector workflow
 
@@ -431,6 +470,7 @@ OIDC, RBAC, environments, and workflows.
 6. Scaffold workflow files and `copilot-instructions.md` via `./scripts/scaffold-repo.sh` on macOS/Linux/WSL, or `pwsh ./scripts/scaffold-repo.ps1` on Windows (Step 9 in playbook). Report which files were created vs skipped.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
+9. Persist the confirmed onboarding Intent as a draft portable record (Step 12).
 9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
 10. Summarize outcome (including scaffolded file counts) and suggest verification commands.
 

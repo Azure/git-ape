@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Azure/git-ape/schemas/git-ape-isee-bindings-v1.schema.json",
+  "title": "Git-Ape ISEE Bindings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "deploymentId",
+    "governanceMode",
+    "intentRecords",
+    "structureRecords",
+    "executionManifest",
+    "gates",
+    "evidenceRequirements",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "git-ape-isee-bindings/v1"
+    },
+    "deploymentId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "governanceMode": {
+      "enum": ["optional", "required"]
+    },
+    "intentRecords": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/profileBinding"
+      }
+    },
+    "structureRecords": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/profileBinding"
+      }
+    },
+    "executionManifest": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/artifactBinding"}
+      ]
+    },
+    "gates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evidenceRequirements": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "parameters", "additional"],
+      "properties": {
+        "template": {"$ref": "#/$defs/artifactBinding"},
+        "parameters": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/artifactBinding"}
+          ]
+        },
+        "additional": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifactBinding"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {"pattern": "(^/|(^|/)\\.\\.(/|$))"}
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "profileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "fingerprint"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "fingerprint": {"$ref": "#/$defs/sha256"},
+        "requireRatified": {"type": "boolean"}
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

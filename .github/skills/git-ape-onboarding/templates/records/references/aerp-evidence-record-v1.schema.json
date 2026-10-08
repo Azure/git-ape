@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aerp.dev/schema/aerp-evidence-record-v1.schema.json",
+  "title": "AERP Evidence Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "evidence_type",
+    "subject",
+    "claim",
+    "producer",
+    "method",
+    "timing",
+    "environment",
+    "decision_bindings",
+    "structure_bindings",
+    "policy_refs",
+    "control_refs",
+    "artifacts",
+    "relationships",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": { "const": "aerp-evidence-record/v1" },
+    "evidence_id": { "type": "string", "format": "uuid" },
+    "evidence_type": {
+      "enum": ["observation", "assessment", "approval", "execution", "outcome", "drift"]
+    },
+    "subject": { "$ref": "#/$defs/subject" },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "result", "summary", "criteria_refs"],
+      "properties": {
+        "statement": { "$ref": "#/$defs/nonEmptyString" },
+        "result": {
+          "enum": [
+            "observed",
+            "passed",
+            "failed",
+            "warning",
+            "inconclusive",
+            "error",
+            "succeeded",
+            "not-applicable"
+          ]
+        },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "criteria_refs": { "$ref": "#/$defs/uniqueStrings" }
+      }
+    },
+    "producer": { "$ref": "#/$defs/producer" },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "parameters_digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "$ref": "#/$defs/nonEmptyString" },
+        "parameters_digest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "valid_from", "valid_until"],
+      "properties": {
+        "observed_at": { "type": "string", "format": "date-time" },
+        "valid_from": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "date-time" }]
+        },
+        "valid_until": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "date-time" }]
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "target", "correlation_ids"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "target": { "$ref": "#/$defs/nonEmptyString" },
+        "correlation_ids": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "decision_bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/decisionBinding" }
+    },
+    "structure_bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/structureBinding" }
+    },
+    "policy_refs": { "$ref": "#/$defs/uniqueStrings" },
+    "control_refs": { "$ref": "#/$defs/uniqueStrings" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "relationships": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["derived_from", "supersedes", "revokes"],
+      "properties": {
+        "derived_from": { "$ref": "#/$defs/uniqueStrings" },
+        "supersedes": { "$ref": "#/$defs/uniqueStrings" },
+        "revokes": { "$ref": "#/$defs/uniqueStrings" }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_fingerprint"],
+      "properties": {
+        "record_fingerprint": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "uri", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "uri": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/nonEmptyString" }]
+        },
+        "digest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "identity", "invocation_id"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "$ref": "#/$defs/nonEmptyString" },
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "invocation_id": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/nonEmptyString" }]
+        }
+      }
+    },
+    "decisionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_id", "record_id", "record_version", "record_fingerprint"],
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]{2,63}$"
+        },
+        "structureBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["structure_id", "record_id", "record_version", "record_fingerprint"],
+          "properties": {
+            "structure_id": {
+              "type": "string",
+              "pattern": "^STR-[A-Z0-9][A-Z0-9-]{1,62}$"
+            },
+            "record_id": { "type": "string", "format": "uuid" },
+            "record_version": { "type": "integer", "minimum": 1 },
+            "record_fingerprint": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "record_id": { "type": "string", "format": "uuid" },
+        "record_version": { "type": "integer", "minimum": 1 },
+        "record_fingerprint": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "media_type", "digest", "role"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "media_type": { "$ref": "#/$defs/nonEmptyString" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "role": {
+          "enum": ["input", "output", "supporting", "report", "log", "snapshot", "policy"]
+        }
+      }
+    }
+  }
+}

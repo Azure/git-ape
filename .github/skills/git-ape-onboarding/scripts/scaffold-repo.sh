@@ -46,6 +46,17 @@ MAPPINGS=(
   "workflows/git-ape-verify.yml:.github/workflows/git-ape-verify.yml"
   "workflows/git-ape-drift.md:.github/workflows/git-ape-drift.md"
   "workflows/git-ape-drift.lock.yml:.github/workflows/git-ape-drift.lock.yml"
+  "../../git-ape-records/scripts/git-ape-records.sh:.github/git-ape/records/git-ape-records.sh"
+  "records/references/ape-decision-record-v1.schema.json:.github/git-ape/records/references/ape-decision-record-v1.schema.json"
+  "records/references/aerp-evidence-record-v1.schema.json:.github/git-ape/records/references/aerp-evidence-record-v1.schema.json"
+  "records/references/aerp-evidence-bundle-v1.schema.json:.github/git-ape/records/references/aerp-evidence-bundle-v1.schema.json"
+  "../../git-ape-records/references/git-ape-execution-graph-v1.schema.json:.github/git-ape/records/references/git-ape-execution-graph-v1.schema.json"
+  "../../git-ape-records/references/git-ape-execution-trace-v1.schema.json:.github/git-ape/records/references/git-ape-execution-trace-v1.schema.json"
+  "../../git-ape-records/references/git-ape-deployment-authorization-v1.schema.json:.github/git-ape/records/references/git-ape-deployment-authorization-v1.schema.json"
+  "records/git-ape-deploy-graph-v1.json:.github/git-ape/records/graphs/git-ape-deploy-v1.json"
+  "../../git-ape-isee/scripts/verify-bindings.sh:.github/git-ape/isee/verify-bindings.sh"
+  "../../git-ape-isee/scripts/adopt-existing.sh:.github/git-ape/isee/adopt-existing.sh"
+  "../../../schemas/git-ape-isee-bindings-v1.schema.json:.github/git-ape/isee/bindings.schema.json"
   "copilot-instructions.md:.github/copilot-instructions.md"
 )
 
@@ -96,6 +107,23 @@ if [ "$skipped" -gt 0 ]; then
         src_rel="copilot-instructions.md" ;;
       .github/workflows/*)
         src_rel="workflows/${path##*/}" ;;
+      .github/git-ape/records/references/*)
+        case "${path##*/}" in
+          git-ape-*)
+            src_rel="../../git-ape-records/references/${path##*/}" ;;
+          *)
+            src_rel="records/references/${path##*/}" ;;
+        esac ;;
+      .github/git-ape/records/graphs/*)
+        src_rel="records/git-ape-deploy-graph-v1.json" ;;
+      .github/git-ape/records/*)
+        src_rel="../../git-ape-records/scripts/${path##*/}" ;;
+      .github/git-ape/isee/*)
+        if [[ "${path##*/}" == "bindings.schema.json" ]]; then
+          src_rel="../../../schemas/git-ape-isee-bindings-v1.schema.json"
+        else
+          src_rel="../../git-ape-isee/scripts/${path##*/}"
+        fi ;;
       *)
         src_rel="$path" ;;
     esac
