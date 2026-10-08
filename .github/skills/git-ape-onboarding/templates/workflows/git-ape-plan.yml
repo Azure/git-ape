@@ -711,11 +711,13 @@ jobs:
 
             let comment = `## Git-Ape Plan: \`${deploymentId}\`\n\n`;
 
-            if (governanceOutcome === 'failure') {
+            if (governanceOutcome === 'success') {
+              comment += `### ✅ Governance Preflight: Passed\n\n`;
+            } else if (governanceOutcome === 'failure') {
               comment += `### ❌ ISEE Governance: Blocked\n\n`;
               comment += `> The deployment failed its configured governance preflight. Azure login was not attempted.\n\n`;
             } else {
-              comment += `### ✅ Governance Preflight: Passed\n\n`;
+              comment += `### ⚠️ Governance Preflight: Not Run\n\n`;
             }
 
             if (validationStatus === 'passed') {
