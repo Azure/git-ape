@@ -1,0 +1,22 @@
+[
+  { "pattern": "^properties\\.httpsOnly$", "severity": "critical", "impact": "HTTPS enforcement changed - HTTP traffic may now be allowed" },
+  { "pattern": "^properties\\.supportsHttpsTrafficOnly$", "severity": "critical", "impact": "Secure transfer requirement changed" },
+  { "pattern": "^properties\\.minimumTlsVersion$", "severity": "critical", "impact": "Minimum TLS version changed - possible downgrade" },
+  { "pattern": "^properties\\.publicNetworkAccess$", "severity": "critical", "impact": "Public network access setting changed - security boundary affected" },
+  { "pattern": "^properties\\.networkAcls\\..*", "severity": "critical", "impact": "Network access rules changed - security boundary affected" },
+  { "pattern": "^properties\\.allowBlobPublicAccess$", "severity": "critical", "impact": "Public blob access setting changed" },
+  { "pattern": "^properties\\.encryption\\..*", "severity": "critical", "impact": "Encryption configuration changed" },
+  { "pattern": "^identity\\..*", "severity": "critical", "impact": "Managed identity configuration changed" },
+  { "pattern": "^properties\\.siteConfig\\.ftpsState$", "severity": "critical", "impact": "FTPS enforcement changed" },
+  { "pattern": "^properties\\.siteConfig\\.scmIpSecurityRestrictions.*", "severity": "critical", "impact": "SCM firewall rules changed" },
+  { "pattern": "^properties\\.siteConfig\\.ipSecurityRestrictions.*", "severity": "critical", "impact": "App firewall rules changed" },
+
+  { "pattern": "^properties\\.siteConfig\\.appSettings\\..*", "severity": "warning", "impact": "Application setting changed - may affect runtime behavior" },
+  { "pattern": "^properties\\.siteConfig\\.alwaysOn$", "severity": "warning", "impact": "Always On setting changed - cold-start/performance impact" },
+  { "pattern": "^sku\\..*", "severity": "warning", "impact": "SKU/tier changed - cost or capacity impact" },
+  { "pattern": "^properties\\.accessTier$", "severity": "warning", "impact": "Storage access tier changed - cost impact" },
+  { "pattern": "^tags\\..*", "severity": "warning", "impact": "Tag mismatch - reporting/billing may be affected" },
+  { "pattern": "^properties\\.diagnosticsProfile\\..*", "severity": "warning", "impact": "Diagnostics/monitoring configuration changed" },
+
+  { "pattern": ".*", "severity": "info", "impact": "Property differs from recorded baseline" }
+]

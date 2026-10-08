@@ -1,0 +1,21 @@
+[
+  "^etag$",
+  "^properties\\.provisioningState$",
+  "^properties\\.resourceGuid$",
+  "^properties\\.creationTime$",
+  "^properties\\.lastModifiedTime$",
+  "^properties\\.changedTime$",
+  "^properties\\.primaryEndpoints\\..*",
+  "^properties\\.secondaryEndpoints\\..*",
+  "^properties\\.statusOfPrimary$",
+  "^properties\\.statusOfSecondary$",
+  "^systemData\\..*",
+  "^properties\\.instrumentationKey$",
+  "^properties\\.ConnectionString$",
+  "^properties\\.hostNames\\..*",
+  "^properties\\.outboundIpAddresses$",
+  "^properties\\.possibleOutboundIpAddresses$",
+  "^properties\\.customDomainVerificationId$",
+  "^properties\\.usage$",
+  "^properties\\.targetSwapSlot$"
+]
