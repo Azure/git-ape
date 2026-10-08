@@ -172,6 +172,32 @@
       "source": null
     },
     {
+      "name": "deployment-blueprints",
+      "tier": "community",
+      "description": "Provides implementation blueprints and deployment sequencing for Azure SaaS reference topologies. USE FOR: choosing single-region vs multi-region vs deployment-stamp topology, defining deployment sequencing and rollback strategy. DO NOT USE FOR: tenancy model selection itself (use tenant-isolation-models), day-2 scale/SRE operations (use scale-and-sre).",
+      "path": ".github/skills/community/deployment-blueprints",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/deployment-blueprints",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "fulfillment-and-metering",
+      "tier": "community",
+      "description": "Implements Azure Marketplace SaaS fulfillment APIs and metered billing event flows for transactable offers. USE FOR: subscription/entitlement resolution, metering event schema and reconciliation design. DO NOT USE FOR: bootstrapping the accelerator itself (use saas-accelerator-bootstrap), publisher/Partner Center onboarding (use marketplace-onboarding).",
+      "path": ".github/skills/community/fulfillment-and-metering",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/fulfillment-and-metering",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
       "name": "git-ape-onboarding",
       "tier": "first-party",
       "description": "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation.",
@@ -185,6 +211,71 @@
       "source": null
     },
     {
+      "name": "isv-landing-zone-foundation",
+      "tier": "community",
+      "description": "Builds the Azure ISV landing zone baseline for identity, networking, governance, security, and environment separation. USE FOR: standing up the first Azure environment for an ISV SaaS product, defining subscription/management-group layout. DO NOT USE FOR: tenancy model selection (use tenant-isolation-models), marketplace publication (use marketplace-onboarding).",
+      "path": ".github/skills/community/isv-landing-zone-foundation",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/isv-landing-zone-foundation",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "marketplace-offer-types",
+      "tier": "community",
+      "description": "Provides offer-type decision guidance and implementation pathways for Azure Marketplace and related commercial offer models. USE FOR: choosing between SaaS, Azure Application, VM, container, or managed-services offer types. DO NOT USE FOR: executing the onboarding flow itself (use marketplace-onboarding or onboard-to-marketplace).",
+      "path": ".github/skills/community/marketplace-offer-types",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/marketplace-offer-types",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "marketplace-onboarding",
+      "tier": "community",
+      "description": "Guides onboarding to Azure Marketplace: publisher setup, technical configuration, validation, and launch readiness. USE FOR: Partner Center publisher setup, offer metadata/plans/pricing, certification prep. DO NOT USE FOR: choosing the offer type (use marketplace-offer-types), fulfillment API implementation (use fulfillment-and-metering).",
+      "path": ".github/skills/community/marketplace-onboarding",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/marketplace-onboarding",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "multi-tenant-saas",
+      "tier": "community",
+      "description": "Primary orchestration skill for building a multi-tenant Azure SaaS platform, integrating ISV landing zone guidance, SaaS Accelerator patterns, and marketplace publication workflows. USE FOR: starting a new multi-tenant SaaS build, routing work across landing-zone/tenancy/accelerator/marketplace skills. DO NOT USE FOR: single-tenant Azure deployments (use git-ape directly), post-launch operations only (use scale-and-sre).",
+      "path": ".github/skills/community/multi-tenant-saas",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/multi-tenant-saas",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "onboard-to-marketplace",
+      "tier": "community",
+      "description": "End-to-end onboarding flow for Azure Marketplace SaaS publication, from Partner Center readiness to final go-live checks. USE FOR: execution-focused walk-through of the full onboarding flow for a SaaS offer specifically. DO NOT USE FOR: comparing offer types (use marketplace-offer-types), general multi-offer-type onboarding (use marketplace-onboarding).",
+      "path": ".github/skills/community/onboard-to-marketplace",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/onboard-to-marketplace",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
       "name": "prereq-check",
       "tier": "first-party",
       "description": "Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose.",
@@ -196,6 +287,71 @@
       "version": "0.1.0",
       "maturity": "stable",
       "source": null
+    },
+    {
+      "name": "saas-accelerator-bootstrap",
+      "tier": "community",
+      "description": "Bootstraps and customizes the Azure Commercial Marketplace SaaS Accelerator as a starting point for transactable SaaS offers. USE FOR: standing up fulfillment/billing scaffolding quickly using the official accelerator, deciding what to customize vs. keep as-is. DO NOT USE FOR: building fulfillment APIs from scratch (use fulfillment-and-metering), tenancy model decisions (use tenant-isolation-models).",
+      "path": ".github/skills/community/saas-accelerator-bootstrap",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/saas-accelerator-bootstrap",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "scale-and-sre",
+      "tier": "community",
+      "description": "Implements production scale, reliability, and observability patterns for multi-tenant SaaS platforms. USE FOR: SLO/alerting design, capacity/tenant-placement planning, DR, tenant-aware telemetry and cost attribution. DO NOT USE FOR: initial tenancy model selection (use tenant-isolation-models), lifecycle automation (use tenant-lifecycle-automation).",
+      "path": ".github/skills/community/scale-and-sre",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/scale-and-sre",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "security-and-compliance",
+      "tier": "community",
+      "description": "Defines security architecture and compliance controls for multi-tenant SaaS, including identity, secrets, data protection, and auditability. USE FOR: cross-tenant isolation threat modeling, compliance control mapping, secret/key lifecycle design. DO NOT USE FOR: tenancy model selection itself (use tenant-isolation-models), landing zone governance baseline (use isv-landing-zone-foundation).",
+      "path": ".github/skills/community/security-and-compliance",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/security-and-compliance",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "tenant-isolation-models",
+      "tier": "community",
+      "description": "Designs and validates tenancy models (shared, pooled, siloed, hybrid) with security, cost, and scale trade-offs. USE FOR: choosing an isolation model per architecture layer (compute/data/identity/messaging/networking), compliance-driven isolation decisions. DO NOT USE FOR: landing zone setup (use isv-landing-zone-foundation), lifecycle automation (use tenant-lifecycle-automation).",
+      "path": ".github/skills/community/tenant-isolation-models",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/tenant-isolation-models",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "stable",
+      "source": "https://github.com/dawright22/azure-saas-skills"
+    },
+    {
+      "name": "tenant-lifecycle-automation",
+      "tier": "community",
+      "description": "Implements automated tenant onboarding, provisioning, upgrade, suspension, and offboarding workflows. USE FOR: designing idempotent tenant state machines, reconciliation of partial/drifted tenant state. DO NOT USE FOR: initial tenancy model selection (use tenant-isolation-models), marketplace fulfillment events specifically (use fulfillment-and-metering).",
+      "path": ".github/skills/community/tenant-lifecycle-automation",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/tenant-lifecycle-automation",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/azure-saas-skills"
     }
   ]
 }
