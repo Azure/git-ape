@@ -196,6 +196,19 @@
       "version": "0.1.0",
       "maturity": "stable",
       "source": null
+    },
+    {
+      "name": "strict-drift-detection",
+      "tier": "community",
+      "description": "Deep, baseline-based configuration drift detection that recursively diffs the FULL resolved Azure resource state (every nested property, array-aware) against a captured baseline, instead of a curated per-resource-type property list. USE FOR: compliance-grade drift audits, catching nested/unexpected property changes that azure-drift-detector's curated checks miss, pre-production configuration verification. DO NOT USE FOR: replacing azure-drift-detector's fast security-property summary — run that first; reconciliation/redeployment (use azure-resource-deployer); resource health checks (use azure-integration-tester).",
+      "path": ".github/skills/community/strict-drift-detection",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/strict-drift-detection",
+      "userInvocable": true,
+      "author": "dawright22",
+      "license": "MIT",
+      "version": "1.0.0",
+      "maturity": "experimental",
+      "source": "https://github.com/dawright22/strict-drift-detection"
     }
   ]
 }

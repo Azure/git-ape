@@ -49,6 +49,14 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 | [Azure Stack Deploy](./azure-stack-deploy) | Run an Azure Deployment Stack create (subscription scope) for a prepared Git-Ape deployment artifact and write state.json (schemaVersion 1.0). Use locally so the result matches the CI deploy workflow. | ✅ |
 | [Azure Stack Destroy](./azure-stack-destroy) | Tear down a Git-Ape deployment by ID. Reads `state.json` under `.azure/deployments/<id>/` to delete the Azure Deployment Stack and purge soft-deleted Key Vault / Cognitive Services. Refuses to run without `state.json`. Use for any local CLI or VS Code Git-Ape teardown so the result matches the CI destroy workflow. | ✅ |
 
+## Community Skills
+
+Third-party skills contributed under `.github/skills/community/`. These are **not** maintained by the Git-Ape maintainers — see each skill's Author for provenance.
+
+| Skill | Description | Author | Maturity | Invocable |
+|-------|-------------|--------|----------|:---------:|
+| [Strict Drift Detection](./community/strict-drift-detection) | Deep, baseline-based configuration drift detection that recursively diffs the FULL resolved Azure resource state (every nested property, array-aware) against a captured baseline, instead of a curated per-resource-type property list. USE FOR: compliance-grade drift audits, catching nested/unexpected property changes that azure-drift-detector's curated checks miss, pre-production configuration verification. DO NOT USE FOR: replacing azure-drift-detector's fast security-property summary — run that first; reconciliation/redeployment (use azure-resource-deployer); resource health checks (use azure-integration-tester). | dawright22 | experimental | ✅ |
+
 ## Skill Invocation in Deployment Flow
 
 ```mermaid

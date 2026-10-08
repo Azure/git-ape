@@ -34,11 +34,13 @@ The raw, machine-readable version lives at [`.github/skills/registry.json`](http
 | [Git Ape Onboarding](./git-ape-onboarding) | first-party | Microsoft | stable | Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments (azure-deploy/azure-destroy), required secrets, and scaffold Actions workflow files — plus enterprise-wide distribution via a `.github-private` repo (managed-settings.json plugin standards + custom agents). USE FOR: first-time Git-Ape setup, new subscription onboarding, multi-environment (dev/staging/prod) setup, configure OIDC, federated credentials, RBAC setup, GitHub environments, scaffold workflow files, rolling Git-Ape out org/enterprise-wide. DO NOT USE FOR: deploying resources (use git-ape), drift detection alone, secret rotation. |
 | [Prereq Check](./prereq-check) | first-party | Git-Ape | stable | Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose. |
 
-## Community Skills (0)
+## Community Skills (1)
 
 Third-party skills. **Not** maintained by the Git-Ape maintainers — check the Author column for who to contact, and review the skill's source before relying on it.
 
-_No community skills have been contributed yet. See [Contributing a Community Skill](https://github.com/Azure/git-ape/blob/main/CONTRIBUTING.md#contributing-a-community-skill) to add the first one._
+| Skill | Tier | Author | Maturity | Description |
+|-------|------|--------|----------|-------------|
+| [Strict Drift Detection](./community/strict-drift-detection) | community | dawright22 | experimental | Deep, baseline-based configuration drift detection that recursively diffs the FULL resolved Azure resource state (every nested property, array-aware) against a captured baseline, instead of a curated per-resource-type property list. USE FOR: compliance-grade drift audits, catching nested/unexpected property changes that azure-drift-detector's curated checks miss, pre-production configuration verification. DO NOT USE FOR: replacing azure-drift-detector's fast security-property summary — run that first; reconciliation/redeployment (use azure-resource-deployer); resource health checks (use azure-integration-tester). |
 
 ## Contributing to the Registry
 
