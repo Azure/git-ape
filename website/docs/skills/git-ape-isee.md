@@ -1,7 +1,7 @@
 ---
 title: "Git Ape Isee"
 sidebar_label: "Git Ape Isee"
-description: "Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; require ratified ADRP Intent; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution."
+description: "Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; bind one or more ratified ADRP Intent records; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution."
 ---
 
 <!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/skills/git-ape-isee/SKILL.md -->
@@ -9,7 +9,7 @@ description: "Adopt and govern existing Git-Ape records after ISEE is installed.
 
 # Git Ape Isee
 
-> Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; require ratified ADRP Intent; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution.
+> Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; bind one or more ratified ADRP Intent records; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution.
 
 ## Details
 
@@ -104,7 +104,7 @@ From the Git-Ape plugin checkout, run:
 
 The adoption command:
 
-- validates the existing ADRP record when `adrp` is installed;
+- validates every bound ADRP record when `adrp` is installed;
 - validates and artifact-verifies every existing AERP bundle when `aerp` is
   installed;
 - creates `isee-bindings.json` from exact existing fingerprints and artifact
@@ -124,10 +124,12 @@ ratified record explicitly:
 .github/git-ape/isee/adopt-existing.sh \
   --deployment-id <id> \
   --mode required \
-  --intent .github/ape-decisions/<ratified-record>.json
+  --intent .github/decisions/<standing-intent>/vNNN.json \
+  --intent .github/decisions/<deployment-intent>/vNNN.json
 ```
 
-Required adoption runs `adrp validate --target <intent> --require-ratified`;
+`--intent` is repeatable. Required adoption runs
+`adrp validate --target <intent> --require-ratified` for every bound Intent;
 schema-valid drafts are rejected. It also requires `aerp validate` and
 `aerp verify --artifact-root <deployment-dir>` for existing Evidence bundles.
 

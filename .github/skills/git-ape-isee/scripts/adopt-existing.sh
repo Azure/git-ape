@@ -9,7 +9,8 @@ Usage:
 
 Options:
   --mode optional|required       Governance mode (default: optional)
-  --intent PATH                 ADRP record to bind (default: deployment intent.json)
+  --intent PATH                 ADRP record to bind; repeatable
+                                (default: deployment intent.json)
   --structure PATH              ASRP record to bind; repeatable
   --execution-manifest PATH     ASRP execution manifest to bind
   --force                       Replace an existing isee-bindings.json
@@ -58,16 +59,16 @@ write_json() {
 
 DEPLOYMENT_ID=""
 MODE="optional"
-INTENT=""
 EXECUTION_MANIFEST=""
 FORCE=false
+INTENTS=()
 STRUCTURES=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --deployment-id) DEPLOYMENT_ID="${2:-}"; shift 2 ;;
     --mode) MODE="${2:-}"; shift 2 ;;
-    --intent) INTENT="${2:-}"; shift 2 ;;
+    --intent) INTENTS+=("${2:-}"); shift 2 ;;
     --structure) STRUCTURES+=("${2:-}"); shift 2 ;;
     --execution-manifest) EXECUTION_MANIFEST="${2:-}"; shift 2 ;;
     --force) FORCE=true; shift ;;
@@ -96,27 +97,46 @@ VERIFY="$ROOT/.github/git-ape/isee/verify-bindings.sh"
 [[ -f "$VERIFY" ]] || VERIFY="$ROOT/.github/skills/git-ape-isee/scripts/verify-bindings.sh"
 [[ -f "$VERIFY" ]] || die "ISEE binding verifier not found"
 
-INTENT="${INTENT:-$DEPLOY_DIR/intent.json}"
-INTENT_REL=$(repo_relative "$INTENT")
-INTENT="$ROOT/$INTENT_REL"
-[[ "$(jq -r '.schema_version // empty' "$INTENT")" == "ape-decision-record/v1" ]] ||
-  die "Intent is not an ADRP v1 record: $INTENT_REL"
+set +u
+if [[ "${#INTENTS[@]}" -eq 0 ]]; then
+  INTENTS=("$DEPLOY_DIR/intent.json")
+fi
+set -u
 
 if [[ "$MODE" == "required" ]]; then
   command -v adrp >/dev/null || die "required governance needs the ADRP CLI"
   command -v aerp >/dev/null || die "required governance needs the AERP CLI"
-  adrp validate --target "$INTENT" --require-ratified >/dev/null ||
-    die "required governance needs a valid ratified Intent record"
-elif command -v adrp >/dev/null; then
-  adrp validate --target "$INTENT" >/dev/null || die "ADRP validation failed: $INTENT_REL"
 fi
 
-INTENT_FP=$(bash "$PRODUCER" fingerprint --profile adrp "$INTENT")
-INTENT_BINDINGS=$(jq -cn \
-  --arg path "$INTENT_REL" \
-  --arg fingerprint "$INTENT_FP" \
-  --argjson requireRatified "$([[ "$MODE" == "required" ]] && echo true || echo false)" \
-  '[{path:$path,fingerprint:$fingerprint,requireRatified:$requireRatified}]')
+INTENT_BINDINGS="[]"
+SEEN_INTENTS="[]"
+set +u
+for intent in "${INTENTS[@]}"; do
+  intent_rel=$(repo_relative "$intent")
+  if jq -e --arg path "$intent_rel" 'index($path) != null' <<<"$SEEN_INTENTS" >/dev/null; then
+    die "duplicate Intent path: $intent_rel"
+  fi
+  SEEN_INTENTS=$(jq -c --arg path "$intent_rel" '. + [$path]' <<<"$SEEN_INTENTS")
+  intent="$ROOT/$intent_rel"
+  [[ "$(jq -r '.schema_version // empty' "$intent")" == "ape-decision-record/v1" ]] ||
+    die "Intent is not an ADRP v1 record: $intent_rel"
+
+  if [[ "$MODE" == "required" ]]; then
+    adrp validate --target "$intent" --require-ratified >/dev/null ||
+      die "required governance needs every bound Intent to be valid and ratified: $intent_rel"
+  elif command -v adrp >/dev/null; then
+    adrp validate --target "$intent" >/dev/null || die "ADRP validation failed: $intent_rel"
+  fi
+
+  intent_fp=$(bash "$PRODUCER" fingerprint --profile adrp "$intent")
+  INTENT_BINDINGS=$(jq -c \
+    --arg path "$intent_rel" \
+    --arg fingerprint "$intent_fp" \
+    --argjson requireRatified "$([[ "$MODE" == "required" ]] && echo true || echo false)" \
+    '. + [{path:$path,fingerprint:$fingerprint,requireRatified:$requireRatified}]' \
+    <<<"$INTENT_BINDINGS")
+done
+set -u
 
 STRUCTURE_BINDINGS="[]"
 set +u
@@ -261,14 +281,19 @@ fi
 
 REPORT="$DEPLOY_DIR/isee-adoption.json"
 REPORT_TMP="$DEPLOY_DIR/.isee-adoption.$$.json"
+INTENT_VALIDATION=$(command -v adrp >/dev/null && echo authoritative || echo native-fingerprint-only)
+INTENT_REPORTS=$(jq -c \
+  --arg validation "$INTENT_VALIDATION" \
+  'map(. + {validation:$validation})' <<<"$INTENT_BINDINGS")
+PRIMARY_INTENT=$(jq -c '.[0]' <<<"$INTENT_REPORTS")
 jq -n \
   --arg deploymentId "$DEPLOYMENT_ID" \
   --arg mode "$MODE" \
   --arg adoptedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-  --arg intent "$INTENT_REL" \
   --arg bindings ".azure/deployments/$DEPLOYMENT_ID/isee-bindings.json" \
-  --arg intentValidation "$(command -v adrp >/dev/null && echo authoritative || echo native-fingerprint-only)" \
   --arg evidenceValidation "$(command -v aerp >/dev/null && echo independent || echo not-run)" \
+  --argjson intent "$PRIMARY_INTENT" \
+  --argjson intents "$INTENT_REPORTS" \
   --argjson structures "$STRUCTURE_BINDINGS" \
   --argjson verified "$VERIFIED_BUNDLES" '
   {
@@ -276,13 +301,14 @@ jq -n \
     deploymentId:$deploymentId,
     governanceMode:$mode,
     adoptedAt:$adoptedAt,
-    intent:{path:$intent,validation:$intentValidation},
+    intent:$intent,
+    intents:$intents,
     structures:$structures,
     evidence:{validation:$evidenceValidation,verifiedBundles:$verified},
     bindings:$bindings,
     notes:[
       "Existing Git-Ape records were adopted without regeneration.",
-      "Intent authority remains governed by ADRP; adoption never ratifies a draft.",
+      "Intent authority remains governed by ADRP; adoption never ratifies drafts.",
       "Evidence is marked verified only after AERP validation and artifact verification."
     ]
   }' > "$REPORT_TMP"

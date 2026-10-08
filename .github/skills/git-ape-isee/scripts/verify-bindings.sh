@@ -61,10 +61,13 @@ jq -e --arg id "$DEPLOYMENT_ID" '
   .deploymentId == $id and
   (.governanceMode == "optional" or .governanceMode == "required") and
   (.intentRecords | type == "array") and
+  (.intentRecords | length > 0) and
   (all(.intentRecords[];
     (.path | type == "string") and
     (.fingerprint | test("^sha256:[0-9a-f]{64}$")) and
     ((.requireRatified // false) | type == "boolean"))) and
+  (.governanceMode != "required" or
+    all(.intentRecords[]; .requireRatified == true)) and
   (.structureRecords | type == "array") and
   (all(.structureRecords[];
     (.path | type == "string") and

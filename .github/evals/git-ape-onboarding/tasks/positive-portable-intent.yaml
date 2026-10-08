@@ -20,7 +20,7 @@ graders:
       prompt: |
         Grade the previous response. PASS only if it states that onboarding:
         1. Writes `.github/git-ape/onboarding-intent.json`.
-        2. Creates a draft ADRP record under `.github/ape-decisions/`.
+        2. Creates a draft ADRP record under `.github/decisions/`.
         3. Writes `.github/git-ape/onboarding-intent-status.json`.
         4. Uses the native Bash producer and does not require ISEE.
         If all criteria are met, call `set_waza_grade_pass`; otherwise call

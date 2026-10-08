@@ -10,6 +10,10 @@ description: "How Git-Ape preserves portable records and adopts optional ISEE go
 Git-Ape preserves Intent and Evidence as part of normal operation. Ape Context
 and the ISEE suite are not prerequisites for record portability.
 
+New repository-level decision records use `.github/decisions/`, shared with
+Ape Context. Existing records in older locations are not moved or rewritten;
+they remain bindable by explicit repository-relative path.
+
 :::warning
 Git-Ape remains experimental. Review all generated records and governance
 configuration before relying on them.
@@ -21,7 +25,7 @@ Git-Ape uses its existing Bash, `jq`, and SHA-256 tooling to produce:
 
 | Record | Location | Native lifecycle status |
 |---|---|---|
-| Onboarding Intent | `.github/ape-decisions/` | `draft` |
+| Onboarding Intent | `.github/decisions/` | `draft` |
 | Deployment Intent | `.azure/deployments/<id>/intent.json` | `draft` |
 | Evidence bundle | `.azure/deployments/<id>/evidence/bundles/<run>.json` | `generated` |
 | Execution trace | `.azure/deployments/<id>/traces/<run>.json` | workflow observation |
@@ -105,26 +109,28 @@ artifacts, or ratify Intent.
 
 ## Required governance
 
-Required governance needs an ADRP-ratified Intent. Ratification is an explicit
-authority action and creates a separate immutable record version:
+Required governance needs every bound Intent to be ADRP-ratified. Ratification
+is an explicit authority action and creates a separate immutable record
+version:
 
 ```bash
 adrp ratify \
   --target .azure/deployments/<id>/intent.json \
-  --output .github/ape-decisions/<ratified-record>.json \
+  --output .github/decisions/<decision>/vNNN.json \
   --confirmed-by "<identity>" \
   --authority-role "<role>" \
   --approval-meaning "<meaning>" \
   --context-fingerprint "sha256:<digest>"
 ```
 
-Adopt the ratified record:
+Adopt one or more ratified records:
 
 ```bash
 .github/git-ape/isee/adopt-existing.sh \
   --deployment-id <id> \
   --mode required \
-  --intent .github/ape-decisions/<ratified-record>.json
+  --intent .github/decisions/<standing-intent>/vNNN.json \
+  --intent .github/decisions/<deployment-intent>/vNNN.json
 ```
 
 Required governance blocks planning and deployment when profile tooling,
@@ -139,13 +145,17 @@ Bind one or more ASRP Structure records and an execution manifest:
 .github/git-ape/isee/adopt-existing.sh \
   --deployment-id <id> \
   --mode required \
-  --intent .github/ape-decisions/<ratified-record>.json \
+  --intent .github/decisions/<standing-intent>/vNNN.json \
+  --intent .github/decisions/<deployment-intent>/vNNN.json \
   --structure .github/ape-structures/<structure>.json \
   --execution-manifest .github/ape-structures/<manifest>.json
 ```
 
-The original Git-Ape artifacts remain the execution and Evidence source. ASRP
-adds governed Structure, gates, and execution bindings around them.
+`--intent` is repeatable, so standing organizational Intent and
+deployment-specific Intent can be bound together. Required governance validates
+every bound record as ratified. The original Git-Ape artifacts remain the
+execution and Evidence source. ASRP adds governed Structure, gates, and
+execution bindings around them.
 
 ## Files after adoption
 

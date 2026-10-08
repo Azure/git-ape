@@ -146,7 +146,7 @@ whether or not ISEE is installed:
 ```text
 .github/git-ape/onboarding-intent.json
 .github/git-ape/onboarding-intent-status.json
-.github/ape-decisions/ADR-GIT-APE-<PROJECT>.v1.json
+.github/decisions/ADR-GIT-APE-<PROJECT>.v1.json
 ```
 
 The decision record is an ADRP-compatible **draft**. Onboarding does not grant

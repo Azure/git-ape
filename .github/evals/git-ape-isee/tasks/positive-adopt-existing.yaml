@@ -5,7 +5,7 @@ name: Positive - Adopt existing standalone records
 description: Installing ISEE after deployment should validate and bind existing records without regeneration.
 tags: [trigger, positive]
 inputs:
-  prompt: "I deployed demo with standalone Git-Ape, then installed the ISEE suite. Adopt its existing intent and evidence into optional governance."
+  prompt: "I deployed demo with standalone Git-Ape, then installed the ISEE suite. The repository already contains the scaffolded adoption command. Adopt the existing intent and evidence by running `bash .github/git-ape/isee/adopt-existing.sh --deployment-id demo --mode optional`, then report the resulting governance state."
   files:
     - path: .azure/deployments/demo/intent.json
       content: |
@@ -22,9 +22,9 @@ inputs:
         set -euo pipefail
         test "$*" = "--deployment-id demo --mode optional"
         mkdir -p .azure/deployments/demo
-        printf '%s\n' '{"governanceMode":"optional","intentRecords":[],"artifacts":{}}' > .azure/deployments/demo/isee-bindings.json
-        printf '%s\n' '{"status":"verified","independentlyVerified":true}' > .azure/deployments/demo/evidence-status.json
-        printf '%s\n' '{"evidence":{"validation":"independent"}}' > .azure/deployments/demo/isee-adoption.json
+        printf '%s\n' '{"schemaVersion":"git-ape-isee-bindings/v1","deploymentId":"demo","governanceMode":"optional","intentRecords":[{"path":".azure/deployments/demo/intent.json","fingerprint":"sha256:fca0d1e870cf089f211557bac743e5619b38f557081abd87394b40c2e14e14a3","requireRatified":false}],"structureRecords":[],"executionManifest":null,"gates":["intent-fingerprint","approved-artifact-digests"],"evidenceRequirements":["aerp-evidence-bundle/v1"],"artifacts":{"template":{"path":".azure/deployments/demo/template.json","digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111"},"parameters":null,"additional":[]}}' > .azure/deployments/demo/isee-bindings.json
+        printf '%s\n' '{"status":"generated","independentlyVerified":false,"reason":"No Evidence bundle passed validation and artifact verification."}' > .azure/deployments/demo/evidence-status.json
+        printf '%s\n' '{"intent":{"path":".azure/deployments/demo/intent.json","validation":"authoritative"},"intents":[{"path":".azure/deployments/demo/intent.json","validation":"authoritative"}],"evidence":{"validation":"independent","verifiedBundles":[]}}' > .azure/deployments/demo/isee-adoption.json
 graders:
   - name: trigger_relevance_positive
     type: trigger

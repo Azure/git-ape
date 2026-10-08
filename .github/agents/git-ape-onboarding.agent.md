@@ -80,7 +80,7 @@ Treat this as a **non-negotiable contract** for the gated first reply: regardles
     stakeholders, constraints, compliance preferences, RBAC model, region, and
     autonomy boundaries.
 12. Run the scaffolded native producer to create a draft ADRP record under
-    `.github/ape-decisions/` plus
+    `.github/decisions/` plus
     `.github/git-ape/onboarding-intent-status.json`. This is mandatory even
     when the user has not installed ISEE.
 13. Summarize created/updated artifacts and next checks.

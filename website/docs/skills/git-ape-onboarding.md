@@ -234,15 +234,17 @@ chat context. After scaffolding:
    PROJECT_SLUG="<uppercase-project-slug>"
    bash .github/git-ape/records/git-ape-records.sh intent \
      --source .github/git-ape/onboarding-intent.json \
-     --output ".github/ape-decisions/ADR-GIT-APE-${PROJECT_SLUG}.v1.json" \
+     --output ".github/decisions/ADR-GIT-APE-${PROJECT_SLUG}.v1.json" \
      --status-output .github/git-ape/onboarding-intent-status.json
    ```
 
 3. Report the record as **draft and unratified**. Never claim that onboarding
    alone grants decision authority.
 
-This step is mandatory for Git-Ape-only onboarding. Ape Context and ADRP may
-later enrich, review, and ratify the same portable record.
+This step is mandatory for Git-Ape-only onboarding. `.github/decisions/` is the
+shared canonical decision-record location used by Git-Ape and Ape Context.
+Ape Context and ADRP may later enrich, review, and ratify the same portable
+record.
 
 ### Step 10: (Optional) Onboard the drift detector workflow
 

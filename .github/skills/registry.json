@@ -174,7 +174,7 @@
     {
       "name": "git-ape-isee",
       "tier": "first-party",
-      "description": "Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; require ratified ADRP Intent; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution.",
+      "description": "Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; bind one or more ratified ADRP Intent records; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution.",
       "path": ".github/skills/git-ape-isee",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-isee",
       "userInvocable": true,

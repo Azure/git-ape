@@ -49,6 +49,9 @@ Git-Ape implements the versioned JSON profiles directly with its existing
 Bash, `jq`, and SHA-256 command-line toolchain. It introduces no native runtime
 or package dependency. Optional ISEE profile CLIs provide governance and
 independent verification, not access to the portable formats themselves.
+Repository-level decisions are written under `.github/decisions/`, matching
+Ape Context. Existing immutable records in legacy locations remain valid and
+can be bound explicitly.
 
 ## Structured execution traces
 
@@ -105,5 +108,9 @@ Required governance needs an explicitly ratified Intent:
 .github/git-ape/isee/adopt-existing.sh \
   --deployment-id <id> \
   --mode required \
-  --intent .github/ape-decisions/<ratified-record>.json
+  --intent .github/decisions/<standing-intent>/vNNN.json \
+  --intent .github/decisions/<deployment-intent>/vNNN.json
 ```
+
+`--intent` may be repeated. Required governance validates every bound Intent
+as ratified and fingerprints each record independently.

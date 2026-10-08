@@ -24,7 +24,7 @@ bash "$ROOT/.github/skills/git-ape-onboarding/scripts/scaffold-repo.sh" "$WORK/r
 
 cd "$WORK/repository"
 git init -q
-mkdir -p .github/ape-decisions .github/git-ape .azure/deployments/demo/evidence/bundles
+mkdir -p .github/decisions .github/git-ape .azure/deployments/demo/evidence/bundles
 
 cat > .github/git-ape/onboarding-intent.json <<'JSON'
 {
@@ -51,11 +51,11 @@ JSON
 
 bash .github/git-ape/records/git-ape-records.sh intent \
   --source .github/git-ape/onboarding-intent.json \
-  --output .github/ape-decisions/ADR-GIT-APE-PLATFORM.v1.json \
+  --output .github/decisions/ADR-GIT-APE-PLATFORM.v1.json \
   --status-output .github/git-ape/onboarding-intent-status.json >/dev/null
 
 test "$(jq -r .status .github/git-ape/onboarding-intent-status.json)" = "draft"
-test "$(jq -r .ratification .github/ape-decisions/ADR-GIT-APE-PLATFORM.v1.json)" = "null"
+test "$(jq -r .ratification .github/decisions/ADR-GIT-APE-PLATFORM.v1.json)" = "null"
 
 cat > .azure/deployments/demo/requirements.json <<'JSON'
 {
@@ -263,11 +263,39 @@ if command -v adrp >/dev/null && command -v aerp >/dev/null; then
 
   bash .github/git-ape/isee/adopt-existing.sh \
     --deployment-id demo \
-    --mode optional >/dev/null
+    --mode optional \
+    --intent .github/decisions/ADR-GIT-APE-PLATFORM.v1.json \
+    --intent .azure/deployments/demo/intent.json >/dev/null
 
   test "$(jq -r .status .azure/deployments/demo/evidence-status.json)" = "verified"
   test "$(jq -r .evidence.validation .azure/deployments/demo/isee-adoption.json)" = "independent"
   test "$(jq -r .governanceMode .azure/deployments/demo/isee-bindings.json)" = "optional"
+  test "$(jq '.intentRecords | length' .azure/deployments/demo/isee-bindings.json)" = "2"
+  test "$(jq '.intents | length' .azure/deployments/demo/isee-adoption.json)" = "2"
+  test "$(jq -r '.intent.path' .azure/deployments/demo/isee-adoption.json)" = ".github/decisions/ADR-GIT-APE-PLATFORM.v1.json"
+  cp .azure/deployments/demo/isee-bindings.json .azure/deployments/demo/isee-bindings.before-duplicate.json
+  if bash .github/git-ape/isee/adopt-existing.sh \
+    --deployment-id demo \
+    --mode optional \
+    --force \
+    --intent .azure/deployments/demo/intent.json \
+    --intent .azure/deployments/demo/intent.json >/dev/null 2>&1; then
+    echo "ISEE adoption unexpectedly accepted a duplicate Intent path." >&2
+    exit 1
+  fi
+  cmp .azure/deployments/demo/isee-bindings.before-duplicate.json \
+    .azure/deployments/demo/isee-bindings.json
+  rm .azure/deployments/demo/isee-bindings.before-duplicate.json
+
+  cp .azure/deployments/demo/isee-bindings.json .azure/deployments/demo/isee-bindings.valid.json
+  jq '.governanceMode = "required"' \
+    .azure/deployments/demo/isee-bindings.valid.json \
+    > .azure/deployments/demo/isee-bindings.json
+  if bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null 2>&1; then
+    echo "ISEE preflight unexpectedly accepted required governance without ratified Intent requirements." >&2
+    exit 1
+  fi
+  mv .azure/deployments/demo/isee-bindings.valid.json .azure/deployments/demo/isee-bindings.json
   bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null
 elif [[ "$REQUIRE_ISEE" == "true" ]]; then
   echo "ADRP and AERP CLIs are required for this test run." >&2
