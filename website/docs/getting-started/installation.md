@@ -99,6 +99,74 @@ In Copilot Chat, type:
 
 You should see the Git-Ape orchestrator respond. If it does not, reload the VS Code window (`Cmd+Shift+P` → **Developer: Reload Window**).
 
+## Discover and install additional skills
+
+After installing Git-Ape through VS Code or Copilot CLI, you have its core
+agents, core skills, and `/git-ape-skills`. The unified registry includes
+community discovery metadata, but listing a community skill does not install
+or activate it. The VSIX excludes community source entirely; Git-based plugin
+installation may download the repository containing that source outside the
+core skill-loader path.
+
+### Search the registry
+
+```text
+/git-ape-skills search AWS
+```
+
+You can also ask `@git-ape find a skill for AWS Lambda`. Results show matching
+skills, descriptions, authors, sources, and documentation. Community results
+are optional and are not available merely because they appear in the registry.
+Search runs locally and makes no workspace changes.
+
+There are currently no submitted community skills. An AWS search will return
+no community match until one is contributed through an Azure/git-ape PR.
+
+### Review and approve a selected skill
+
+```text
+/git-ape-skills install <skill-name>
+```
+
+Installation requires Node.js and an authenticated GitHub CLI (`gh`). Git-Ape
+identifies your destination workspace, resolves a pinned Azure/git-ape commit,
+and shows the selected skill and supporting files. Approve the skill, commit,
+and destination before any files are written.
+
+Community content comes from Azure/git-ape, not the author's external source
+URL. PR review provides oversight and provenance, not a guarantee of safety.
+
+### Install into the workspace
+
+The complete selected directory is copied into your repository:
+
+```text
+your-repository\
+  .github\
+    skills\
+      <skill-name>\
+        SKILL.md
+        scripts\
+        references\
+        .git-ape-provenance.json
+```
+
+Supporting scripts and references are copied when present. The installer
+refuses overwrites, records the pinned source revision, and does not execute
+scripts or install dependencies. You can review and commit these workspace
+changes for your team.
+
+### Use the installed skill
+
+Reload your client or start a new session if needed, then invoke
+`/<skill-name>` once the client discovers it. Git-Ape routes to a community
+skill only when it is available in the current session.
+
+Installation is workspace-scoped, not global. Other repositories do not
+automatically receive the skill. Client discovery requires support for
+workspace `.github/skills/` directories; live client activation has not been
+verified as part of this implementation.
+
 ## What's next?
 
 You have Git-Ape installed. Here is the recommended path depending on what you want to do:

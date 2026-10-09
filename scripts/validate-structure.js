@@ -25,11 +25,11 @@ const matter = require(path.join(WEBSITE_DIR, 'node_modules', 'gray-matter'));
 const ROOT = path.resolve(__dirname, '..');
 const AGENTS_DIR = path.join(ROOT, '.github', 'agents');
 const SKILLS_DIR = path.join(ROOT, '.github', 'skills');
+const COMMUNITY_SKILLS_DIR = path.join(ROOT, '.github', 'community-skills');
 
 const KEBAB_CASE_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
-// Third-party/community skills live in this fixed subdirectory of SKILLS_DIR.
-// It is a container, not a skill itself, and is excluded from first-party checks.
+// The legacy nested directory must not be used for community source.
 const COMMUNITY_DIR_NAME = 'community';
 
 let errors = [];
@@ -55,7 +55,7 @@ function ok(msg) {
 
 // Returns one entry per skill directory across both tiers:
 //   - first-party: direct children of .github/skills/
-//   - community:   children of .github/skills/community/ (third-party contributions)
+//   - community:   children of .github/community-skills/ (opt-in contributions)
 // `relDir` is the path relative to SKILLS_DIR (e.g. 'azure-cost-estimator' or
 // 'community/foo'); `leaf` is the directory's own name, which must match the
 // skill's frontmatter `name` regardless of tier.
@@ -72,7 +72,7 @@ function getSkillEntries() {
     entries.push({ relDir: dir, leaf: dir, tier: 'first-party' });
   }
 
-  const communityRoot = path.join(SKILLS_DIR, COMMUNITY_DIR_NAME);
+  const communityRoot = COMMUNITY_SKILLS_DIR;
   if (fs.existsSync(communityRoot)) {
     const communityDirs = fs.readdirSync(communityRoot).filter((d) =>
       fs.statSync(path.join(communityRoot, d)).isDirectory()
@@ -86,7 +86,9 @@ function getSkillEntries() {
 }
 
 function skillMdPathFor(entry) {
-  return path.join(SKILLS_DIR, entry.relDir, 'SKILL.md');
+  return entry.tier === 'community'
+    ? path.join(COMMUNITY_SKILLS_DIR, entry.leaf, 'SKILL.md')
+    : path.join(SKILLS_DIR, entry.relDir, 'SKILL.md');
 }
 
 function getAgentFiles() {
@@ -184,6 +186,30 @@ function checkSkillFrontmatter(skillEntries) {
   }
   if (errors.length === 0) {
     ok('All skills have valid frontmatter with name and description');
+  }
+}
+
+function checkCommunityFiles(skillEntries) {
+  function checkDirectory(directory) {
+    for (const file of fs.readdirSync(directory)) {
+      const filename = path.join(directory, file);
+      const stat = fs.lstatSync(filename);
+      if (stat.isSymbolicLink()) {
+        error(`Community source cannot contain symlinks: ${path.relative(ROOT, filename)}`);
+      } else if (stat.isDirectory()) {
+        checkDirectory(filename);
+      } else if (!stat.isFile()) {
+        error(`Unsupported community source file: ${path.relative(ROOT, filename)}`);
+      }
+    }
+  }
+  for (const entry of skillEntries.filter((skill) => skill.tier === 'community')) {
+    const directory = path.join(COMMUNITY_SKILLS_DIR, entry.leaf);
+    if (fs.lstatSync(directory).isSymbolicLink()) {
+      error(`Community source cannot be a symlink: ${entry.leaf}`);
+    } else {
+      checkDirectory(directory);
+    }
   }
 }
 
@@ -330,6 +356,14 @@ function checkRelativeLinks(skillEntries, agentFiles) {
     for (const link of links) {
       linkCount++;
       const resolved = path.resolve(path.dirname(skillMd), link);
+      if (entry.tier === 'community') {
+        const relative = path.relative(path.dirname(skillMd), resolved);
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+          error(`${entry.relDir}/SKILL.md: Community supporting-file links must stay inside the skill directory: '${link}'`);
+          brokenCount++;
+          continue;
+        }
+      }
       if (!fs.existsSync(resolved)) {
         error(`${entry.relDir}/SKILL.md: Broken relative link '${link}'`);
         brokenCount++;
@@ -367,6 +401,14 @@ function main() {
   console.log(`   Agents: ${AGENTS_DIR}`);
 
   const skillEntries = getSkillEntries();
+  const names = new Set();
+  for (const entry of skillEntries) {
+    if (names.has(entry.leaf)) error(`Duplicate core/community skill name '${entry.leaf}'`);
+    names.add(entry.leaf);
+  }
+  if (fs.existsSync(path.join(SKILLS_DIR, 'community'))) {
+    error('Community source must live in .github/community-skills/, outside the core loader path');
+  }
   const agentFiles = getAgentFiles();
 
   const communityCount = skillEntries.filter((e) => e.tier === 'community').length;
@@ -376,6 +418,7 @@ function main() {
   checkKebabCase(skillEntries.map((e) => e.leaf), 'skill');
   checkSkillPresence(skillEntries);
   checkSkillFrontmatter(skillEntries);
+  checkCommunityFiles(skillEntries);
   checkAgentFrontmatter(agentFiles);
   checkSkillSections(skillEntries);
   checkAgentSections(agentFiles);

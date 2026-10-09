@@ -64,6 +64,9 @@
     ],
     "chatSkills": [
       {
+        "path": "./.github/skills/git-ape-skills/SKILL.md"
+      },
+      {
         "path": "./.github/skills/azure-cost-estimator/SKILL.md"
       },
       {
