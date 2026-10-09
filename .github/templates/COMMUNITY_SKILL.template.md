@@ -2,12 +2,12 @@
 
 ---
 title: "Community skill scaffold template"
-description: "Copy this file to .github/skills/community/<slug>/SKILL.md and replace every <!-- TODO --> marker."
+description: "Copy this file to .github/community-skills/<slug>/SKILL.md and replace every <!-- TODO --> marker."
 ---
 
 <!--
   HOW TO USE THIS TEMPLATE
-  1. Copy this file to `.github/skills/community/<your-slug>/SKILL.md`
+  1. Copy this file to `.github/community-skills/<your-slug>/SKILL.md`
      (rename, drop `.template`). Directory name must be kebab-case and
      must match the `name:` field below exactly.
   2. Remove this comment block and the `title:`/`description:` frontmatter

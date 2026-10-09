@@ -146,7 +146,7 @@ What the user (or agent) should invoke after a successful run. Use a clickable c
 ## Community skills
 
 Third parties can contribute skills without maintainer sign-off by placing
-them under `.github/skills/community/<name>/SKILL.md` instead of
+them under `.github/community-skills/<name>/SKILL.md` instead of
 `.github/skills/<name>/SKILL.md`. They follow the identical file layout and
 frontmatter rules above, plus a required `metadata.author`. See
 [Contributing a Community Skill](https://github.com/Azure/git-ape/blob/main/CONTRIBUTING.md#contributing-a-community-skill)
@@ -158,6 +158,12 @@ the generated [Skill Registry](/docs/skills/registry)
 (`.github/skills/registry.json`), which lists name, tier, author, and
 maturity for discovery by users and tooling. No manual registration step
 beyond adding a valid `SKILL.md` is required.
+
+Community source is not bundled with core or the VSIX. The unified registry
+contains discovery metadata only; users explicitly install a selected skill
+with `/git-ape-skills install <name>`. Installation copies supporting files from
+a pinned Azure/git-ape commit into the user's workspace and never follows the
+author's external source URL. PR review does not guarantee safety.
 
 ## Anatomy of a good skill
 

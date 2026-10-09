@@ -28,7 +28,7 @@ description: "GitHub Actions workflow: PR Validation"
 |----------|-------|
 | **Display Name** | Structural Validation |
 | **Runs On** | `ubuntu-latest` |
-| **Steps** | 4 |
+| **Steps** | 5 |
 
 ### `markdownlint`
 
@@ -61,10 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -77,15 +77,18 @@ jobs:
       - name: Run structural validation
         run: node scripts/validate-structure.js
 
+      - name: Test skill discovery and opt-in installation
+        run: node --test scripts/tests/skill-discovery.test.js
+
   markdownlint:
     name: "Markdown Lint"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
 

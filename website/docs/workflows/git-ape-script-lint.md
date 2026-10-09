@@ -13,7 +13,7 @@ description: "GitHub Actions workflow: Git-Ape: Script Lint"
 
 ## Triggers
 
-- **`pull_request`** — paths: `.github/skills/**/*.sh, .github/skills/**/*.ps1, .github/linters/PSScriptAnalyzerSettings.psd1...`
+- **`pull_request`** — paths: `.github/skills/**/*.sh, .github/skills/**/*.ps1, .github/community-skills/**/*.sh...`
 - **`workflow_dispatch`**
 
 
@@ -71,6 +71,8 @@ on:
     paths:
       - '.github/skills/**/*.sh'
       - '.github/skills/**/*.ps1'
+      - '.github/community-skills/**/*.sh'
+      - '.github/community-skills/**/*.ps1'
       - '.github/linters/PSScriptAnalyzerSettings.psd1'
       - '.github/workflows/git-ape-script-lint.yml'
   workflow_dispatch:
@@ -83,7 +85,7 @@ jobs:
     name: Shell scripts (shellcheck + bash -n)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Ensure shellcheck is available
         run: |
@@ -97,7 +99,7 @@ jobs:
       - name: Lint and parse-check shell scripts
         run: |
           set -euo pipefail
-          mapfile -t FILES < <(find .github/skills -type f -name '*.sh' | sort)
+          mapfile -t FILES < <(find .github/skills .github/community-skills -type f -name '*.sh' | sort)
           if [ "${#FILES[@]}" -eq 0 ]; then
             echo "No skill shell scripts found."
             exit 0
@@ -134,7 +136,7 @@ jobs:
     name: PowerShell scripts (PSScriptAnalyzer + parser)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
@@ -151,7 +153,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem -Recurse -Path .github/skills -Filter *.ps1 | Sort-Object FullName
+          $files = Get-ChildItem -Recurse -Path .github/skills, .github/community-skills -Filter *.ps1 | Sort-Object FullName
           if (-not $files) {
             Write-Host 'No skill PowerShell scripts found.'
             exit 0

@@ -13,7 +13,7 @@ description: "GitHub Actions workflow: Git-Ape: Docs Deploy"
 
 ## Triggers
 
-- **`push`** — branches: `["main"]` — paths: `.github/agents/**, .github/skills/**, .github/workflows/**...`
+- **`push`** — branches: `["main"]` — paths: `.github/agents/**, .github/skills/**, .github/community-skills/**...`
 
 
 ## Permissions
@@ -30,7 +30,7 @@ description: "GitHub Actions workflow: Git-Ape: Docs Deploy"
 |----------|-------|
 | **Display Name** | build |
 | **Runs On** | `ubuntu-latest` |
-| **Steps** | 6 |
+| **Steps** | 7 |
 
 ### `deploy`
 
@@ -58,6 +58,7 @@ on:
     paths:
       - '.github/agents/**'
       - '.github/skills/**'
+      - '.github/community-skills/**'
       - '.github/workflows/**'
       - '.github/plugin/**'
       - 'docs/**'
@@ -79,10 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -99,10 +100,14 @@ jobs:
         working-directory: website
         run: npm run build
 
+      - name: Copy hidden static dirs (Docusaurus skips dotfiles)
+        run: cp -r website/static/.well-known website/build/.well-known
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: website/build
+          include-hidden-files: true
 
   deploy:
     environment:
@@ -113,7 +118,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
 ```
 
