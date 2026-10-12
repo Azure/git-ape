@@ -69,21 +69,21 @@ for model in ${models[@]}; do
   echo "▶ Eval: ${model}"
   waza run ".github/evals/${skill}/eval.yaml" \
     --model "${model}" \
-    --judge-model "claude-opus-4.7" \
+    --judge-model "claude-opus-5.5" \
     --no-cache \
     --output "/tmp/waza-promote/${skill}-${model}.json" \
     2>&1 | tail -3
 done
 ```
 
-`--judge-model claude-opus-4.7` pins the LLM-as-judge to a model that
+`--judge-model claude-opus-5.5` pins the LLM-as-judge to a model that
 is NOT in any runner roster (pilot or expanded). Two reasons:
 
 1. **No self-grading bias.** When the same model is both runner and
    judge, that leg's prompt-grader verdicts conflate model capability
    with judge agreement. Pinning the judge outside the roster gives
    every leg an independent grader.
-2. **Judge capability ≥ every runner.** `claude-opus-4.7` is chosen as
+2. **Judge capability ≥ every runner.** `claude-opus-5.5` is chosen as
    a higher-capability judge than the current pilot/expanded runner mix
    (sonnet-5, gpt-5.4, gpt-5.3-codex, opus-4.8) to reduce ceiling
    effects when scoring the strongest runner outputs.

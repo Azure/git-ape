@@ -566,15 +566,15 @@ jobs:
           # instead of polluting the score table.
           #
           # --judge-model is decoupled from the executor model and pinned
-          # to claude-opus-4.7 for TWO reasons:
-          #   1. No self-grading bias — opus-4.7 is NOT in any runner
+          # to claude-opus-5.5 for TWO reasons:
+          #   1. No self-grading bias — opus-5.5 is NOT in any runner
           #      roster (this workflow currently fixes the runner to
           #      sonnet-5, but the rule holds: judge is always outside
           #      whatever set of models we ever fan runners across).
-          #   2. Judge capability ≥ runner — opus-4.7 is chosen as a
+          #   2. Judge capability ≥ runner — opus-5.5 is chosen as a
           #      higher-capability judge than sonnet-5 so quality scores
           #      have headroom and aren't capped by a same-tier judge.
-          # If we ever add per-agent model overrides AND opus-4.7 lands in
+          # If we ever add per-agent model overrides AND opus-5.5 lands in
           # a runner roster, re-pin the judge to a model still outside it.
           max_attempts=3
           attempt=0
@@ -585,7 +585,7 @@ jobs:
             rc=0
             waza run "${spec}" \
               --model "claude-sonnet-5" \
-              --judge-model "claude-opus-4.7" \
+              --judge-model "claude-opus-5.5" \
               --suggest \
               --recommend \
               --format "github-comment" \

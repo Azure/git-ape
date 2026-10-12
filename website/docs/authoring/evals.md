@@ -136,7 +136,7 @@ The eval-directory copy of `*.agent.md` must be kept in sync with the production
 |--------|--------|-----------------|
 | `trigger` (implicit via `metrics.trigger_precision`) | Did the agent route to the right skill on positives, and stay quiet on negatives? | Always |
 | `behavior` | Tool-call budget, duration, or step-order assertions | Always (at minimum a `budget` config) |
-| `prompt` (LLM-as-judge) | Did the reply text meet a documented quality bar? Scored by `claude-sonnet-5`. | Always for positive tasks |
+| `prompt` (LLM-as-judge) | Did the reply text meet a documented quality bar? Scored by the executor model locally; CI pins `--judge-model claude-opus-5.5` (outside every runner tier). | Always for positive tasks |
 | `skill_invocation` | Did the agent invoke the specific tool calls the skill expects? | Skills that wrap MCP tools or specific CLIs |
 | `tool_constraint` | Did the agent stay within the declared tool allowlist? | Agent evals (waza auto-injects this from `.agent.md` `tools:` unless suppressed) |
 
