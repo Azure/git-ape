@@ -16,6 +16,19 @@ graders:
       mode: positive
       threshold: 0.5
 
+  # Deterministic grounding check: fails unless the agent actually queried
+  # the live Azure Retail Prices API (SKILL.md prescribes `curl` in the
+  # terminal). answer_quality only grades wording, so this catches prices
+  # recalled from memory. Scoped to positives only — on negatives it would
+  # be a deterministic 0.0 (same failure mode as eval-level
+  # `skill_invocation`, removed in commit 2f699c79).
+  - type: tool_constraint
+    name: grounded_via_retail_prices_api
+    config:
+      expect_tools:
+        - tool: "^bash$"
+          command_pattern: 'prices\.azure\.com'
+
   # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
   # judge call only zeroes out this task, not the whole leg.
   # IMPORTANT: `continue_session: true` is mandatory — without it the judge

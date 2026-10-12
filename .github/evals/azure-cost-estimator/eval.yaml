@@ -2,7 +2,9 @@
 
 # Expanded-tier evaluation suite for the azure-cost-estimator skill.
 # Validates trigger precision via the heuristic `trigger` grader plus
-# per-positive-task answer_quality LLM judge.
+# per-positive-task answer_quality LLM judge and a deterministic
+# `tool_constraint` grounding check (agent must actually call
+# prices.azure.com, not recall prices from memory).
 #
 # Run: waza run .github/evals/azure-cost-estimator/eval.yaml
 
@@ -35,9 +37,11 @@ graders:
       max_tool_calls: 30
       max_duration_ms: 240000
 
-  # answer_quality (LLM-as-judge) is scoped per-task on positive tasks
-  # only (see tasks/positive-*.yaml). Keeps judge-model errors from
-  # zeroing out the negative-task trigger check in the same leg.
+  # answer_quality (LLM-as-judge) and the `grounded_via_retail_prices_api`
+  # tool_constraint are scoped per-task on positive tasks only (see
+  # tasks/positive-*.yaml). Keeps judge-model errors from zeroing out the
+  # negative-task trigger check, and avoids deterministic 0.0 on negatives
+  # (which never call the Retail Prices API).
   #
   # Do NOT add `skill_invocation` with `required_skills:` here — eval-level
   # prompt graders fire on EVERY task (including negatives) and produce

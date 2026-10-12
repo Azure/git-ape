@@ -5,7 +5,11 @@ name: Negative — Historical billing / Cost Management invoice query
 description: Querying actual billed usage from Azure Cost Management belongs to a billing/cost-analysis workflow, not the retail-prices-based estimator.
 tags: [trigger, negative, mutable-by-skill]
 inputs:
-  prompt: "Pull my actual Azure spend for last month broken down by resource group from Cost Management — I need the real invoiced numbers, not an estimate."
+  # The heuristic `trigger` grader scores the fraction of prompt tokens found
+  # anywhere in SKILL.md, so avoid estimator vocabulary (estimate, actual,
+  # real, month) or this scores >= 0.5 deterministically on every model.
+  # Keeps the adjacent-domain signal (Azure + Cost Management + resource group).
+  prompt: "Export our invoiced Azure spend for the last billing period from Cost Management, broken down by resource group. I need the charges exactly as billed on the invoice — no forecasts or projections."
 graders:
   - name: trigger_relevance_negative
     type: trigger

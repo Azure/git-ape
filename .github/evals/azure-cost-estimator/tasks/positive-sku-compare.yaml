@@ -15,6 +15,14 @@ graders:
       mode: positive
       threshold: 0.5
 
+  # See positive-arm-template-estimate.yaml for the grounding-check rationale.
+  - type: tool_constraint
+    name: grounded_via_retail_prices_api
+    config:
+      expect_tools:
+        - tool: "^bash$"
+          command_pattern: 'prices\.azure\.com'
+
   - type: prompt
     name: answer_quality
     config:
