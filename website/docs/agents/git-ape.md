@@ -17,7 +17,7 @@ description: "Deploy Azure resources through guided workflow: gather requirement
 |----------|-------|
 | **File** | `.github/agents/git-ape.agent.md` |
 | **User Invocable** | ✅ Yes |
-| **Model** | Claude Opus 4.6 (copilot) |
+| **Model** | Claude Opus 4.8 (copilot) |
 | **Argument Hint** | Describe what Azure resources to deploy |
 
 ## Tools
