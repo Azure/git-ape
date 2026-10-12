@@ -11,6 +11,37 @@ TRACE_SCHEMA="git-ape-execution-trace/v1"
 TRACE_VALIDATION_SCHEMA="git-ape-trace-validation/v1"
 TOOL_VERSION="1"
 
+# Structural checks for git-ape-execution-graph/v1 shared by trace and
+# trace-validate. Every edge must declare requiredEvidence so receipt
+# validation can never be silently disabled by an omitted field.
+GRAPH_VALIDATION_JQ='
+  def nonempty_string: type == "string" and length > 0;
+  def valid_graph($schema):
+    . as $g |
+    ($g | type == "object") and
+    ($g.schemaVersion == $schema) and
+    ($g.graphId | nonempty_string) and
+    ($g.entryNode | nonempty_string) and
+    ($g.successTerminal | nonempty_string) and
+    ($g.ordered | type == "boolean") and
+    ($g.nodes | type == "array" and length > 0) and
+    ($g.edges | type == "array") and
+    all($g.nodes[]; type == "object" and (.id | nonempty_string) and (.requiredForSuccess | type == "boolean")) and
+    (($g.nodes | map(.id)) as $nodeIds |
+      ($nodeIds | length == (unique | length)) and
+      ($nodeIds | index($g.entryNode) != null) and
+      ($nodeIds | index($g.successTerminal) != null) and
+      all($g.edges[]; . as $edge |
+        ($edge | type == "object") and
+        ($edge.from | nonempty_string) and
+        ($edge.to | nonempty_string) and
+        ($nodeIds | index($edge.from) != null) and
+        ($nodeIds | index($edge.to) != null) and
+        ($edge.requiredEvidence | type == "array") and
+        all($edge.requiredEvidence[]; nonempty_string) and
+        ($edge.requiredEvidence | length == (unique | length))));
+'
+
 die() {
   echo "error: $*" >&2
   exit 2
@@ -112,13 +143,21 @@ infer_result() {
   name=$(basename "$path")
   [[ "$name" != "error.log" ]] || { echo "failed"; return; }
   if [[ "$path" == *.json ]] && jq empty "$path" >/dev/null 2>&1; then
-    local normalized
-    normalized=$(jq -r '[.result?, .status?, .overallStatus?, .overall_status?] | map(select(. != null) | tostring | ascii_downcase) | join(" ")' "$path")
-    if [[ "$normalized" =~ fail|block|error|unhealthy ]]; then
+    local classification
+    # Classify on whole status tokens only: substrings such as "incomplete"
+    # must never be read as success.
+    classification=$(jq -r '
+      [.result?, .status?, .overallStatus?, .overall_status?]
+      | map(select(. != null) | tostring | ascii_downcase | gsub("^\\s+|\\s+$"; ""))
+      | if any(.[]; IN("fail", "failed", "failure", "block", "blocked", "error", "errored", "unhealthy")) then "failed"
+        elif length > 0 and all(.[]; IN("pass", "passed", "success", "succeed", "succeeded", "healthy", "complete", "completed")) then "succeeded"
+        else "observed" end
+    ' "$path")
+    if [[ "$classification" == "failed" ]]; then
       echo "failed"
       return
     fi
-    if [[ "$normalized" =~ pass|succeed|healthy|complete ]]; then
+    if [[ "$classification" == "succeeded" ]]; then
       [[ "$evidence_type" == "assessment" ]] && echo "passed" || echo "succeeded"
       return
     fi
@@ -211,9 +250,8 @@ command_intent() {
          .value as $a | (text(($a.id // $a.alternative_id); ("alternative-" + ((.key + 1) | tostring)))) as $id |
          {id:$id,title:text($a.title;$id),description:text($a.description;""),benefits:($a.benefits|strings),drawbacks:($a.drawbacks|strings),
           rejection_reason:(if ($a.rejection_reason|type) == "string" then $a.rejection_reason else null end)}]
-     else [{id:"git-ape-managed-execution",title:"Git-Ape managed execution",description:$statement,
-            benefits:["Preserves reviewable deployment artifacts and explicit execution gates"],
-            drawbacks:["Alternatives and trade-offs still require author review"],rejection_reason:null}] end) as $alternatives |
+     else [{id:"requested-outcome",title:"Requested outcome as captured (no alternatives supplied)",description:$statement,
+            benefits:[],drawbacks:[],rejection_reason:null}] end) as $alternatives |
     (text($i.selected_alternative; $alternatives[0].id)) as $requestedSelected |
     (if any($alternatives[]; .id == $requestedSelected) then $requestedSelected else $alternatives[0].id end) as $selected |
     (text(($s.user // $i.decision_owner); "unknown")) as $owner |
@@ -293,7 +331,8 @@ command_intent() {
     --arg source "$source" \
     --arg sourceDigest "$source_digest" \
     --argjson notes "$inferred" \
-    '{schemaVersion:"git-ape-record-status/v1",recordType:"intent",status:"draft",profile:$profile,
+    --arg statusSchema "$STATUS_SCHEMA" \
+    '{schemaVersion:$statusSchema,recordType:"intent",status:"draft",profile:$profile,
       record:$record,fingerprint:$fingerprint,source:$source,sourceDigest:$sourceDigest,
       authoritative:false,independentlyVerified:false,notes:$notes}' > "$status_tmp"
   write_json "$status_tmp" "$status_output"
@@ -352,24 +391,8 @@ command_trace() {
   [[ -f "$graph" ]] || die "file not found: $graph"
   [[ -f "$events" ]] || die "file not found: $events"
 
-  jq -e --arg schema "$TRACE_GRAPH_SCHEMA" '
-    . as $g |
-    ($g.nodes | map(.id)) as $nodeIds |
-    $g.schemaVersion == $schema and
-    ($g.graphId | type == "string" and length > 0) and
-    ($g.entryNode | type == "string" and length > 0) and
-    ($g.successTerminal | type == "string" and length > 0) and
-    ($g.nodes | type == "array" and length > 0) and
-    ($g.edges | type == "array") and
-    ($nodeIds | length == (unique | length)) and
-    ($nodeIds | index($g.entryNode) != null) and
-    ($nodeIds | index($g.successTerminal) != null) and
-    all($g.edges[]; . as $edge |
-      ($edge.from | type == "string" and length > 0) and
-      ($edge.to | type == "string" and length > 0) and
-      ($nodeIds | index($edge.from) != null) and
-      ($nodeIds | index($edge.to) != null))
-  ' "$graph" >/dev/null || die "$graph is not a valid $TRACE_GRAPH_SCHEMA graph"
+  jq -e --arg schema "$TRACE_GRAPH_SCHEMA" "$GRAPH_VALIDATION_JQ"'try valid_graph($schema) catch false' \
+    "$graph" >/dev/null 2>&1 || die "$graph is not a valid $TRACE_GRAPH_SCHEMA graph"
   jq -e '
     type == "array" and
     all(.[];
@@ -444,10 +467,48 @@ command_trace_validate() {
   [[ -f "$trace" ]] || die "file not found: $trace"
 
   local expected_graph_digest actual_graph_digest report_tmp status
+  local structural_error=""
   expected_graph_digest=$(sha256_file "$graph")
-  actual_graph_digest=$(jq -r '.graph.digest // empty' "$trace")
+  actual_graph_digest=$(jq -r '.graph.digest // empty' "$trace" 2>/dev/null || true)
   report_tmp="$(dirname "$output")/.trace-validation.$$.json"
   mkdir -p "$(dirname "$output")"
+
+  if ! jq -e --arg schema "$TRACE_GRAPH_SCHEMA" "$GRAPH_VALIDATION_JQ"'try valid_graph($schema) catch false' \
+       "$graph" >/dev/null 2>&1; then
+    structural_error='{"code":"INVALID_GRAPH","message":"Graph does not conform to git-ape-execution-graph/v1; every edge must declare requiredEvidence."}'
+  elif ! jq -e '
+       type == "object" and
+       (.events | type == "array") and
+       all(.events[]; type == "object" and (.id | type == "string" and length > 0) and
+         ((.type == "node" and (.node | type == "string") and (.status == "completed" or .status == "failed")) or
+          (.type == "transition" and (.from | type == "string") and (.to | type == "string"))))
+     ' "$trace" >/dev/null 2>&1; then
+    structural_error='{"code":"INVALID_TRACE_EVENTS","message":"Trace must be an object whose events are well-formed node or transition events."}'
+  fi
+
+  if [[ -n "$structural_error" ]]; then
+    jq -n \
+      --arg schema "$TRACE_VALIDATION_SCHEMA" \
+      --arg graphPath "$graph" \
+      --arg tracePath "$trace" \
+      --arg expectedGraphDigest "$expected_graph_digest" \
+      --arg validatedAt "$(utc_now)" \
+      --argjson error "$structural_error" '
+      {
+        schemaVersion:$schema,
+        status:"failed",
+        graph:{path:$graphPath,digest:$expectedGraphDigest},
+        trace:{path:$tracePath,id:null,invocationId:null,outcome:null},
+        validatedAt:$validatedAt,
+        summary:{errors:1,nodesObserved:0,transitionsObserved:0},
+        errors:[$error]
+      }
+    ' > "$report_tmp"
+    write_json "$report_tmp" "$output" true
+    rm -f "$report_tmp"
+    jq -cS . "$output"
+    return 1
+  fi
 
   jq -n \
     --arg schema "$TRACE_VALIDATION_SCHEMA" \
@@ -469,6 +530,9 @@ command_trace_validate() {
     ([
       if $t.schemaVersion != "git-ape-execution-trace/v1" then
         {code:"INVALID_TRACE_SCHEMA",message:"Trace schemaVersion is not git-ape-execution-trace/v1."}
+      else empty end,
+      if (($t.outcome == "succeeded") or ($t.outcome == "failed")) | not then
+        {code:"INVALID_TRACE_OUTCOME",message:"Trace outcome must be succeeded or failed."}
       else empty end,
       if $actualGraphDigest != $expectedGraphDigest then
         {code:"GRAPH_DIGEST_MISMATCH",message:"Trace is not bound to the supplied graph bytes."}
@@ -515,7 +579,7 @@ command_trace_validate() {
              (($events | length) == 0 or $events[-1].type != "node" or $events[-1].node != $g.successTerminal) then
           {code:"INVALID_SUCCESS_TERMINAL",message:("Successful ordered trace must end at " + $g.successTerminal + ".")}
         else empty end
-      elif ($g.ordered // false) and
+      elif $t.outcome == "failed" and ($g.ordered // false) and
            (($events | length) == 0 or $events[-1].type != "node" or $events[-1].status != "failed") then
         {code:"MISSING_FAILED_TERMINAL",message:"Failed ordered trace must end with the failed node event."}
       else empty end
@@ -579,6 +643,13 @@ command_evidence() {
     die "evidence requires --deployment-dir, --output, --status-output, --identity, and --target"
   [[ -d "$deployment_dir" ]] || die "deployment directory not found: $deployment_dir"
   [[ ! -e "$output" ]] || die "refusing to overwrite immutable record: $output"
+  local prerequisite
+  for prerequisite in state.json tests.json; do
+    [[ -f "$deployment_dir/$prerequisite" ]] ||
+      die "evidence requires $prerequisite in $deployment_dir; refusing to emit Evidence without deployment state and test results"
+    jq empty "$deployment_dir/$prerequisite" >/dev/null 2>&1 ||
+      die "$deployment_dir/$prerequisite is not valid JSON"
+  done
   invocation_id="${invocation_id:-$(basename "$deployment_dir")}"
   observed_at="${observed_at:-$(utc_now)}"
 
@@ -684,7 +755,8 @@ command_evidence() {
   local status_tmp
   status_tmp="$(dirname "$status_output")/.evidence-status.$$.json"
   jq -n --arg profile "$AERP_BUNDLE_SCHEMA" --arg bundle "$relative_output" --arg fingerprint "$bundle_fp" \
-    '{schemaVersion:"git-ape-record-status/v1",recordType:"evidence",status:"generated",profile:$profile,
+    --arg statusSchema "$STATUS_SCHEMA" \
+    '{schemaVersion:$statusSchema,recordType:"evidence",status:"generated",profile:$profile,
       bundle:$bundle,fingerprint:$fingerprint,authoritative:false,independentlyVerified:false,
       reason:"Git-Ape emitted a conformant bundle; independent AERP verification has not run."}' > "$status_tmp"
   write_json "$status_tmp" "$status_output"

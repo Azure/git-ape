@@ -131,8 +131,12 @@ the Azure deployment result and remains the destroy lifecycle source of truth.
 The execution trace records which Git-Ape workflow nodes and transitions were
 observed. `authorization.json` records whether the triggering commit was
 verified as an approved pull-request merge; a direct push fails before Azure
-execution. Trace failure does not rewrite Azure state or trigger rollback, but
-the workflow reports the missing or invalid trace as a separate failure.
+execution. When Azure execution never runs (rejected authorization, failed
+validation, or a blocked security gate), an existing `state.json` is preserved
+unchanged; the rejected attempt is recorded only in `authorization.json`, the
+trace, and Evidence. Trace failure does not rewrite Azure state or trigger
+rollback, but the workflow reports the missing or invalid trace as a separate
+failure.
 
 
 

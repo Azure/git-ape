@@ -5,15 +5,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 DEPLOYMENT_ID=""
+BINDINGS=""
+STATUS=""
+MODE="unknown"
+STATUS_WRITTEN=false
 
 usage() {
-  echo "Usage: $0 --deployment-id <id>" >&2
+  echo "Usage: $0 --deployment-id <id> [--bindings FILE] [--status-output FILE]" >&2
   exit 2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --deployment-id) DEPLOYMENT_ID="${2:-}"; shift 2 ;;
+    --bindings) BINDINGS="${2:-}"; shift 2 ;;
+    --status-output) STATUS="${2:-}"; shift 2 ;;
     -h|--help) usage ;;
     *) echo "Unknown argument: $1" >&2; usage ;;
   esac
@@ -22,8 +28,8 @@ done
 [[ "$DEPLOYMENT_ID" =~ ^[A-Za-z0-9._-]+$ ]] || usage
 
 DEPLOY_DIR="$ROOT/.azure/deployments/$DEPLOYMENT_ID"
-BINDINGS="$DEPLOY_DIR/isee-bindings.json"
-STATUS="$DEPLOY_DIR/governance-status.json"
+BINDINGS="${BINDINGS:-$DEPLOY_DIR/isee-bindings.json}"
+STATUS="${STATUS:-$DEPLOY_DIR/governance-status.json}"
 PRODUCER="$ROOT/.github/git-ape/records/git-ape-records.sh"
 if [[ ! -f "$PRODUCER" ]]; then
   PRODUCER="$ROOT/.github/skills/git-ape-records/scripts/git-ape-records.sh"
@@ -33,28 +39,58 @@ write_status() {
   local status="$1"
   local mode="$2"
   local reason="$3"
-  jq -n \
-    --arg deploymentId "$DEPLOYMENT_ID" \
-    --arg status "$status" \
-    --arg mode "$mode" \
-    --arg reason "$reason" \
-    '{schemaVersion:"git-ape-governance-status/v1",deploymentId:$deploymentId,status:$status,mode:$mode,reason:(if $reason == "" then null else $reason end)}' \
-    > "$STATUS"
+  local temporary
+  mkdir -p "$(dirname "$STATUS")"
+  temporary="$(dirname "$STATUS")/.$(basename "$STATUS").$$.tmp"
+  if command -v jq >/dev/null; then
+    jq -n \
+      --arg deploymentId "$DEPLOYMENT_ID" \
+      --arg status "$status" \
+      --arg mode "$mode" \
+      --arg reason "$reason" \
+      '{schemaVersion:"git-ape-governance-status/v1",deploymentId:$deploymentId,status:$status,mode:$mode,reason:(if $reason == "" then null else $reason end)}' \
+      > "$temporary"
+  else
+    # Without jq, emit a minimal record; DEPLOYMENT_ID is already restricted to
+    # JSON-safe characters and the reason is sanitised.
+    reason="${reason//\\//}"
+    reason="${reason//\"/\'}"
+    printf '{"schemaVersion":"git-ape-governance-status/v1","deploymentId":"%s","status":"%s","mode":"%s","reason":"%s"}\n' \
+      "$DEPLOYMENT_ID" "$status" "$mode" "$reason" > "$temporary"
+  fi
+  mv "$temporary" "$STATUS"
+  STATUS_WRITTEN=true
 }
+
+# Every blocked preflight records a failed status before exiting so a stale
+# "passed" result can never survive a later failure.
+block() {
+  local reason="$1"
+  write_status "failed" "$MODE" "$reason"
+  echo "ISEE preflight blocked: $reason" >&2
+  exit 1
+}
+
+on_exit() {
+  local rc=$?
+  if [[ $rc -ne 0 && "$STATUS_WRITTEN" != "true" ]]; then
+    write_status "failed" "$MODE" "preflight terminated unexpectedly (exit $rc)" || true
+  fi
+}
+trap on_exit EXIT
 
 if [[ ! -f "$BINDINGS" ]]; then
   if [[ "${GIT_APE_ISEE_REQUIRED:-false}" == "true" ]]; then
-    write_status "failed" "required" "required bindings are missing"
-    echo "ISEE preflight blocked: $BINDINGS is required but missing." >&2
-    exit 1
+    MODE="required"
+    block "required bindings are missing"
   fi
   write_status "standalone" "standalone" ""
   echo "ISEE preflight: standalone Git-Ape (no bindings file)."
   exit 0
 fi
 
-command -v jq >/dev/null || { echo "ISEE preflight blocked: jq is required." >&2; exit 1; }
-[[ -f "$PRODUCER" ]] || { echo "ISEE preflight blocked: native record producer missing." >&2; exit 1; }
+command -v jq >/dev/null || block "jq is required"
+[[ -f "$PRODUCER" ]] || block "native record producer missing"
 
 jq -e --arg id "$DEPLOYMENT_ID" '
   .schemaVersion == "git-ape-isee-bindings/v1" and
@@ -86,11 +122,7 @@ jq -e --arg id "$DEPLOYMENT_ID" '
   (all(.artifacts.additional[];
     (.path | type == "string") and
     (.digest | test("^sha256:[0-9a-f]{64}$"))))
-' "$BINDINGS" >/dev/null || {
-  write_status "failed" "unknown" "invalid bindings contract"
-  echo "ISEE preflight blocked: invalid bindings contract." >&2
-  exit 1
-}
+' "$BINDINGS" >/dev/null 2>&1 || block "invalid bindings contract"
 
 MODE=$(jq -r '.governanceMode' "$BINDINGS")
 
@@ -103,73 +135,65 @@ sha256_file() {
   fi
 }
 
+# Sets RESOLVED_PATH in the current shell so a blocked path records a failed
+# status instead of exiting only a command-substitution subshell.
+RESOLVED_PATH=""
 resolve_path() {
   local relative="$1"
-  local candidate parent resolved
-  [[ "$relative" != /* && "$relative" != ".." && "$relative" != ../* && "$relative" != */../* && "$relative" != */.. ]] || {
-    echo "ISEE preflight blocked: unsafe path $relative" >&2
-    exit 1
-  }
+  local candidate parent
+  [[ "$relative" != /* && "$relative" != ".." && "$relative" != ../* && "$relative" != */../* && "$relative" != */.. ]] ||
+    block "unsafe path $relative"
   candidate="$ROOT/$relative"
-  parent=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) || {
-    echo "ISEE preflight blocked: path parent not found: $relative" >&2
-    exit 1
-  }
-  [[ ! -L "$candidate" ]] || {
-    echo "ISEE preflight blocked: symbolic links are not allowed in bindings: $relative" >&2
-    exit 1
-  }
-  resolved="$parent/$(basename "$candidate")"
-  case "$resolved" in
-    "$ROOT"|"$ROOT"/*) printf '%s\n' "$resolved" ;;
-    *)
-      echo "ISEE preflight blocked: path escapes repository root: $relative" >&2
-      exit 1
-      ;;
+  parent=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) ||
+    block "path parent not found: $relative"
+  [[ ! -L "$candidate" ]] ||
+    block "symbolic links are not allowed in bindings: $relative"
+  RESOLVED_PATH="$parent/$(basename "$candidate")"
+  case "$RESOLVED_PATH" in
+    "$ROOT"|"$ROOT"/*) ;;
+    *) block "path escapes repository root: $relative" ;;
   esac
 }
 
 verify_artifact() {
   local path="$1"
   local expected="$2"
-  local absolute
-  absolute=$(resolve_path "$path")
-  [[ -f "$absolute" ]] || { echo "ISEE preflight blocked: artifact not found: $path" >&2; exit 1; }
   local actual
-  actual=$(sha256_file "$absolute")
-  [[ "$actual" == "$expected" ]] || {
-    echo "ISEE preflight blocked: artifact digest mismatch: $path" >&2
-    exit 1
-  }
+  resolve_path "$path"
+  [[ -f "$RESOLVED_PATH" ]] || block "artifact not found: $path"
+  actual=$(sha256_file "$RESOLVED_PATH")
+  [[ "$actual" == "$expected" ]] || block "artifact digest mismatch: $path"
 }
 
 while IFS=$'\t' read -r path expected require_ratified; do
-  absolute=$(resolve_path "$path")
-  [[ -f "$absolute" ]] || { echo "ISEE preflight blocked: Intent record not found: $path" >&2; exit 1; }
-  actual=$(bash "$PRODUCER" fingerprint --profile adrp "$absolute")
-  [[ "$actual" == "$expected" ]] || { echo "ISEE preflight blocked: ADRP fingerprint mismatch: $path" >&2; exit 1; }
+  resolve_path "$path"
+  absolute="$RESOLVED_PATH"
+  [[ -f "$absolute" ]] || block "Intent record not found: $path"
+  actual=$(bash "$PRODUCER" fingerprint --profile adrp "$absolute") ||
+    block "could not fingerprint Intent record: $path"
+  [[ "$actual" == "$expected" ]] || block "ADRP fingerprint mismatch: $path"
   if command -v adrp >/dev/null; then
     ARGS=(validate --target "$absolute")
     [[ "$require_ratified" == "true" ]] && ARGS+=(--require-ratified)
-    adrp "${ARGS[@]}" >/dev/null
+    adrp "${ARGS[@]}" >/dev/null || block "ADRP validation failed: $path"
   elif [[ "$MODE" == "required" ]]; then
-    echo "ISEE preflight blocked: ADRP CLI required for governed Intent validation." >&2
-    exit 1
+    block "ADRP CLI required for governed Intent validation"
   else
     echo "ISEE preflight warning: ADRP CLI unavailable; native fingerprint matched." >&2
   fi
 done < <(jq -r '.intentRecords[] | [.path, .fingerprint, (.requireRatified // false)] | @tsv' "$BINDINGS")
 
 while IFS=$'\t' read -r path expected; do
-  absolute=$(resolve_path "$path")
-  [[ -f "$absolute" ]] || { echo "ISEE preflight blocked: Structure record not found: $path" >&2; exit 1; }
-  actual=$(bash "$PRODUCER" fingerprint --profile asrp "$absolute")
-  [[ "$actual" == "$expected" ]] || { echo "ISEE preflight blocked: ASRP fingerprint mismatch: $path" >&2; exit 1; }
+  resolve_path "$path"
+  absolute="$RESOLVED_PATH"
+  [[ -f "$absolute" ]] || block "Structure record not found: $path"
+  actual=$(bash "$PRODUCER" fingerprint --profile asrp "$absolute") ||
+    block "could not fingerprint Structure record: $path"
+  [[ "$actual" == "$expected" ]] || block "ASRP fingerprint mismatch: $path"
   if command -v asrp >/dev/null; then
-    asrp validate "$absolute" >/dev/null
+    asrp validate "$absolute" >/dev/null || block "ASRP validation failed: $path"
   elif [[ "$MODE" == "required" ]]; then
-    echo "ISEE preflight blocked: ASRP CLI required for governed Structure validation." >&2
-    exit 1
+    block "ASRP CLI required for governed Structure validation"
   else
     echo "ISEE preflight warning: ASRP CLI unavailable; native fingerprint matched." >&2
   fi

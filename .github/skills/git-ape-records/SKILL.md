@@ -43,6 +43,9 @@ bash .github/git-ape/records/git-ape-records.sh intent \
 
 The output is an `ape-decision-record/v1` record with `status: draft` and
 `ratification: null`. Inferred or incomplete material is listed in `gaps`.
+When no alternatives are supplied, the record carries a single
+`requested-outcome` entry describing only the captured request, with no
+invented benefits or drawbacks, and lists the omission in `gaps`.
 
 If the source or producer is missing, stop and name the missing path. If a
 draft already exists, do not overwrite it without explicit review.
@@ -95,7 +98,8 @@ The bundle is `aerp-evidence-bundle/v1`, contains SHA-256 artifact digests,
 and records `status: generated` in the Git-Ape status file.
 
 If `state.json` or `tests.json` is missing, stop. Never substitute a
-success-shaped Evidence record.
+success-shaped Evidence record. The `evidence` command enforces this and exits
+non-zero when either prerequisite is missing or is not valid JSON.
 
 ### Optional Governance
 

@@ -173,19 +173,19 @@
           "type": "string",
           "pattern": "^[A-Z][A-Z0-9-]{2,63}$"
         },
-        "structureBinding": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["structure_id", "record_id", "record_version", "record_fingerprint"],
-          "properties": {
-            "structure_id": {
-              "type": "string",
-              "pattern": "^STR-[A-Z0-9][A-Z0-9-]{1,62}$"
-            },
-            "record_id": { "type": "string", "format": "uuid" },
-            "record_version": { "type": "integer", "minimum": 1 },
-            "record_fingerprint": { "$ref": "#/$defs/digest" }
-          }
+        "record_id": { "type": "string", "format": "uuid" },
+        "record_version": { "type": "integer", "minimum": 1 },
+        "record_fingerprint": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "structureBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structure_id", "record_id", "record_version", "record_fingerprint"],
+      "properties": {
+        "structure_id": {
+          "type": "string",
+          "pattern": "^STR-[A-Z0-9][A-Z0-9-]{1,62}$"
         },
         "record_id": { "type": "string", "format": "uuid" },
         "record_version": { "type": "integer", "minimum": 1 },

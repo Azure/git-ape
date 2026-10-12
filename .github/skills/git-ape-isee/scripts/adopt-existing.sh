@@ -221,9 +221,15 @@ fi
   die "one or more existing Evidence bundles failed AERP validation or artifact verification"
 
 BINDINGS="$DEPLOY_DIR/isee-bindings.json"
+GOVERNANCE_STATUS="$DEPLOY_DIR/governance-status.json"
 [[ "$FORCE" == "true" || ! -e "$BINDINGS" ]] ||
   die "isee-bindings.json already exists; use --force only after reviewing the replacement"
-BINDINGS_TMP="$DEPLOY_DIR/.isee-bindings.$$.json"
+CANDIDATE_BINDINGS="$DEPLOY_DIR/.isee-bindings.candidate.$$.json"
+CANDIDATE_STATUS="$DEPLOY_DIR/.governance-status.candidate.$$.json"
+cleanup_candidates() {
+  rm -f "$CANDIDATE_BINDINGS" "$CANDIDATE_STATUS"
+}
+trap cleanup_candidates EXIT
 jq -n \
   --arg deploymentId "$DEPLOYMENT_ID" \
   --arg mode "$MODE" \
@@ -242,11 +248,17 @@ jq -n \
     gates:["intent-fingerprint","approved-artifact-digests"],
     evidenceRequirements:["aerp-evidence-bundle/v1"],
     artifacts:{template:$template,parameters:$parameters,additional:[]}
-  }' > "$BINDINGS_TMP"
-write_json "$BINDINGS_TMP" "$BINDINGS"
-rm -f "$BINDINGS_TMP"
+  }' > "$CANDIDATE_BINDINGS"
 
-bash "$VERIFY" --deployment-id "$DEPLOYMENT_ID" >/dev/null
+# Verify the candidate before publishing so a failed preflight never replaces
+# (or, with --force, destroys) the previously published bindings and status.
+bash "$VERIFY" \
+  --deployment-id "$DEPLOYMENT_ID" \
+  --bindings "$CANDIDATE_BINDINGS" \
+  --status-output "$CANDIDATE_STATUS" >/dev/null ||
+  die "candidate bindings failed ISEE preflight; existing isee-bindings.json was left unchanged"
+mv "$CANDIDATE_BINDINGS" "$BINDINGS"
+mv "$CANDIDATE_STATUS" "$GOVERNANCE_STATUS"
 
 CURRENT_BUNDLE=""
 if [[ -f "$DEPLOY_DIR/evidence-status.json" ]]; then

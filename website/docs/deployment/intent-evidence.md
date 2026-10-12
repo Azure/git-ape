@@ -51,15 +51,29 @@ The `deployment_authorized` node is backed by `authorization.json`. The
 workflow resolves the triggering commit to exactly one merged pull request
 targeting `main` and requires an effective approval before Azure execution.
 Direct pushes, ambiguous commit associations, and unapproved merges are
-recorded as rejected authorization attempts and fail closed.
+recorded as rejected authorization attempts and fail closed. Every page of
+associated pull requests and reviews is read before the latest effective review
+per reviewer is evaluated. A rejected attempt never overwrites an existing
+`state.json`.
+
+Planning and deployment also verify that `intent.json` still matches the
+fingerprint recorded in `intent-status.json`; an Intent-only edit blocks until
+the draft Intent is regenerated explicitly.
 
 Native validation checks:
 
+- the graph conforms to `git-ape-execution-graph/v1`, including a
+  `requiredEvidence` array on every edge;
 - the trace is bound to the exact graph bytes;
+- the trace outcome is `succeeded` or `failed`;
 - every observed node and transition is declared;
 - transitions carry their required Evidence identifiers;
 - ordered traces alternate node and transition events and follow a continuous path;
 - a successful run completed every required node and terminal.
+
+Integration tests complete only with an explicit `passed` result. Skipped
+tests are inconclusive: the trace ends at a failed `integration_tests` node
+instead of claiming success.
 
 Trace conformance does not prove that Evidence contents are correct or that a
 control was effective. The trace, validation report, and referenced artifacts

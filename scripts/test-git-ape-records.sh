@@ -255,6 +255,165 @@ test "$(jq '[.records[].artifacts[].path | select(. == "authorization.json")] | 
 bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null
 test "$(jq -r .mode .azure/deployments/demo/governance-status.json)" = "standalone"
 
+sha256_of() {
+  if command -v sha256sum >/dev/null; then
+    sha256sum "$1" | awk '{print "sha256:" $1}'
+  else
+    shasum -a 256 "$1" | awk '{print "sha256:" $1}'
+  fi
+}
+PRODUCER=.github/git-ape/records/git-ape-records.sh
+DEMO=.azure/deployments/demo
+
+# Intent capture without supplied alternatives records only the captured
+# request and never invents a selected option with fabricated benefits.
+mkdir -p .azure/deployments/inferred
+printf '%s\n' '{"deploymentId":"inferred","environment":"test","user":"platform-owner"}' \
+  > .azure/deployments/inferred/requirements.json
+bash "$PRODUCER" intent \
+  --source .azure/deployments/inferred/requirements.json \
+  --output .azure/deployments/inferred/intent.json \
+  --status-output .azure/deployments/inferred/intent-status.json >/dev/null
+test "$(jq -r '.alternatives | length' .azure/deployments/inferred/intent.json)" = "1"
+test "$(jq -r '.alternatives[0].id' .azure/deployments/inferred/intent.json)" = "requested-outcome"
+test "$(jq -r '.selected_alternative' .azure/deployments/inferred/intent.json)" = "requested-outcome"
+test "$(jq '.alternatives[0].benefits + .alternatives[0].drawbacks | length' .azure/deployments/inferred/intent.json)" = "0"
+test "$(jq '[.gaps[] | select(. == "Alternative options have not been supplied")] | length' .azure/deployments/inferred/intent.json)" = "1"
+test "$(jq -r '.alternatives[] | select(.id == "git-ape-managed-execution") | .id' .azure/deployments/inferred/intent.json)" = ""
+
+# Evidence refuses to run without deployment state and test results.
+if bash "$PRODUCER" evidence \
+  --deployment-dir .azure/deployments/inferred \
+  --output .azure/deployments/inferred/evidence/bundles/run-1.json \
+  --status-output .azure/deployments/inferred/evidence-status.json \
+  --identity git-ape:test \
+  --target git-ape:test-target >/dev/null 2>&1; then
+  echo "Evidence unexpectedly emitted without state.json and tests.json." >&2
+  exit 1
+fi
+test ! -e .azure/deployments/inferred/evidence/bundles/run-1.json
+printf '%s\n' '{"status":"succeeded"}' > .azure/deployments/inferred/state.json
+if bash "$PRODUCER" evidence \
+  --deployment-dir .azure/deployments/inferred \
+  --output .azure/deployments/inferred/evidence/bundles/run-1.json \
+  --status-output .azure/deployments/inferred/evidence-status.json \
+  --identity git-ape:test \
+  --target git-ape:test-target >/dev/null 2>&1; then
+  echo "Evidence unexpectedly emitted without tests.json." >&2
+  exit 1
+fi
+
+# Status tokens are matched whole: "incomplete" is not success.
+printf '%s\n' '{"status":"incomplete"}' > .azure/deployments/inferred/state.json
+printf '%s\n' '{"status":"passed"}' > .azure/deployments/inferred/tests.json
+bash "$PRODUCER" evidence \
+  --deployment-dir .azure/deployments/inferred \
+  --output .azure/deployments/inferred/evidence/bundles/run-1.json \
+  --status-output .azure/deployments/inferred/evidence-status.json \
+  --identity git-ape:test \
+  --target git-ape:test-target >/dev/null
+test "$(jq -r '.records[] | select(.artifacts[0].path == "state.json") | .claim.result' \
+  .azure/deployments/inferred/evidence/bundles/run-1.json)" = "observed"
+test "$(jq -r '.records[] | select(.artifacts[0].path == "tests.json") | .claim.result' \
+  .azure/deployments/inferred/evidence/bundles/run-1.json)" = "succeeded"
+rm -rf .azure/deployments/inferred
+
+# trace-validate rejects schema-invalid outcomes even when the last node failed.
+jq '.outcome = "unknown" | .events = .events[0:15] | .events[14].status = "failed"' \
+  "$DEMO/traces/run-1.json" > "$DEMO/invalid-outcome-trace.json"
+if bash "$PRODUCER" trace-validate \
+  --graph "$DEMO/execution-graphs/run-1.json" \
+  --trace "$DEMO/invalid-outcome-trace.json" \
+  --output "$DEMO/invalid-outcome-validation.json" >/dev/null; then
+  echo "trace-validate unexpectedly accepted an invalid outcome." >&2
+  exit 1
+fi
+test "$(jq '[.errors[] | select(.code == "INVALID_TRACE_OUTCOME")] | length' "$DEMO/invalid-outcome-validation.json")" = "1"
+rm -f "$DEMO/invalid-outcome-trace.json" "$DEMO/invalid-outcome-validation.json"
+
+# A graph edge without requiredEvidence cannot silently disable receipts.
+jq 'del(.edges[0].requiredEvidence)' "$DEMO/execution-graphs/run-1.json" > "$DEMO/no-receipts-graph.json"
+if bash "$PRODUCER" trace-validate \
+  --graph "$DEMO/no-receipts-graph.json" \
+  --trace "$DEMO/traces/run-1.json" \
+  --output "$DEMO/no-receipts-validation.json" >/dev/null; then
+  echo "trace-validate unexpectedly accepted an edge without requiredEvidence." >&2
+  exit 1
+fi
+test "$(jq -r '.errors[0].code' "$DEMO/no-receipts-validation.json")" = "INVALID_GRAPH"
+printf '%s\n' '[]' > "$DEMO/empty-events.json"
+if bash "$PRODUCER" trace \
+  --graph "$DEMO/no-receipts-graph.json" \
+  --events "$DEMO/empty-events.json" \
+  --output "$DEMO/no-receipts-trace.json" \
+  --validation-output "$DEMO/no-receipts-trace-validation.json" \
+  --invocation-id no-receipts \
+  --workflow git-ape-deploy \
+  --identity git-ape:test \
+  --outcome failed >/dev/null 2>&1; then
+  echo "trace unexpectedly accepted an edge without requiredEvidence." >&2
+  exit 1
+fi
+test ! -e "$DEMO/no-receipts-trace.json"
+rm -f "$DEMO/no-receipts-graph.json" "$DEMO/no-receipts-validation.json" "$DEMO/empty-events.json"
+
+# Every blocked preflight records a failed status, replacing a stale pass.
+cp "$DEMO/governance-status.json" "$DEMO/governance-status.standalone.json"
+cp "$DEMO/evidence-status.json" "$DEMO/evidence-status.before-adoption.json"
+jq -n \
+  --arg intentFp "$(bash "$PRODUCER" fingerprint --profile adrp "$DEMO/intent.json")" \
+  --arg templateDigest "$(sha256_of "$DEMO/template.json")" \
+  '{schemaVersion:"git-ape-isee-bindings/v1",deploymentId:"demo",governanceMode:"optional",
+    intentRecords:[{path:".azure/deployments/demo/intent.json",fingerprint:$intentFp,requireRatified:false}],
+    structureRecords:[],executionManifest:null,gates:[],evidenceRequirements:[],
+    artifacts:{template:{path:".azure/deployments/demo/template.json",digest:$templateDigest},parameters:null,additional:[]}}' \
+  > "$DEMO/isee-bindings.json"
+bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null 2>&1
+test "$(jq -r .status "$DEMO/governance-status.json")" = "passed"
+cp "$DEMO/template.json" "$DEMO/template.json.orig"
+printf '\n' >> "$DEMO/template.json"
+if bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null 2>&1; then
+  echo "ISEE preflight unexpectedly accepted a changed template." >&2
+  exit 1
+fi
+test "$(jq -r .status "$DEMO/governance-status.json")" = "failed"
+test "$(jq -r .reason "$DEMO/governance-status.json")" = "artifact digest mismatch: .azure/deployments/demo/template.json"
+mv "$DEMO/template.json.orig" "$DEMO/template.json"
+bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo >/dev/null 2>&1
+test "$(jq -r .status "$DEMO/governance-status.json")" = "passed"
+jq '.intentRecords[0].path = "../outside.json"' "$DEMO/isee-bindings.json" > "$DEMO/isee-bindings.json.unsafe-candidate"
+if bash .github/git-ape/isee/verify-bindings.sh --deployment-id demo \
+  --bindings "$DEMO/isee-bindings.json.unsafe-candidate" \
+  --status-output "$DEMO/candidate-status.json" >/dev/null 2>&1; then
+  echo "ISEE preflight unexpectedly accepted an unsafe candidate path." >&2
+  exit 1
+fi
+test "$(jq -r .status "$DEMO/candidate-status.json")" = "failed"
+test "$(jq -r .reason "$DEMO/candidate-status.json")" = "unsafe path ../outside.json"
+test "$(jq -r .status "$DEMO/governance-status.json")" = "passed"
+rm -f "$DEMO/isee-bindings.json.unsafe-candidate" "$DEMO/candidate-status.json"
+
+# Adoption publishes bindings only after the candidate passes preflight.
+bash .github/git-ape/isee/adopt-existing.sh --deployment-id demo --mode optional --force >/dev/null 2>&1
+test "$(jq -r .status "$DEMO/governance-status.json")" = "passed"
+cp "$DEMO/isee-bindings.json" "$DEMO/isee-bindings.published.json"
+cp "$DEMO/governance-status.json" "$DEMO/governance-status.published.json"
+cp .github/git-ape/isee/verify-bindings.sh "$WORK/verify-bindings.sh.orig"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > .github/git-ape/isee/verify-bindings.sh
+if bash .github/git-ape/isee/adopt-existing.sh --deployment-id demo --mode optional --force \
+  --intent .github/decisions/ADR-GIT-APE-PLATFORM.v1.json >/dev/null 2>&1; then
+  echo "ISEE adoption unexpectedly published bindings that failed preflight." >&2
+  exit 1
+fi
+cp "$WORK/verify-bindings.sh.orig" .github/git-ape/isee/verify-bindings.sh
+cmp "$DEMO/isee-bindings.published.json" "$DEMO/isee-bindings.json"
+cmp "$DEMO/governance-status.published.json" "$DEMO/governance-status.json"
+test -z "$(find "$DEMO" -maxdepth 1 -name '.*candidate*' -print)"
+rm -f "$DEMO/isee-bindings.json" "$DEMO/isee-bindings.published.json" \
+  "$DEMO/governance-status.published.json" "$DEMO/isee-adoption.json"
+mv "$DEMO/governance-status.standalone.json" "$DEMO/governance-status.json"
+mv "$DEMO/evidence-status.before-adoption.json" "$DEMO/evidence-status.json"
+
 if command -v adrp >/dev/null && command -v aerp >/dev/null; then
   adrp validate --target .azure/deployments/demo/intent.json >/dev/null
   aerp validate .azure/deployments/demo/evidence/bundles/run-1.json >/dev/null
