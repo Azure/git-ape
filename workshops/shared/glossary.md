@@ -28,6 +28,7 @@
 | Agent | What It Does |
 |-------|-------------|
 | **@git-ape** | Main orchestrator. Coordinates the full deployment workflow: gather requirements, generate template, validate security, deploy, test. |
+| **@azure-requirements-gatherer** | Asks clarifying questions to fill in the gaps left by a one-sentence deployment request (runtime, tier, monitoring, project name). |
 | **@azure-principal-architect** | Reviews deployments against the WAF five pillars. Provides architecture recommendations and trade-off analysis. |
 | **@azure-policy-advisor** | Assesses ARM templates against Azure Policy frameworks (CIS, NIST). Recommends policy assignments. |
 | **@azure-iac-exporter** | Exports existing Azure resources to ARM templates. Brings live infrastructure under IaC management. |
@@ -42,6 +43,8 @@
 | `/azure-security-analyzer` | Runs per-resource security assessment with severity ratings. |
 | `/azure-cost-estimator` | Estimates monthly costs using the Azure Retail Prices API. |
 | `/azure-deployment-preflight` | Runs what-if analysis and permission checks before deployment. |
+| `/azure-stack-deploy` | Deploys a prepared Git-Ape artifact as a subscription-scoped Azure Deployment Stack and writes `state.json`. The primitive behind `@git-ape`'s deploy stage and the CI deploy workflow. |
+| `/azure-stack-destroy` | Tears down a Git-Ape deployment by stack ID in one idempotent call, then purges soft-deletable resources (Key Vault, Cognitive Services). Prefer this over `az group delete` for anything Git-Ape created. |
 | `/azure-drift-detector` | Detects configuration drift between deployed resources and stored state. |
 | `/azure-integration-tester` | Runs post-deployment health checks on deployed resources. |
 | `/azure-role-selector` | Recommends least-privilege RBAC roles for identities and resources. |

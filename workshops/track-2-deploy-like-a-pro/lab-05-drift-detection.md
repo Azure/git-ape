@@ -105,10 +105,10 @@ Run the drift detector again:
 ## What's Next?
 
 - **Track 3:** [Platform Engineering](../track-3-platform-engineering/) — CI/CD pipelines, headless mode, multi-environment, policy compliance (90 min)
-- **Clean up:** Delete the workshop resources:
+- **Clean up:** Destroy the workshop deployment through its stack (reads `state.json`, deletes the stack, purges soft-deletable Key Vault/Cognitive Services resources — do not use `az group delete` here, it misses both):
 
 ```bash
-az group delete --name rg-inventoryapp-dev-eastus --yes --no-wait
+/azure-stack-destroy <your-deployment-id>
 ```
 
 ## Step 6: Drift severity

@@ -144,3 +144,4 @@ You will see this in action in Lab 3 when we deliberately break a security contr
 - Template generator agent: `.github/agents/azure-template-generator.agent.md` (search for `inner scope` and `bestpractices`)
 - Deployer agent: `.github/agents/azure-resource-deployer.agent.md`
 - Security analyzer: `.github/skills/azure-security-analyzer/SKILL.md` (the evidence rule)
+- Before writing ARM properties, the Template Generator consults `/azure-rest-api-reference` for exact schemas and the latest stable API versions — this is what keeps generated `reference()` calls and resource properties accurate without memorized/stale schemas.
