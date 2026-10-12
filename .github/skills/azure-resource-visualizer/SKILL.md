@@ -1,8 +1,9 @@
 ---
 name: azure-resource-visualizer
 description: "Analyze deployed Azure resource groups and generate detailed Mermaid architecture diagrams showing relationships between resources. Use for post-deployment visualization, understanding existing infrastructure, or documenting live Azure environments."
-argument-hint: "Resource group name to visualize"
-user-invocable: true
+metadata:
+  argument-hint: "Resource group name to visualize"
+  user-invocable: true
 ---
 
 # Azure Resource Visualizer

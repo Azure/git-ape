@@ -10,7 +10,7 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Contribution Model
 
-- **Skills** are community-contributable via Pull Request.
+- **Skills** are community-contributable via Pull Request, either as first-party skills (`.github/skills/<name>/`) or as third-party **community skills** (`.github/skills/community/<name>/`) — see [Contributing a Community Skill](#contributing-a-community-skill).
 - **Agents** are maintainer-curated. To propose agent changes, open a Discussion first.
 
 ## Adding a New Skill
@@ -76,6 +76,62 @@ Brief overview of the skill.
 3. Step three
 ```
 
+## Contributing a Community Skill
+
+Git-Ape maintains a **skill registry** so third parties can build and ship
+skills within the Git-Ape framework without needing to be a maintainer.
+Community skills live in their own subdirectory and are picked up
+automatically by the generated registry (`.github/skills/registry.json`
+and the [Skill Registry](https://azure.github.io/git-ape/docs/skills/registry)
+docs page) — no separate registration step is required.
+
+### Where they live
+
+```
+.github/skills/community/
+└── your-skill-name/
+    └── SKILL.md
+```
+
+Same rules as first-party skills apply: kebab-case directory name, `name:`
+frontmatter matching the directory exactly, and the required
+`## When to Use` / `## Procedure` sections.
+
+### Additional required frontmatter
+
+Community skills must also set `metadata.author` so users know who built and
+maintains the skill:
+
+```yaml
+---
+name: your-skill-name
+description: "Short description of what this skill does."
+license: MIT
+metadata:
+  author: your-github-handle       # Required. Who maintains this skill.
+  source: https://github.com/you/your-repo   # Optional. Canonical home, if not here.
+  maturity: experimental           # Optional. experimental (default) | stable
+  version: "1.0.0"                 # Optional.
+---
+```
+
+Start from [`.github/templates/COMMUNITY_SKILL.template.md`](.github/templates/COMMUNITY_SKILL.template.md)
+rather than the first-party `SKILL.template.md` — it includes the required
+`metadata.author` field and an `## Attribution` section.
+
+### Review bar
+
+Community skills go through **the same process as first-party skills**:
+maintainer review plus the full PR validation suite (`validate-structure.js`,
+markdownlint, and Script Lint if the skill ships shell/PowerShell scripts).
+The only functional differences are the directory location and the required
+`metadata.author` field, which CI enforces — a community `SKILL.md` missing
+`metadata.author` fails structural validation.
+
+Community skills are clearly labeled as **third-party, not maintained by the
+Git-Ape team** wherever they're listed (registry, docs pages), so users can
+make an informed choice about trusting them.
+
 ## Proposing Agent Changes
 
 Agents are **maintainer-curated** and not open for direct community contribution via PR.
@@ -126,6 +182,7 @@ site. Decision rationale for the harness choice lives in
 4. **Submit a PR** — Fill in the PR template and describe your changes.
 5. **CI checks run automatically** — The PR validation workflow verifies:
    - YAML frontmatter has required fields (`name`, `description` for skills; `description` for agents)
+   - Community skills (`.github/skills/community/<name>/`) additionally require `metadata.author`
    - Skill `name` matches its parent directory name
    - All skill/agent directories use kebab-case
    - Every skill directory contains a `SKILL.md` file
@@ -134,6 +191,13 @@ site. Decision rationale for the harness choice lives in
    - Cross-references (slash-commands `/skill-name`) map to existing skill directories
    - Relative markdown links resolve to real file paths
    - Markdown passes linting (markdownlint)
+
+   If your PR touches a skill's shell or PowerShell scripts, the separate
+   **Script Lint** workflow (`git-ape-script-lint.yml`) also runs:
+   - Shell scripts (`.sh`) must pass `shellcheck` (severity ≥ warning) and `bash -n`
+   - PowerShell scripts (`.ps1`) must pass `PSScriptAnalyzer` (Error/Warning, per
+     [`.github/linters/PSScriptAnalyzerSettings.psd1`](.github/linters/PSScriptAnalyzerSettings.psd1))
+     and the PowerShell language parser
 6. **Review** — Maintainers will review your PR and provide feedback.
 
 ## Development Setup
@@ -151,6 +215,20 @@ node scripts/validate-structure.js
 
 # Generate documentation (optional)
 node scripts/generate-docs.js
+```
+
+If you edit a skill's embedded scripts, reproduce the **Script Lint** checks
+locally before pushing:
+
+```bash
+# Shell: static analysis + syntax (needs shellcheck + bash)
+find .github/skills -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+find .github/skills -name '*.sh' -exec bash -n {} \;
+
+# PowerShell: static analysis + parser (needs pwsh + PSScriptAnalyzer)
+pwsh -NoProfile -Command "Install-Module PSScriptAnalyzer -Scope CurrentUser -Force"
+pwsh -NoProfile -Command "Get-ChildItem -Recurse .github/skills -Filter *.ps1 |
+  ForEach-Object { Invoke-ScriptAnalyzer -Path \$_.FullName -Settings .github/linters/PSScriptAnalyzerSettings.psd1 }"
 ```
 
 ## Reporting Issues

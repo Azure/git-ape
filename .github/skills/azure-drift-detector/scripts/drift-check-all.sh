@@ -110,11 +110,12 @@ for DEPLOYMENT_PATH in $DEPLOYMENTS; do
     [[ "$VERBOSE" == "true" ]] && echo -e "${BLUE}Checking: $DEPLOYMENT_ID${NC}"
     
     # Run drift detection
-    DRIFT_ARGS="--deployment-id $DEPLOYMENT_ID --output-format json"
-    [[ "$INCLUDE_KNOWN" == "true" ]] && DRIFT_ARGS="$DRIFT_ARGS --include-known-drift"
+    DRIFT_ARGS=(--deployment-id "$DEPLOYMENT_ID" --output-format json)
+    [[ "$INCLUDE_KNOWN" == "true" ]] && DRIFT_ARGS+=(--include-known-drift)
     
-    DRIFT_OUTPUT=$("$SCRIPT_DIR/detect-drift.sh" $DRIFT_ARGS 2>&1 || true)
-    DRIFT_EXIT_CODE=$?
+    # Drift results are parsed from the JSON file written below, so stdout/stderr
+    # from the detector are intentionally discarded here.
+    "$SCRIPT_DIR/detect-drift.sh" "${DRIFT_ARGS[@]}" >/dev/null 2>&1 || true
     
     # Parse drift results
     DRIFT_FILE="$DEPLOYMENT_PATH/drift-analysis/drift-details.json"

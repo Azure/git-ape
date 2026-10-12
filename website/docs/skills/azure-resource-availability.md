@@ -18,7 +18,7 @@ description: "Query live Azure APIs to validate resource availability before tem
 | **Skill Directory** | `.github/skills/azure-resource-availability/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-resource-availability Resource type, region, and SKU/version to validate` |
+| **Usage** | `/azure-resource-availability` |
 
 
 ## Documentation

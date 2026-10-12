@@ -62,3 +62,12 @@ updates:
     time: "06:00"
     timezone: Etc/UTC
 version: 2
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7

@@ -30,18 +30,26 @@ dev:
   maxIterations: 5
 
 tokens:
-  # Aspirational token caps for new SKILL.md files. These are intentionally
-  # tighter than today's corpus (13 skills as of 2026-05, p75 ≈ 3.2k tokens) —
-  # the goal is to push NEW skills to fit comfortably in agent context, while
-  # existing oversize skills are gradually trimmed via /skill-improve.
-  # Re-evaluate once the skill corpus stabilises: `waza tokens count
+  # Aspirational token caps for SKILL.md files, calibrated to the upstream
+  # agentskills.io specification recommendation: < 5,000 tokens and < 500 lines
+  # per skill body. (See https://agentskills.io/specification.md#progressive-disclosure)
+  #
+  # Rationale: an earlier iteration of this config set warningThreshold=1000 and
+  # fallbackLimit=1300 in pursuit of a "tighter than upstream" local target.
+  # In practice, several legitimately procedural skills (azure-policy-advisor,
+  # azure-security-analyzer, git-ape-onboarding) carry domain-specific procedures
+  # that exceed 1k tokens by design — the upstream 5,000-token ceiling is the
+  # ground truth for "does this fit in agent context comfortably".
+  #
+  # Skills approaching warningThreshold should explore progressive disclosure
+  # (L2 references/, L3 live tools, scripts/) before being decomposed. Skills
+  # over fallbackLimit should be split into focused sub-skills.
+  #
+  # Re-evaluate when the skill corpus stabilises: `waza tokens count
   # .github/skills/ --format json | jq '[.files|to_entries[]|
   # select(.key|endswith("/SKILL.md"))|.value.tokens]|sort'`.
-  warningThreshold: 1000
-  # Hard fallback ceiling enforced by `waza tokens compare --strict`.
-  # Tightened in Wave 3b from 1500 → 1300 (1.3× warningThreshold) to narrow
-  # the gap between "warn" and "block" for new skills.
-  fallbackLimit: 1300
+  warningThreshold: 3000
+  fallbackLimit: 5000
 
 graders:
   programTimeout: 30

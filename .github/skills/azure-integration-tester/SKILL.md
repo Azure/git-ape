@@ -1,8 +1,9 @@
 ---
 name: azure-integration-tester
 description: 'Run post-deployment integration tests for Azure resources. Verify Function Apps, Storage Accounts, Databases, App Services are healthy and accessible. Use after successful Azure deployment.'
-argument-hint: 'Deployment outputs (resource IDs and endpoints)'
-user-invocable: true
+metadata:
+  argument-hint: 'Deployment outputs (resource IDs and endpoints)'
+  user-invocable: true
 ---
 
 # Azure Integration Tester

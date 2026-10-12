@@ -6,12 +6,13 @@ on:
   workflow_dispatch:
 permissions:
   issues: read
+  copilot-requests: write
 tools:
   github:
     toolsets: [issues, labels]
 safe-outputs:
   add-labels:
-    allowed: [bug, feature, enhancement, documentation, question, help-wanted, good-first-issue]
+    allowed: [bug, feature, enhancement, documentation, question, help wanted, good first issue, community]
   add-comment: {}
   noop:
     report-as-issue: false
@@ -23,7 +24,7 @@ source: github/gh-aw/.github/workflows/issue-triage-agent.md@852cb06ad52958b402e
 
 # Issue Triage Agent
 
-List open issues in ${{ github.repository }} that have no labels. For each unlabeled issue, analyze the title and body, then add one of the allowed labels: `bug`, `feature`, `enhancement`, `documentation`, `question`, `help-wanted`, or `good-first-issue`, `community`.
+List open issues in ${{ github.repository }} that have no labels. For each unlabeled issue, analyze the title and body, then add one of the allowed labels: `bug`, `feature`, `enhancement`, `documentation`, `question`, `help wanted`, `good first issue`, or `community`.
 
 Skip issues that:
 - Already have any of these labels
@@ -79,6 +80,6 @@ This provides both per-issue context and batch visibility.
 - `enhancement`: Suggests improvements to existing features or code.
 - `documentation`: Pertains to issues related to documentation, such as missing or unclear docs.
 - `question`: Used for issues that are asking for clarification or have questions about the project.
-- `help-wanted`: Indicates that the issue is a good candidate for external contributions and help
-- `good-first-issue`: Marks issues that are suitable for newcomers to the project, often with simpler scope.
+- `help wanted`: Indicates that the issue is a good candidate for external contributions and help
+- `good first issue`: Marks issues that are suitable for newcomers to the project, often with simpler scope.
 - `community`: Indicates that the issue is related to community engagement, such as events, discussions, or contributions that don't fit into the other categories. From authors who are not contributors to the codebase but are engaging with the project in other ways.

@@ -1,0 +1,31 @@
+<svg viewBox="0 0 560 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+<defs>
+<linearGradient id="tpl" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient>
+<linearGradient id="ana" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0F9ED5"/><stop offset="100%" stop-color="#156082"/></linearGradient>
+<linearGradient id="pass" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4EA72E"/><stop offset="100%" stop-color="#2D6E1B"/></linearGradient>
+<linearGradient id="block" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D13438"/><stop offset="100%" stop-color="#A02226"/></linearGradient>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#FFD700"/></marker>
+</defs>
+<g font-family="Segoe UI,system-ui,sans-serif">
+<rect x="20" y="110" width="130" height="70" rx="12" fill="url(#tpl)" stroke="rgba(255,255,255,0.3)"/>
+<text x="85" y="138" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Template</text>
+<text x="85" y="158" text-anchor="middle" fill="#e8e2ff" font-size="10">ARM JSON</text>
+<rect x="200" y="110" width="160" height="70" rx="12" fill="url(#ana)" stroke="rgba(255,255,255,0.3)"/>
+<text x="280" y="135" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Security Analyzer</text>
+<text x="280" y="153" text-anchor="middle" fill="#d6eef8" font-size="10">Critical &#183; High &#183; Medium</text>
+<text x="280" y="168" text-anchor="middle" fill="#d6eef8" font-size="10">checks</text>
+<rect x="410" y="35" width="130" height="70" rx="12" fill="url(#pass)" stroke="rgba(255,255,255,0.3)"/>
+<text x="475" y="60" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">PASS</text>
+<text x="475" y="80" text-anchor="middle" fill="#d8efce" font-size="10">Deploy proceeds</text>
+<text x="475" y="93" text-anchor="middle" fill="#d8efce" font-size="9">via az stack sub create</text>
+<rect x="410" y="185" width="130" height="70" rx="12" fill="url(#block)" stroke="rgba(255,255,255,0.3)"/>
+<text x="475" y="210" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">BLOCKED</text>
+<text x="475" y="230" text-anchor="middle" fill="#fac6c8" font-size="10">Fix or override</text>
+<text x="475" y="243" text-anchor="middle" fill="#fac6c8" font-size="9">(logged justification)</text>
+<text x="385" y="25" fill="#d8efce" font-size="10" font-weight="700">all critical/high &#10003;</text>
+<text x="385" y="275" fill="#fac6c8" font-size="10" font-weight="700">any critical/high &#10007;</text>
+</g>
+<line x1="150" y1="145" x2="196" y2="145" stroke="#FFD700" stroke-width="2.5" marker-end="url(#ar)"/>
+<line x1="360" y1="130" x2="406" y2="80" stroke="#FFD700" stroke-width="2.5" marker-end="url(#ar)"/>
+<line x1="360" y1="160" x2="406" y2="215" stroke="#FFD700" stroke-width="2.5" marker-end="url(#ar)"/>
+</svg>

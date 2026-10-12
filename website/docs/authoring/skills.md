@@ -138,8 +138,26 @@ What the user (or agent) should invoke after a successful run. Use a clickable c
 | `argument-hint` | ⚪ | Free-text hint displayed in the prompt picker. |
 | `user-invocable` | ⚪ | Defaults to `true`. Set `false` for skills that only run as a sub-step of an agent and should not be surfaced standalone. |
 | `license` | ⚪ | Recommended `MIT` for skills shipped with this repo — keeps redistribution rights explicit. |
-| `metadata.author` | ⚪ | Free-text author or team name (e.g. `Git-Ape`, `Microsoft`). |
+| `metadata.author` | ⚪ for first-party, **✅ required** for community skills | Free-text author or team name (e.g. `Git-Ape`, `Microsoft`, or your GitHub handle). |
 | `metadata.version` | ⚪ | Semver string. Bump on every behavior change — eval suites and CI can pin to a version. |
+| `metadata.source` | ⚪ | Community skills only. URL of the repo where the skill is canonically maintained, if not this one. |
+| `metadata.maturity` | ⚪ | Community skills only. `experimental` (default) or `stable`. |
+
+## Community skills
+
+Third parties can contribute skills without maintainer sign-off by placing
+them under `.github/skills/community/<name>/SKILL.md` instead of
+`.github/skills/<name>/SKILL.md`. They follow the identical file layout and
+frontmatter rules above, plus a required `metadata.author`. See
+[Contributing a Community Skill](https://github.com/Azure/git-ape/blob/main/CONTRIBUTING.md#contributing-a-community-skill)
+for the full process and start from
+[`COMMUNITY_SKILL.template.md`](https://github.com/Azure/git-ape/blob/main/.github/templates/COMMUNITY_SKILL.template.md).
+
+Every skill — first-party and community — is picked up automatically into
+the generated [Skill Registry](/docs/skills/registry)
+(`.github/skills/registry.json`), which lists name, tier, author, and
+maturity for discovery by users and tooling. No manual registration step
+beyond adding a valid `SKILL.md` is required.
 
 ## Anatomy of a good skill
 

@@ -1,10 +1,10 @@
 ---
 name: prereq-check
 description: "Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose."
-argument-hint: "Run without arguments to check all prerequisites"
-user-invocable: true
 license: MIT
 metadata:
+  argument-hint: "Run without arguments to check all prerequisites"
+  user-invocable: true
   author: Git-Ape
   version: "0.1.0"
 ---

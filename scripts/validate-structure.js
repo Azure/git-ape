@@ -28,6 +28,10 @@ const SKILLS_DIR = path.join(ROOT, '.github', 'skills');
 
 const KEBAB_CASE_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+// Third-party/community skills live in this fixed subdirectory of SKILLS_DIR.
+// It is a container, not a skill itself, and is excluded from first-party checks.
+const COMMUNITY_DIR_NAME = 'community';
+
 let errors = [];
 let warnings = [];
 
@@ -49,11 +53,40 @@ function ok(msg) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getSkillDirs() {
+// Returns one entry per skill directory across both tiers:
+//   - first-party: direct children of .github/skills/
+//   - community:   children of .github/skills/community/ (third-party contributions)
+// `relDir` is the path relative to SKILLS_DIR (e.g. 'azure-cost-estimator' or
+// 'community/foo'); `leaf` is the directory's own name, which must match the
+// skill's frontmatter `name` regardless of tier.
+function getSkillEntries() {
   if (!fs.existsSync(SKILLS_DIR)) return [];
-  return fs.readdirSync(SKILLS_DIR).filter((d) => {
-    return fs.statSync(path.join(SKILLS_DIR, d)).isDirectory();
-  });
+  const entries = [];
+
+  const topLevel = fs.readdirSync(SKILLS_DIR).filter((d) =>
+    fs.statSync(path.join(SKILLS_DIR, d)).isDirectory()
+  );
+
+  for (const dir of topLevel) {
+    if (dir === COMMUNITY_DIR_NAME) continue; // container, not a skill
+    entries.push({ relDir: dir, leaf: dir, tier: 'first-party' });
+  }
+
+  const communityRoot = path.join(SKILLS_DIR, COMMUNITY_DIR_NAME);
+  if (fs.existsSync(communityRoot)) {
+    const communityDirs = fs.readdirSync(communityRoot).filter((d) =>
+      fs.statSync(path.join(communityRoot, d)).isDirectory()
+    );
+    for (const dir of communityDirs) {
+      entries.push({ relDir: path.posix.join(COMMUNITY_DIR_NAME, dir), leaf: dir, tier: 'community' });
+    }
+  }
+
+  return entries;
+}
+
+function skillMdPathFor(entry) {
+  return path.join(SKILLS_DIR, entry.relDir, 'SKILL.md');
 }
 
 function getAgentFiles() {
@@ -108,44 +141,45 @@ function checkKebabCase(dirs, label) {
   }
 }
 
-function checkSkillPresence(skillDirs) {
+function checkSkillPresence(skillEntries) {
   console.log('\n📄 SKILL.md presence:');
-  for (const dir of skillDirs) {
-    const skillMd = path.join(SKILLS_DIR, dir, 'SKILL.md');
-    if (!fs.existsSync(skillMd)) {
-      error(`Skill directory '${dir}' is missing SKILL.md`);
+  for (const entry of skillEntries) {
+    if (!fs.existsSync(skillMdPathFor(entry))) {
+      error(`Skill directory '${entry.relDir}' is missing SKILL.md`);
     }
   }
-  const allPresent = skillDirs.every((d) =>
-    fs.existsSync(path.join(SKILLS_DIR, d, 'SKILL.md'))
-  );
+  const allPresent = skillEntries.every((e) => fs.existsSync(skillMdPathFor(e)));
   if (allPresent) {
-    ok(`All ${skillDirs.length} skill directories contain SKILL.md`);
+    ok(`All ${skillEntries.length} skill directories contain SKILL.md`);
   }
 }
 
-function checkSkillFrontmatter(skillDirs) {
+function checkSkillFrontmatter(skillEntries) {
   console.log('\n🏷️  Skill frontmatter validation:');
-  for (const dir of skillDirs) {
-    const skillMd = path.join(SKILLS_DIR, dir, 'SKILL.md');
+  for (const entry of skillEntries) {
+    const skillMd = skillMdPathFor(entry);
     if (!fs.existsSync(skillMd)) continue;
 
     const parsed = parseFrontmatter(skillMd);
     if (!parsed) {
-      error(`${dir}/SKILL.md: Could not parse YAML frontmatter`);
+      error(`${entry.relDir}/SKILL.md: Could not parse YAML frontmatter`);
       continue;
     }
 
     const { data: fm } = parsed;
 
     if (!fm.name) {
-      error(`${dir}/SKILL.md: Missing required frontmatter field 'name'`);
-    } else if (fm.name !== dir) {
-      error(`${dir}/SKILL.md: Frontmatter 'name' is '${fm.name}' but directory is '${dir}'`);
+      error(`${entry.relDir}/SKILL.md: Missing required frontmatter field 'name'`);
+    } else if (fm.name !== entry.leaf) {
+      error(`${entry.relDir}/SKILL.md: Frontmatter 'name' is '${fm.name}' but directory is '${entry.leaf}'`);
     }
 
     if (!fm.description) {
-      error(`${dir}/SKILL.md: Missing required frontmatter field 'description'`);
+      error(`${entry.relDir}/SKILL.md: Missing required frontmatter field 'description'`);
+    }
+
+    if (entry.tier === 'community' && !(fm.metadata && fm.metadata.author)) {
+      error(`${entry.relDir}/SKILL.md: Community skills must set 'metadata.author' (attribution for the registry)`);
     }
   }
   if (errors.length === 0) {
@@ -177,10 +211,10 @@ function checkAgentFrontmatter(agentFiles) {
   }
 }
 
-function checkSkillSections(skillDirs) {
+function checkSkillSections(skillEntries) {
   console.log('\n📑 Required skill sections (## When to Use, ## Procedure):');
-  for (const dir of skillDirs) {
-    const skillMd = path.join(SKILLS_DIR, dir, 'SKILL.md');
+  for (const entry of skillEntries) {
+    const skillMd = skillMdPathFor(entry);
     if (!fs.existsSync(skillMd)) continue;
 
     const parsed = parseFrontmatter(skillMd);
@@ -189,7 +223,7 @@ function checkSkillSections(skillDirs) {
     const content = parsed.content;
 
     if (!content.includes('## When to Use')) {
-      warn(`${dir}/SKILL.md: Missing '## When to Use' section`);
+      warn(`${entry.relDir}/SKILL.md: Missing '## When to Use' section`);
     }
 
     // Accept "## Procedure" or equivalent procedural sections
@@ -197,7 +231,7 @@ function checkSkillSections(skillDirs) {
       content.includes('## Execution Playbook') ||
       content.includes('## Command Playbook');
     if (!hasProcedure) {
-      warn(`${dir}/SKILL.md: Missing '## Procedure' section (or equivalent like '## Execution Playbook')`);
+      warn(`${entry.relDir}/SKILL.md: Missing '## Procedure' section (or equivalent like '## Execution Playbook')`);
     }
   }
 }
@@ -221,10 +255,10 @@ function checkAgentSections(agentFiles) {
   }
 }
 
-function checkCrossReferences(skillDirs, agentFiles) {
+function checkCrossReferences(skillEntries, agentFiles) {
   console.log('\n🔗 Cross-reference integrity:');
 
-  const skillNames = new Set(skillDirs);
+  const skillNames = new Set(skillEntries.map((e) => e.leaf));
 
   // Check agent -> agent references
   const agentNameMap = new Map();
@@ -261,8 +295,8 @@ function checkCrossReferences(skillDirs, agentFiles) {
   }
 
   // Check skill -> skill slash-command references
-  for (const dir of skillDirs) {
-    const skillMd = path.join(SKILLS_DIR, dir, 'SKILL.md');
+  for (const entry of skillEntries) {
+    const skillMd = skillMdPathFor(entry);
     if (!fs.existsSync(skillMd)) continue;
 
     const parsed = parseFrontmatter(skillMd);
@@ -271,7 +305,7 @@ function checkCrossReferences(skillDirs, agentFiles) {
     const slashCommands = extractSlashCommands(parsed.content);
     for (const cmd of slashCommands) {
       if (!skillNames.has(cmd)) {
-        warn(`${dir}/SKILL.md: Slash-command '/${cmd}' does not match any skill directory`);
+        warn(`${entry.relDir}/SKILL.md: Slash-command '/${cmd}' does not match any skill directory`);
       }
     }
   }
@@ -281,14 +315,14 @@ function checkCrossReferences(skillDirs, agentFiles) {
   }
 }
 
-function checkRelativeLinks(skillDirs, agentFiles) {
+function checkRelativeLinks(skillEntries, agentFiles) {
   console.log('\n🔗 Relative link validation:');
   let linkCount = 0;
   let brokenCount = 0;
 
   // Check skills
-  for (const dir of skillDirs) {
-    const skillMd = path.join(SKILLS_DIR, dir, 'SKILL.md');
+  for (const entry of skillEntries) {
+    const skillMd = skillMdPathFor(entry);
     if (!fs.existsSync(skillMd)) continue;
 
     const raw = fs.readFileSync(skillMd, 'utf-8');
@@ -297,7 +331,7 @@ function checkRelativeLinks(skillDirs, agentFiles) {
       linkCount++;
       const resolved = path.resolve(path.dirname(skillMd), link);
       if (!fs.existsSync(resolved)) {
-        error(`${dir}/SKILL.md: Broken relative link '${link}'`);
+        error(`${entry.relDir}/SKILL.md: Broken relative link '${link}'`);
         brokenCount++;
       }
     }
@@ -332,20 +366,21 @@ function main() {
   console.log(`   Skills: ${SKILLS_DIR}`);
   console.log(`   Agents: ${AGENTS_DIR}`);
 
-  const skillDirs = getSkillDirs();
+  const skillEntries = getSkillEntries();
   const agentFiles = getAgentFiles();
 
-  console.log(`\n   Found ${skillDirs.length} skill directories`);
+  const communityCount = skillEntries.filter((e) => e.tier === 'community').length;
+  console.log(`\n   Found ${skillEntries.length} skill directories (${communityCount} community)`);
   console.log(`   Found ${agentFiles.length} agent files`);
 
-  checkKebabCase(skillDirs, 'skill');
-  checkSkillPresence(skillDirs);
-  checkSkillFrontmatter(skillDirs);
+  checkKebabCase(skillEntries.map((e) => e.leaf), 'skill');
+  checkSkillPresence(skillEntries);
+  checkSkillFrontmatter(skillEntries);
   checkAgentFrontmatter(agentFiles);
-  checkSkillSections(skillDirs);
+  checkSkillSections(skillEntries);
   checkAgentSections(agentFiles);
-  checkCrossReferences(skillDirs, agentFiles);
-  checkRelativeLinks(skillDirs, agentFiles);
+  checkCrossReferences(skillEntries, agentFiles);
+  checkRelativeLinks(skillEntries, agentFiles);
 
   // Summary
   console.log('\n' + '─'.repeat(60));

@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-compliance-audit
+name: Positive — Compliance framework audit (CIS)
+description: User asks for a CIS-framed compliance audit across a mixed resource set. Skill should acknowledge the framework, point at the built-in regulatory compliance initiative, and discuss initiative-vs-individual-policy trade-offs.
+# See positive-after-template-generation.yaml for `mutable-by-*` tag semantics.
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: |
+    We need to audit our Azure subscription for compliance with the CIS
+    Azure Foundations benchmark. The deployment we're focused on has:
+
+    - Storage Accounts (multiple)
+    - An Azure SQL Database
+    - Virtual Machines (a small VM Scale Set)
+
+    Which CIS-relevant controls apply to these resource types, and should
+    we assign the CIS regulatory compliance initiative as a whole, or pick
+    individual policies? Also: should we start in audit mode or jump
+    straight to deny enforcement?
+
+    Give me your recommendations now based on what you already know about
+    the CIS Azure Foundations benchmark and Azure Policy. At most one or
+    two quick documentation lookups if you're truly uncertain — don't
+    research exhaustively.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-policy-advisor/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # See positive-after-template-generation.yaml header for the rules around
+  # prompt graders, continue_session, and binary pass/fail semantics.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked for a CIS Azure Foundations–framed compliance audit
+        covering Storage Accounts, an Azure SQL Database, and Virtual
+        Machines (in a Scale Set). They also asked whether to assign the
+        CIS initiative as a whole vs picking individual policies, and
+        whether to start in audit or deny enforcement.
+
+        PASS criteria — the response must satisfy ALL FOUR of:
+          1. Acknowledges the CIS Azure Foundations benchmark the user
+             asked about and recommends evaluating the corresponding
+             built-in Azure Policy regulatory-compliance initiative (or a
+             CIS initiative if available), while noting that current
+             initiative IDs / names should be verified from Microsoft
+             Learn or `az policy set-definition list` before assignment.
+          2. Discusses the initiative-vs-individual-policy trade-off —
+             at minimum, that an initiative bundles many policies at once
+             for broad coverage, while individual assignments give more
+             granular control / parameter tuning. Either direction of the
+             trade-off must be made explicit.
+          3. Recommends an audit-first rollout (e.g., `Audit` effects,
+             `DoNotEnforce` enforcement mode, or "start in audit-only")
+             with deny / `Default` enforcement only after baselines are
+             clean or for hardened production. Either phrasing is fine —
+             the response must show awareness of the staged rollout.
+          4. Touches at least THREE of the four categories (storage,
+             SQL, compute / VM, monitoring / diagnostic settings) with
+             at least one named control area, built-in policy, or
+             specific check per category mentioned. Examples of acceptable
+             specifics: secure transfer for storage, SQL auditing /
+             transparent data encryption / Defender for SQL, VM disk
+             encryption / managed disks / approved extensions, diagnostic
+             settings / Log Analytics, allowed locations, tagging.
+
+        If ALL FOUR PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

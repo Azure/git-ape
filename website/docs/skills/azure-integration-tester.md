@@ -18,7 +18,7 @@ description: "Run post-deployment integration tests for Azure resources. Verify 
 | **Skill Directory** | `.github/skills/azure-integration-tester/` |
 | **Phase** | Post-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-integration-tester Deployment outputs (resource IDs and endpoints)` |
+| **Usage** | `/azure-integration-tester` |
 
 
 ## Documentation

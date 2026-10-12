@@ -1,0 +1,61 @@
+<svg viewBox="0 0 520 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+  <defs>
+    <linearGradient id="fnGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#667eea"/>
+      <stop offset="100%" stop-color="#764ba2"/>
+    </linearGradient>
+    <linearGradient id="stGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F9ED5"/>
+      <stop offset="100%" stop-color="#156082"/>
+    </linearGradient>
+    <linearGradient id="aiGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E97132"/>
+      <stop offset="100%" stop-color="#B14E1F"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FFD700"/>
+    </marker>
+  </defs>
+
+  <!-- Function App (center) -->
+  <g>
+    <rect x="190" y="110" width="140" height="80" rx="14" fill="url(#fnGrad)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <text x="260" y="138" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="16" font-weight="700">Function App</text>
+    <text x="260" y="160" text-anchor="middle" fill="#f0e6ff" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Python runtime</text>
+    <text x="260" y="178" text-anchor="middle" fill="#ffd700" font-family="Segoe UI, system-ui, sans-serif" font-size="10" font-weight="700">+ Managed Identity</text>
+  </g>
+
+  <!-- Storage Account (right) -->
+  <g>
+    <rect x="380" y="50" width="120" height="70" rx="12" fill="url(#stGrad)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <text x="440" y="78" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="700">Storage</text>
+    <text x="440" y="98" text-anchor="middle" fill="#d6eef8" font-family="Segoe UI, system-ui, sans-serif" font-size="10">blob + queue</text>
+  </g>
+
+  <!-- App Insights (right-bottom) -->
+  <g>
+    <rect x="380" y="180" width="120" height="70" rx="12" fill="url(#aiGrad)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <text x="440" y="208" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="700">App Insights</text>
+    <text x="440" y="228" text-anchor="middle" fill="#ffe2cf" font-family="Segoe UI, system-ui, sans-serif" font-size="10">logs &amp; traces</text>
+  </g>
+
+  <!-- Trigger (left) -->
+  <g>
+    <rect x="20" y="110" width="120" height="80" rx="12" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.30)" stroke-width="1.2"/>
+    <text x="80" y="138" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="700">HTTP Trigger</text>
+    <text x="80" y="158" text-anchor="middle" fill="#c0cad7" font-family="Segoe UI, system-ui, sans-serif" font-size="10">your request</text>
+    <text x="80" y="176" text-anchor="middle" fill="#c0cad7" font-family="Segoe UI, system-ui, sans-serif" font-size="10">in →</text>
+  </g>
+
+  <!-- Arrows -->
+  <line x1="140" y1="150" x2="186" y2="150" stroke="#FFD700" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="330" y1="135" x2="376" y2="90" stroke="#FFD700" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="330" y1="165" x2="376" y2="210" stroke="#FFD700" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Labels on arrows -->
+  <text x="345" y="105" fill="#ffe89a" font-family="Segoe UI, system-ui, sans-serif" font-size="9" font-style="italic">data</text>
+  <text x="345" y="200" fill="#ffe89a" font-family="Segoe UI, system-ui, sans-serif" font-size="9" font-style="italic">telemetry</text>
+
+  <!-- Caption -->
+  <text x="260" y="285" text-anchor="middle" fill="#c0cad7" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-style="italic">All connections use managed identity — zero secrets in code</text>
+</svg>

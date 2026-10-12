@@ -1,0 +1,205 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Azure Git-Ape",
+    "identifier": "did:web:azure.github.io"
+  },
+  "entries": [
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-cost-estimator",
+      "displayName": "Azure Cost Estimator",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-cost-estimator/SKILL.md",
+      "description": "Estimate monthly costs for Azure resources by querying the Azure Retail Prices API. Parses ARM templates to identify resources, SKUs, and regions, then looks up real retail pricing. Produces a per-resource cost breakdown with monthly totals.",
+      "representativeQueries": [
+        "estimate the monthly cost of my Azure ARM template",
+        "how much will this Azure deployment cost to run",
+        "get real Azure retail pricing for my infrastructure",
+        "calculate Azure resource costs before deploying"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-deployment-preflight",
+      "displayName": "Azure Deployment Preflight",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-deployment-preflight/SKILL.md",
+      "description": "Run preflight validation on ARM templates before deployment. Performs what-if analysis, permission checks, and generates a structured report with resource changes (create/modify/delete). Use before any deployment to preview changes and catch issues early.",
+      "representativeQueries": [
+        "validate my ARM template before deploying to Azure",
+        "preview what changes will be made to Azure resources",
+        "run what-if analysis on an Azure deployment",
+        "check for permission errors before deploying to Azure"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-drift-detector",
+      "displayName": "Azure Drift Detector",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-drift-detector/SKILL.md",
+      "description": "Detect configuration drift between deployed Azure resources and stored deployment state. Compare actual Azure configuration against desired state, identify differences, and guide user through reconciliation options.",
+      "representativeQueries": [
+        "detect configuration drift in my Azure resources",
+        "check if Azure resources have changed since last deployment",
+        "compare live Azure state to my ARM template desired state",
+        "find manual changes made to deployed Azure infrastructure"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-integration-tester",
+      "displayName": "Azure Integration Tester",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-integration-tester/SKILL.md",
+      "description": "Run post-deployment integration tests for Azure resources. Verify Function Apps, Storage Accounts, Databases, and App Services are healthy and accessible. Use after successful Azure deployment.",
+      "representativeQueries": [
+        "run integration tests on my Azure deployment",
+        "verify Azure Function App is healthy after deploying",
+        "test that Azure resources are accessible post-deployment",
+        "run smoke tests against deployed Azure infrastructure"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-naming-research",
+      "displayName": "Azure Naming Research",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-naming-research/SKILL.md",
+      "description": "Research Azure naming constraints and CAF abbreviations for a given resource type. Look up the official CAF slug, naming rules (length, scope, valid characters), and derive validation and cleaning regex patterns for an Azure resource.",
+      "representativeQueries": [
+        "what are the naming rules for an Azure storage account",
+        "find the CAF abbreviation for an Azure resource type",
+        "check Azure resource name length and character restrictions",
+        "get the official naming convention for Azure Container Apps"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-policy-advisor",
+      "displayName": "Azure Policy Advisor",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-policy-advisor/SKILL.md",
+      "description": "Assess ARM template resources for Azure Policy compliance. Query existing subscription assignments, identify unassigned built-in and custom policies (CIS, NIST, FedRAMP), and emit a two-part report: template-fixable gaps and subscription-level policy assignments.",
+      "representativeQueries": [
+        "check my ARM template for Azure Policy compliance gaps",
+        "find unassigned CIS or NIST policies in my Azure subscription",
+        "assess my Azure deployment against FedRAMP policy requirements",
+        "identify Azure policy violations in my infrastructure template"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-resource-availability",
+      "displayName": "Azure Resource Availability",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-resource-availability/SKILL.md",
+      "description": "Query live Azure APIs to validate resource availability before template generation or deployment. Checks VM SKU restrictions, Kubernetes and runtime version support, API version compatibility, and subscription quota.",
+      "representativeQueries": [
+        "check if a VM SKU is available in my Azure region",
+        "verify Azure subscription quota before deploying",
+        "check if an AKS Kubernetes version is still supported",
+        "validate Azure resource availability before creating a template"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-resource-visualizer",
+      "displayName": "Azure Resource Visualizer",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-resource-visualizer/SKILL.md",
+      "description": "Analyze deployed Azure resource groups and generate detailed Mermaid architecture diagrams showing relationships between resources. Use for post-deployment visualization, understanding existing infrastructure, or documenting live Azure environments.",
+      "representativeQueries": [
+        "generate an architecture diagram of my Azure resource group",
+        "visualize relationships between deployed Azure resources",
+        "create a Mermaid diagram of my Azure infrastructure",
+        "document my live Azure environment as an architecture diagram"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-rest-api-reference",
+      "displayName": "Azure REST API Reference",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-rest-api-reference/SKILL.md",
+      "description": "Look up Azure REST API and ARM template reference documentation for any resource type. Returns exact property schemas, required fields, valid values, and latest stable API versions. Use before generating or modifying ARM templates to ensure correctness.",
+      "representativeQueries": [
+        "look up the ARM template schema for an Azure resource type",
+        "find the required properties for an Azure Cosmos DB template",
+        "get the latest stable API version for an Azure resource",
+        "look up valid values for an Azure ARM template property"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-role-selector",
+      "displayName": "Azure Role Selector",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-role-selector/SKILL.md",
+      "description": "Recommend least-privilege Azure RBAC roles for deployed resources. Finds minimal built-in roles matching desired permissions or creates custom role definitions. Use during security analysis or when configuring access for service principals and managed identities.",
+      "representativeQueries": [
+        "find the least privilege Azure RBAC role for reading blob storage",
+        "what Azure role should I assign to a managed identity",
+        "create a custom Azure role with specific permissions",
+        "recommend minimal RBAC permissions for a service principal"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-security-analyzer",
+      "displayName": "Azure Security Analyzer",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-security-analyzer/SKILL.md",
+      "description": "Analyze Azure resource configurations against security best practices. Produces per-resource security assessment with severity ratings and actionable recommendations. Use during template generation before deployment confirmation.",
+      "representativeQueries": [
+        "check my Azure deployment for security misconfigurations",
+        "analyze ARM template against Azure security best practices",
+        "find high severity security issues in my Azure infrastructure",
+        "security review my Azure resources before deploying"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-stack-deploy",
+      "displayName": "Azure Stack Deploy",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-stack-deploy/SKILL.md",
+      "description": "Run an Azure Deployment Stack create at subscription scope for a prepared Git-Ape deployment artifact and write state.json. Use locally so the result matches the CI deploy workflow.",
+      "representativeQueries": [
+        "deploy a Git-Ape ARM template to Azure as a deployment stack",
+        "run an Azure Deployment Stack at subscription scope",
+        "deploy infrastructure to Azure and save deployment state",
+        "execute a Git-Ape deployment locally matching CI workflow"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:azure-stack-destroy",
+      "displayName": "Azure Stack Destroy",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/azure-stack-destroy/SKILL.md",
+      "description": "Tear down a Git-Ape deployment by ID. Reads state.json to delete the Azure Deployment Stack and purge soft-deleted Key Vault and Cognitive Services resources. Matches the CI destroy workflow.",
+      "representativeQueries": [
+        "tear down an Azure Deployment Stack and all its resources",
+        "delete a Git-Ape deployment and purge soft-deleted resources",
+        "destroy Azure infrastructure deployed by Git-Ape",
+        "clean up an Azure deployment including Key Vault purge"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:git-ape-onboarding",
+      "displayName": "Git-Ape Onboarding",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/git-ape-onboarding/SKILL.md",
+      "description": "Bootstrap a GitHub repository for Git-Ape CI/CD: Entra app registration, OIDC federated credentials, RBAC role assignments, GitHub environments, required secrets, and scaffold Actions workflow files for Azure deployments.",
+      "representativeQueries": [
+        "set up a GitHub repository for automated Azure deployments",
+        "configure OIDC federation between GitHub Actions and Azure",
+        "bootstrap Git-Ape CI/CD for a new repository",
+        "create Entra app registration and federated credentials for GitHub Actions"
+      ]
+    },
+    {
+      "identifier": "urn:ai:github.com:azure:git-ape:prereq-check",
+      "displayName": "Prerequisites Check",
+      "type": "application/ai-skill",
+      "url": "https://github.com/Azure/git-ape/blob/main/.github/skills/prereq-check/SKILL.md",
+      "description": "Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. Use before first-time onboarding or when a command-not-found error occurs.",
+      "representativeQueries": [
+        "check if my machine has the tools required for Azure deployment",
+        "install missing CLI dependencies for Git-Ape",
+        "validate az cli, gh cli, and jq are installed and authenticated",
+        "diagnose missing tools before running a Git-Ape workflow"
+      ]
+    }
+  ],
+  "collections": []
+}

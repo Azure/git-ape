@@ -47,6 +47,14 @@ description: "GitHub Actions workflow: Git-Ape: Onboarding Template Check"
 | **Runs On** | `ubuntu-latest` |
 | **Steps** | 2 |
 
+### `scaffold-enterprise-parity-smoke`
+
+| Property | Value |
+|----------|-------|
+| **Display Name** | Enterprise scaffold parity smoke (.github-private bash vs pwsh produces identical files) |
+| **Runs On** | `ubuntu-latest` |
+| **Steps** | 2 |
+
 
 
 ## Source
@@ -76,6 +84,8 @@ name: "Git-Ape: Onboarding Template Check"
 #   2. check-sync-pwsh  — Windows, runs the .ps1 sync check.
 #   3. scaffold-parity-smoke — Ubuntu, scaffolds via both runtimes into
 #      separate sandboxes and fails on any byte-level divergence.
+#   4. scaffold-enterprise-parity-smoke — Ubuntu, same byte-parity check for
+#      the enterprise (.github-private) scaffolders.
 
 on:
   pull_request:
@@ -85,6 +95,8 @@ on:
       - '.github/skills/git-ape-onboarding/scripts/sync-templates.ps1'
       - '.github/skills/git-ape-onboarding/scripts/scaffold-repo.sh'
       - '.github/skills/git-ape-onboarding/scripts/scaffold-repo.ps1'
+      - '.github/skills/git-ape-onboarding/scripts/scaffold-enterprise.sh'
+      - '.github/skills/git-ape-onboarding/scripts/scaffold-enterprise.ps1'
       - '.github/copilot-instructions.md'
       - '.github/workflows/git-ape-onboarding-template-check.yml'
   workflow_dispatch:
@@ -132,6 +144,28 @@ jobs:
           # Recursive diff: fails the job if the two scaffolds differ by a single byte.
           diff -r "$SANDBOX_SH" "$SANDBOX_PS"
           echo "scaffold-repo.sh and scaffold-repo.ps1 produce byte-identical output."
+
+  scaffold-enterprise-parity-smoke:
+    name: Enterprise scaffold parity smoke (.github-private bash vs pwsh produces identical files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Scaffold via bash and pwsh into separate sandboxes, then diff
+        run: |
+          set -euo pipefail
+          SANDBOX_SH="$(mktemp -d)"
+          SANDBOX_PS="$(mktemp -d)"
+          chmod +x .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.sh
+          bash .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.sh "$SANDBOX_SH" > /dev/null
+          pwsh -NoProfile -File .github/skills/git-ape-onboarding/scripts/scaffold-enterprise.ps1 "$SANDBOX_PS" > /dev/null
+          # Recursive diff: fails the job if the two scaffolds differ by a single byte.
+          diff -r "$SANDBOX_SH" "$SANDBOX_PS"
+          # The distributed managed-settings.json must always be valid JSON.
+          if command -v jq > /dev/null 2>&1; then
+            jq empty "$SANDBOX_SH/.github/copilot/managed-settings.json"
+          fi
+          echo "scaffold-enterprise.sh and scaffold-enterprise.ps1 produce byte-identical output."
 
 ```
 

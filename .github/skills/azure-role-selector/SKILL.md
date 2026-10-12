@@ -1,8 +1,9 @@
 ---
 name: azure-role-selector
 description: "Recommend least-privilege Azure RBAC roles for deployed resources. Finds minimal built-in roles matching desired permissions or creates custom role definitions. Use during security analysis or when configuring access for service principals and managed identities."
-argument-hint: "Describe the permissions needed (e.g., 'read storage blobs', 'deploy to app service')"
-user-invocable: true
+metadata:
+  argument-hint: "Describe the permissions needed (e.g., 'read storage blobs', 'deploy to app service')"
+  user-invocable: true
 ---
 
 # Azure Role Selector

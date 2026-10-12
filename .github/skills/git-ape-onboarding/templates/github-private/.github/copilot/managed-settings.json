@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "git-ape": {
+      "source": {
+        "source": "github",
+        "repo": "Azure/git-ape"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "git-ape@git-ape": true
+  }
+}

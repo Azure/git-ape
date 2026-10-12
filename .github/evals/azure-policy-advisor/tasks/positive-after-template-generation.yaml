@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-after-template-generation
+name: Positive — Post-template-generation policy recommendations
+description: After generating an ARM template, the user asks which Azure Policies to enforce. Skill should activate and produce per-resource recommendations split into template-level and subscription-level actions.
+# `mutable-by-*` tag declares which artifact must change for this task's
+# score to move. Values:
+#   mutable-by-skill        — score reflects SKILL.md (trigger graders)
+#   mutable-by-agent        — score reflects .agent.md (persona, workflow, identity)
+#   mutable-by-eval-grader  — score is locked by grader/task design; only this YAML can fix it
+tags: [trigger, positive, mutable-by-skill]
+inputs:
+  prompt: |
+    I just generated an ARM template with these resources for a production
+    deployment:
+
+    - Storage Account (Standard_LRS, HTTPS only, shared key access disabled,
+      blob public access disabled)
+    - Function App (system-assigned managed identity, TLS 1.2 minimum,
+      FTPS-only)
+    - Key Vault (RBAC authorization enabled, soft delete on, purge
+      protection on)
+
+    What Azure Policies should we enforce on this deployment to make it
+    compliant with general Azure best practices? Please separate anything
+    I should fix in the ARM template itself from policies the subscription /
+    platform team should assign. Assume you cannot query my subscription
+    right now — base recommendations on the template and resource types
+    above, and note anything that would need live verification.
+
+    Give me your top recommendations now using your existing knowledge of
+    Azure built-in policies. Skip exhaustive documentation lookups — at
+    most one or two quick checks for the most uncertain policy IDs is fine.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-policy-advisor/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user provided a small ARM template summary (Storage Account,
+        Function App, Key Vault — all already configured with several
+        security best practices) and asked which Azure Policies to enforce
+        on top, separating template-level fixes from subscription-level
+        assignments. They explicitly told the assistant to assume no live
+        Azure subscription query is available.
+
+        PASS criteria — the response must satisfy ALL FOUR of:
+          1. Addresses applicable policy / governance considerations for
+             ALL THREE resource types (Storage Account, Function App / App
+             Service, Key Vault). Each resource type must be mentioned with
+             at least one policy-relevant consideration, not just listed.
+          2. Recommends at least two recognizable Azure built-in policy
+             checks by name or close display-name equivalent, such as
+             secure transfer / HTTPS for storage, shared-key access disabled,
+             App Service HTTPS-only or TLS minimum version, managed identity
+             required, Key Vault RBAC authorization, soft delete / purge
+             protection, or diagnostic / resource logs.
+          3. Surfaces BOTH action tracks — template-level fixes (e.g.,
+             adding diagnostic settings, blob soft delete, missing TLS
+             setting) AND subscription-level policy or initiative
+             assignments (e.g., assigning a built-in policy or initiative
+             at the subscription scope). The response does not have to use
+             the literal words "Part 1 / Part 2", but both tracks must be
+             clearly distinguishable.
+          4. Provides at least one of: (a) a Microsoft Learn link or
+             category reference for Azure Policy built-ins, (b) a specific
+             built-in policy definition GUID, or (c) named built-in policies
+             with an explicit caveat that current definition IDs should be
+             verified against Microsoft Learn or `az policy definition list`
+             before assignment. A generic "I would look it up" with no
+             specific policy names or sources does NOT satisfy this.
+
+        If ALL FOUR PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

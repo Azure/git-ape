@@ -18,7 +18,7 @@ description: "Analyze deployed Azure resource groups and generate detailed Merma
 | **Skill Directory** | `.github/skills/azure-resource-visualizer/` |
 | **Phase** | Post-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-resource-visualizer Resource group name to visualize` |
+| **Usage** | `/azure-resource-visualizer` |
 
 
 ## Documentation

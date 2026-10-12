@@ -1,0 +1,3 @@
+# Placeholder so Git tracks this directory.
+# Put standalone custom agent profiles here as agents/<AGENT-NAME>.md
+# Do NOT copy Git-Ape's agents here — see ../README.md (they need the plugin).

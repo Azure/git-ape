@@ -70,6 +70,7 @@ jobs:
           HAS_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID != '' }}
           HAS_TENANT_ID: ${{ secrets.AZURE_TENANT_ID != '' }}
           HAS_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID != '' }}
+          HAS_COPILOT_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN != '' }}
         run: |
           MISSING=0
 
@@ -92,6 +93,17 @@ jobs:
             MISSING=$((MISSING + 1))
           else
             echo "✅ AZURE_SUBSCRIPTION_ID is set"
+          fi
+
+          # COPILOT_GITHUB_TOKEN is OPTIONAL — only the agentic drift-detection
+          # workflow (git-ape-drift) needs it. Report as a warning and never
+          # count it toward MISSING, so plan/deploy/destroy verification still
+          # passes when drift detection is not enabled.
+          if [[ "$HAS_COPILOT_TOKEN" != "true" ]]; then
+            echo "::warning::COPILOT_GITHUB_TOKEN not set — optional, required only for the drift-detection workflow (git-ape-drift)"
+            echo "⚠️ COPILOT_GITHUB_TOKEN not set (optional — needed only for drift detection)"
+          else
+            echo "✅ COPILOT_GITHUB_TOKEN is set (drift detection enabled)"
           fi
 
           echo "missing=$MISSING" >> "$GITHUB_OUTPUT"

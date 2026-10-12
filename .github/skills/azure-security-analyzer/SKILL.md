@@ -1,8 +1,9 @@
 ---
 name: azure-security-analyzer
 description: "Analyze Azure resource configurations against security best practices using Azure MCP bestpractices service. Produces per-resource security assessment with severity ratings and recommendations. Use during template generation before deployment confirmation."
-argument-hint: "Resource types and their configurations from the ARM template"
-user-invocable: true
+metadata:
+  argument-hint: "Resource types and their configurations from the ARM template"
+  user-invocable: true
 ---
 
 # Azure Security Analyzer

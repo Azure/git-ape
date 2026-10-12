@@ -393,6 +393,27 @@ gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --env "azure-destroy" --bod
 
 </details>
 
+#### (Optional) Enable drift detection
+
+The scaffolded **drift-detection** workflow (`git-ape-drift.lock.yml`) is a [GitHub Agentic Workflow](https://github.github.com/gh-aw/) that runs on the **GitHub Copilot engine**, so it needs one extra credential beyond the Azure OIDC values above: **`COPILOT_GITHUB_TOKEN`**. Its compiled workflow opens with a hard preflight gate that fails the run when the secret is missing — there is **no fallback** to the built-in `GITHUB_TOKEN`.
+
+Skip this step if you are not enabling scheduled drift detection — `plan`, `deploy`, `destroy`, and `verify` do not need it.
+
+```bash
+REPO="your-org/your-repo"
+# Paste a GitHub PAT (fine-grained or classic) from an identity with an active
+# GitHub Copilot seat. Store it as a REPOSITORY secret — the daily schedule
+# runs from main with no environment attached.
+gh secret set COPILOT_GITHUB_TOKEN -R "$REPO"
+```
+
+Confirm it end-to-end with a manual run:
+
+```bash
+gh workflow run git-ape-drift.lock.yml -R "$REPO"
+gh run list --workflow git-ape-drift.lock.yml -R "$REPO" --limit 1
+```
+
 #### Create GitHub environments
 
 <details>

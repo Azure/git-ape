@@ -1,7 +1,8 @@
 # Git-Ape Onboarding Templates
 
-This folder is the **canonical source** for the workflow files and deployment
-standards that the `/git-ape-onboarding` skill scaffolds into a user's repository.
+This folder is the **canonical source** for the workflow files, deployment
+standards, and enterprise-distribution layout that the `/git-ape-onboarding`
+skill scaffolds into a user's repository.
 
 > [!NOTE]
 > This README is for **repository maintainers only**. It is not shown to users
@@ -26,6 +27,12 @@ The files here are **canonical**.
 are **not mirrored** into this repository's `.github/workflows/`. They are
 scaffolded only into a **user's repository** by `scaffold-repo.{sh,ps1}` during
 onboarding. Git-Ape's own repo doesn't run these workflows.
+
+**Enterprise distribution templates** (`github-private/**`) are likewise
+**scaffold-only** — never mirrored into this repo. They are scaffolded into a
+**`.github-private` repository** by `scaffold-enterprise.{sh,ps1}` when
+onboarding runs in enterprise-distribution mode. See the "Mode: Enterprise
+Distribution" section of `../SKILL.md`.
 
 **`copilot-instructions.md`** is mirrored to this repository's
 `.github/copilot-instructions.md` so that Copilot uses the same deployment
@@ -53,10 +60,11 @@ standards when assisting on the git-ape repo itself. The mirror is kept in sync 
 `.github/skills/git-ape-onboarding/templates/workflows/` and commit. No mirror
 update is needed because Git-Ape's own repo does not contain a mirror copy.
 
-**Editing the helpers themselves:** if you change one of `sync-templates.{sh,ps1}`
-or `scaffold-repo.{sh,ps1}`, edit the parity sibling in the same PR. The
-`scaffold-parity-smoke` CI job recursively diffs the output of both
-`scaffold-repo` scripts and will fail on any divergence.
+**Editing the helpers themselves:** if you change one of `sync-templates.{sh,ps1}`,
+`scaffold-repo.{sh,ps1}`, or `scaffold-enterprise.{sh,ps1}`, edit the parity
+sibling in the same PR. The `scaffold-parity-smoke` and
+`scaffold-enterprise-parity-smoke` CI jobs recursively diff the output of each
+scaffolder pair and will fail on any divergence.
 
 ## Scaffold behavior
 
@@ -77,6 +85,15 @@ The skill scaffolds files **into the user's working copy only**:
 | `workflows/git-ape-drift.md` | `.github/workflows/git-ape-drift.md` | Agentic drift workflow source (gh-aw) |
 | `workflows/git-ape-drift.lock.yml` | `.github/workflows/git-ape-drift.lock.yml` | Compiled drift workflow (runnable as-is) |
 | `copilot-instructions.md` | `.github/copilot-instructions.md` | Git-Ape deployment standards |
+| `github-private/README.md` | `README.md` | Maintainer guide for the `.github-private` config repo |
+| `github-private/.github/copilot/managed-settings.json` | `.github/copilot/managed-settings.json` | Enterprise plugin standards (auto-installs the `git-ape` plugin) |
+| `github-private/agents/.gitkeep` | `agents/.gitkeep` | Placeholder for optional standalone custom agents |
+
+The first seven rows are scaffolded into a **user's deployment repo** by
+`scaffold-repo.{sh,ps1}`. The three `github-private/**` rows are scaffolded into a
+separate **`.github-private` enterprise config repo** by
+`scaffold-enterprise.{sh,ps1}` (the "Destination" column is relative to that
+repo's root). See the "Mode: Enterprise Distribution" section of `../SKILL.md`.
 
 ## Regenerating the drift lock file
 

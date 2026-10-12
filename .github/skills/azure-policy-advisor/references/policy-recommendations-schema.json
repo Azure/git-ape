@@ -1,0 +1,108 @@
+{
+  "assessedAt": "2026-04-07T19:00:00Z",
+  "deploymentId": "{deployment-id}",
+  "framework": "{compliance-framework}",
+  "enforcementMode": "Audit",
+  "subscriptionState": "queried",
+  "summary": {
+    "totalRecommended": 16,
+    "alreadyAssigned": 2,
+    "templateCompliant": 8,
+    "templateFixable": 3,
+    "customAvailable": 1,
+    "subscriptionGaps": 3
+  },
+  "existingAssignments": [
+    {
+      "name": "Secure transfer to storage accounts should be enabled",
+      "definitionId": "/providers/Microsoft.Authorization/policyDefinitions/404c3081-a854-4457-ae30-26a93ef643f9",
+      "enforcementMode": "Default",
+      "scope": "/subscriptions/{subscription-id}",
+      "assignedVia": "direct",
+      "policyType": "BuiltIn",
+      "relevantToDeployment": true
+    }
+  ],
+  "unassignedCustomDefinitions": [
+    {
+      "name": "SFI-ID4.2.1 Storage Accounts - Safe Secrets Standard",
+      "definitionId": "/providers/Microsoft.Management/managementGroups/{mg-id}/providers/Microsoft.Authorization/policyDefinitions/{custom-id}",
+      "category": "Storage",
+      "targetResourceType": "Microsoft.Storage/storageAccounts",
+      "effect": "Modify",
+      "definitionScope": "management-group",
+      "actionTrack": "subscription"
+    }
+  ],
+  "templateImprovements": [
+    {
+      "resourceType": "Microsoft.Storage/storageAccounts",
+      "gap": "Blob soft delete not enabled",
+      "complianceControl": "CP-9 (Contingency Planning)",
+      "severity": "medium",
+      "fix": "Add blobServices/default child resource with deleteRetentionPolicy.enabled: true",
+      "actionTrack": "template"
+    },
+    {
+      "resourceType": "Microsoft.Storage/storageAccounts",
+      "gap": "No diagnostic settings",
+      "complianceControl": "AU-2, AU-6, AU-12 (Audit & Accountability)",
+      "severity": "high",
+      "fix": "Add Log Analytics workspace + Microsoft.Insights/diagnosticSettings",
+      "actionTrack": "template"
+    }
+  ],
+  "policies": [
+    {
+      "name": "Secure transfer to storage accounts should be enabled",
+      "definitionId": "404c3081-a854-4457-ae30-26a93ef643f9",
+      "effect": "Deny",
+      "severity": "critical",
+      "category": "Storage",
+      "status": "already-assigned",
+      "policyType": "BuiltIn",
+      "actionTrack": "none",
+      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#storage"
+    },
+    {
+      "name": "Disable shared key access",
+      "definitionId": "{built-in-id}",
+      "effect": "Audit",
+      "severity": "high",
+      "category": "Storage",
+      "status": "template-compliant",
+      "policyType": "BuiltIn",
+      "actionTrack": "subscription",
+      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#storage"
+    },
+    {
+      "name": "Enable blob soft delete",
+      "definitionId": null,
+      "effect": null,
+      "severity": "medium",
+      "category": "Storage",
+      "status": "template-fixable",
+      "policyType": null,
+      "actionTrack": "template",
+      "sourceUrl": null
+    },
+    {
+      "name": "NSG flow logs should be enabled",
+      "definitionId": "27960feb-a23c-4577-8d36-ef8b5f35e0be",
+      "effect": "Audit",
+      "severity": "high",
+      "category": "Networking",
+      "status": "gap",
+      "policyType": "BuiltIn",
+      "actionTrack": "subscription",
+      "sourceUrl": "https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#network"
+    }
+  ],
+  "initiative": {
+    "name": "NIST SP 800-53 Rev. 5",
+    "builtInId": "179d1daa-458f-4e47-8086-2a68d0d6c38f",
+    "policyCount": 696,
+    "status": "not-assigned",
+    "coverage": "covers {N} of {M} recommended policies"
+  }
+}

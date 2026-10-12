@@ -18,7 +18,7 @@ description: "Recommend least-privilege Azure RBAC roles for deployed resources.
 | **Skill Directory** | `.github/skills/azure-role-selector/` |
 | **Phase** | Pre-Deploy |
 | **User Invocable** | ✅ Yes |
-| **Usage** | `/azure-role-selector Describe the permissions needed (e.g., 'read storage blobs', 'deploy to app service')` |
+| **Usage** | `/azure-role-selector` |
 
 
 ## Documentation

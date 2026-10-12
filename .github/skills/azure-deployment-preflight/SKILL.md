@@ -1,8 +1,9 @@
 ---
 name: azure-deployment-preflight
 description: "Run preflight validation on ARM templates before deployment. Performs what-if analysis, permission checks, and generates a structured report with resource changes (create/modify/delete). Use before any deployment to preview changes and catch issues early."
-argument-hint: "ARM template path or deployment ID"
-user-invocable: true
+metadata:
+  argument-hint: "ARM template path or deployment ID"
+  user-invocable: true
 ---
 
 # Azure Deployment Preflight Validation

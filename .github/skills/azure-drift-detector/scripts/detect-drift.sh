@@ -61,6 +61,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --verbose)
+            # shellcheck disable=SC2034  # reserved: --verbose is accepted for CLI parity; verbose output is not yet wired up
             VERBOSE=true
             shift
             ;;
@@ -114,11 +115,8 @@ echo ""
 # Load known drift if exists and ignoring is enabled
 KNOWN_DRIFT_FILE="$DRIFT_DIR/known-drift.json"
 if [[ "$IGNORE_KNOWN_DRIFT" == "true" ]] && [[ -f "$KNOWN_DRIFT_FILE" ]]; then
-    KNOWN_DRIFT=$(cat "$KNOWN_DRIFT_FILE")
     echo -e "${YELLOW}Note: Ignoring known drift entries${NC}"
     echo ""
-else
-    KNOWN_DRIFT="{}"
 fi
 
 # Initialize drift counters
