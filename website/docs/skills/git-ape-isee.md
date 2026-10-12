@@ -108,10 +108,16 @@ The adoption command:
 - validates and artifact-verifies every existing AERP bundle when `aerp` is
   installed;
 - creates `isee-bindings.json` from exact existing fingerprints and artifact
-  digests;
+  digests, publishing it (and `governance-status.json`) only after the
+  candidate passes the governance preflight, so a failed `--force` replacement
+  leaves the previous bindings untouched;
 - writes `isee-adoption.json` as a human-readable machine record;
 - promotes only successfully verified Evidence;
 - never installs tooling, regenerates records, or ratifies Intent.
+
+Every blocked preflight writes `governance-status.json` with `status: failed`
+and the blocking reason, so a stale `passed` result never survives a later
+failure.
 
 If the deployment ID is supplied, run the command directly. Stop on missing
 records, stale artifacts, failed profile validation, or failed verification;

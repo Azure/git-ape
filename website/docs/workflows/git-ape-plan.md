@@ -493,6 +493,14 @@ jobs:
                 exit 1
               }
             fi
+            # Bind intent.json itself to its status record: an Intent-only
+            # edit must not pass planning with a stale intent-status.json.
+            RECORDED_INTENT_FINGERPRINT=$(jq -r '.fingerprint // empty' "$DEPLOY_DIR/intent-status.json")
+            CURRENT_INTENT_FINGERPRINT=$(bash "$PRODUCER" fingerprint --profile adrp "$DEPLOY_DIR/intent.json")
+            [[ -n "$RECORDED_INTENT_FINGERPRINT" && "$CURRENT_INTENT_FINGERPRINT" == "$RECORDED_INTENT_FINGERPRINT" ]] || {
+              echo "::error::intent.json does not match the fingerprint recorded in intent-status.json. Review the Intent change and regenerate the draft Intent explicitly."
+              exit 1
+            }
           elif [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
             bash "$PRODUCER" intent \
               --source "$DEPLOY_DIR/requirements.json" \
@@ -768,7 +776,9 @@ jobs:
             const whatifStatus = azure.whatifStatus || 'skipped';
             const whatifResult = azure.whatifResult || '';
             const azureLoginOutcome = azure.azureLoginOutcome || '';
-            const governanceOutcome = azure.governanceOutcome || 'success';
+            // Only an explicit success renders as Passed; a missing outcome
+            // means the preflight did not run.
+            const governanceOutcome = azure.governanceOutcome || 'skipped';
             const scanStatus = local.scanStatus || 'skipped';
             const scanErrors = local.scanErrors || '0';
             const scanWarnings = local.scanWarnings || '0';
@@ -786,11 +796,13 @@ jobs:
 
             let comment = `## Git-Ape Plan: \`${deploymentId}\`\n\n`;
 
-            if (governanceOutcome === 'failure') {
+            if (governanceOutcome === 'success') {
+              comment += `### ✅ Governance Preflight: Passed\n\n`;
+            } else if (governanceOutcome === 'failure') {
               comment += `### ❌ ISEE Governance: Blocked\n\n`;
               comment += `> The deployment failed its configured governance preflight. Azure login was not attempted.\n\n`;
             } else {
-              comment += `### ✅ Governance Preflight: Passed\n\n`;
+              comment += `### ⚠️ Governance Preflight: Not Run\n\n`;
             }
 
             if (validationStatus === 'passed') {

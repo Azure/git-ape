@@ -208,6 +208,15 @@ jobs:
                 exit 1
               }
             fi
+            # Bind intent.json itself to its status record: an Intent-only
+            # edit must not be accepted (or carried into Evidence) as if it
+            # were the captured record.
+            RECORDED_INTENT_FINGERPRINT=$(jq -r '.fingerprint // empty' "$DEPLOY_DIR/intent-status.json")
+            CURRENT_INTENT_FINGERPRINT=$(bash "$PRODUCER" fingerprint --profile adrp "$DEPLOY_DIR/intent.json")
+            [[ -n "$RECORDED_INTENT_FINGERPRINT" && "$CURRENT_INTENT_FINGERPRINT" == "$RECORDED_INTENT_FINGERPRINT" ]] || {
+              echo "::error::intent.json does not match the fingerprint recorded in intent-status.json. Review the Intent change and regenerate the draft Intent explicitly."
+              exit 1
+            }
             echo "Intent record matches its captured source; preserving it."
           elif [[ -f "$DEPLOY_DIR/requirements.json" ]]; then
             bash "$PRODUCER" intent \
@@ -365,9 +374,32 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28"
           )
 
-          PULLS=$(curl --fail --silent --show-error \
-            "${API_HEADERS[@]}" \
-            "$API_ROOT/repos/$REPOSITORY/commits/$COMMIT_SHA/pulls?per_page=100")
+          # GitHub list endpoints are paginated. Read every page so a later
+          # dismissal or changes-requested review (or another associated pull
+          # request) can never be hidden behind the first page.
+          fetch_all_pages() {
+            local url="$1" page=1 pages_dir page_file
+            pages_dir=$(mktemp -d)
+            while :; do
+              if [[ "$page" -gt 100 ]]; then
+                echo "::error::Refusing to evaluate authorization: more than 100 pages returned by $url" >&2
+                rm -rf "$pages_dir"
+                return 1
+              fi
+              page_file="$pages_dir/$(printf '%06d' "$page").json"
+              curl --fail --silent --show-error \
+                "${API_HEADERS[@]}" \
+                "${url}?per_page=100&page=${page}" > "$page_file"
+              if [[ "$(jq 'length' "$page_file")" -lt 100 ]]; then
+                break
+              fi
+              page=$((page + 1))
+            done
+            jq -s 'add // []' "$pages_dir"/*.json
+            rm -rf "$pages_dir"
+          }
+
+          PULLS=$(fetch_all_pages "$API_ROOT/repos/$REPOSITORY/commits/$COMMIT_SHA/pulls")
           MATCHES=$(jq --arg sha "$COMMIT_SHA" \
             '[.[] | select(
               .merged_at != null and
@@ -405,9 +437,7 @@ jobs:
 
           PR=$(jq '.[0]' <<<"$MATCHES")
           PR_NUMBER=$(jq -r '.number' <<<"$PR")
-          REVIEWS=$(curl --fail --silent --show-error \
-            "${API_HEADERS[@]}" \
-            "$API_ROOT/repos/$REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100")
+          REVIEWS=$(fetch_all_pages "$API_ROOT/repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")
           EFFECTIVE_APPROVALS=$(jq '
             [
               .[]
@@ -754,8 +784,17 @@ jobs:
           LOCATION: ${{ steps.params.outputs.location }}
           PROJECT: ${{ steps.params.outputs.project }}
           ENVIRONMENT: ${{ steps.params.outputs.environment }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
         run: |
           DEPLOY_DIR="${{ steps.params.outputs.deploy_dir }}"
+          # state.json is the destroy lifecycle source of truth. When Azure
+          # execution never ran (rejected authorization, failed validation or
+          # security gate), keep the prior state; the rejected attempt is
+          # recorded only in authorization, trace, and Evidence artifacts.
+          if [[ ( -z "$DEPLOY_OUTCOME" || "$DEPLOY_OUTCOME" == "skipped" ) && -f "$DEPLOY_DIR/state.json" ]]; then
+            echo "Azure execution did not run (deploy step: ${DEPLOY_OUTCOME:-not reached}); preserving existing state.json."
+            exit 0
+          fi
           STATUS="${{ steps.deploy.outputs.deploy_status || 'failed' }}"
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           # Default to an empty array and validate the snapshot parses as JSON
@@ -864,10 +903,13 @@ jobs:
 
           RECORDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           TRACE_OUTCOME="failed"
+          # integration_tests is required for success: only an explicit
+          # "passed" result completes it. Skipped tests are inconclusive and
+          # end the trace as a failed terminal rather than a false success.
           if [[ "$DEPLOY_RESULT" == "succeeded" &&
                 "$AUTHORIZATION_OUTCOME" == "success" &&
                 "$STATE_OUTCOME" == "success" &&
-                "$TESTS_RESULT" != "failed" ]]; then
+                "$TESTS_RESULT" == "passed" ]]; then
             TRACE_OUTCOME="succeeded"
           fi
 
@@ -890,7 +932,8 @@ jobs:
             def node($id; $outcome; $result; $evidence):
               if attempted($outcome) then
                 {id:("node-" + $id),type:"node",node:$id,
-                 status:(if $result == "failed" then "failed" else status($outcome) end),
+                 status:(if $result == "failed" or ($id == "integration_tests" and $result != "passed")
+                         then "failed" else status($outcome) end),
                  recordedAt:$recordedAt,evidence:$evidence,result:(if $result == "" then null else $result end)}
               else null end;
             ([

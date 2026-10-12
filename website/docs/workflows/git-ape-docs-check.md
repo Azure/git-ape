@@ -62,10 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -81,7 +81,7 @@ jobs:
       - name: Check for stale docs
         id: diff
         run: |
-          if git diff --quiet website/docs/; then
+          if git diff --quiet website/docs/ .github/skills/registry.json; then
             echo "stale=false" >> "$GITHUB_OUTPUT"
             echo "✅ Generated docs are up to date"
           else
@@ -89,16 +89,16 @@ jobs:
             echo "⚠️ Generated docs are stale"
             echo ""
             echo "Changed files:"
-            git diff --name-only website/docs/
+            git diff --name-only website/docs/ .github/skills/registry.json
           fi
 
       - name: Comment on PR if stale
         if: steps.diff.outputs.stale == 'true'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { execSync } = require('child_process');
-            const changedFiles = execSync('git diff --name-only website/docs/')
+            const changedFiles = execSync('git diff --name-only website/docs/ .github/skills/registry.json')
               .toString()
               .trim()
               .split('\n')

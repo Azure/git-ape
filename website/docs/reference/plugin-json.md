@@ -22,7 +22,6 @@ The plugin manifest defines the Git-Ape plugin metadata. The same manifest is co
 | **License** | MIT |
 | **Agents Path** | `.github/agents/` |
 | **Skills Path** | `.github/skills/` |
-
 ## Keywords
 
 `azure` · `cloud` · `workloads` · `deployment` · `arm-templates` · `devops` · `security` · `cost-estimation` · `github-actions` · `copilot-agents`

@@ -488,8 +488,8 @@ OIDC, RBAC, environments, and workflows.
 7. *(Optional)* Offer to onboard the drift detector workflow by provisioning `COPILOT_GITHUB_TOKEN` (Step 10 in playbook). Skip if the user does not want scheduled drift detection.
 8. Ask compliance framework and enforcement mode preferences (Step 11 in playbook).
 9. Persist the confirmed onboarding Intent as a draft portable record (Step 12).
-9. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
-10. Summarize outcome (including scaffolded file counts) and suggest verification commands.
+10. Update `copilot-instructions.md` with compliance preferences — or, if the file was skipped by the scaffold step, surface the preferences in chat for manual integration.
+11. Summarize outcome (including scaffolded file counts) and suggest verification commands.
 
 ### Enterprise distribution
 
