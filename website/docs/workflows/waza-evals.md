@@ -544,10 +544,10 @@ jobs:
           mkdir -p .waza-results
           spec=".github/evals/${{ matrix.skill }}/eval.yaml"
           # Slug used for filenames + artifact suffix; harmless when the
-          # model has dots (gpt-5.4) since GH Actions allows them.
+          # model has dots (gpt-5.5) since GH Actions allows them.
           slug="${{ matrix.skill }}-${{ matrix.model }}"
 
-          # gpt-5.4 (and any other model flagged `baseline: true` in the
+          # gpt-5.5 (and any other model flagged `baseline: true` in the
           # manifest) runs in --baseline (A/B) mode to cap quota cost while
           # still providing a reference point for cross-model comparison. All
           # other models run standard. The PR comment labels each leg.
@@ -580,8 +580,8 @@ jobs:
           # --judge-model decouples the LLM-as-judge from the executor model
           # and pins it to claude-opus-5.5 for TWO reasons:
           #   1. No self-grading bias — opus-5.5 is NOT in any matrix tier
-          #      (pilot: sonnet-5, gpt-5.4, gpt-5.3-codex, opus-4.8;
-          #      expanded: sonnet-5, gpt-5.3-codex), so no runner leg is
+          #      (pilot: sonnet-5.5, gpt-5.5, gpt-5.3-codex, opus-4.8;
+          #      expanded: sonnet-5.5, gpt-5.3-codex), so no runner leg is
           #      ever judged by its own model.
           #   2. Judge capability ≥ every runner — opus-5.5 is chosen as a
           #      higher-capability judge than the runner mix to reduce
@@ -695,7 +695,7 @@ jobs:
           slug="${{ matrix.skill }}-${{ matrix.model }}"
           mkdir -p .waza-results
           # --judge-model omitted: this step uses the project default judge model
-          # (claude-sonnet-5 from .waza.yaml) for consistent quality scoring
+          # (claude-sonnet-5.5 from .waza.yaml) for consistent quality scoring
           # regardless of which executor model is running in this matrix leg.
           waza quality ".github/skills/${{ matrix.skill }}" --format table \
             > ".waza-results/${slug}-quality.txt" 2>&1 || true

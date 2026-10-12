@@ -85,7 +85,7 @@ name: Waza agent evals
 # Why a parallel workflow (vs. extending waza-evals.yml):
 #   - Different cost profile: agent evals are compound (agent + auto-loaded
 #     skills via plugin.json) and cost ~5 premium reqs each. No tier-based
-#     multi-model fan-out — single model (claude-sonnet-5) to cap quota.
+#     multi-model fan-out — single model (claude-sonnet-5.5) to cap quota.
 #   - Different artifacts: agents share `waza tokens profile` and `waza
 #     quality` parity with the skills workflow (each agent's `.agent.md`
 #     is staged as a temporary `SKILL.md` to satisfy waza's skill-walker);
@@ -454,7 +454,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # eval: matrix (agent). Each leg runs `waza run` on the agent's compound
   # eval and produces a markdown snippet for the PR comment. Single-model
-  # (claude-sonnet-5) to cap quota cost — each leg averages ~5 premium reqs.
+  # (claude-sonnet-5.5) to cap quota cost — each leg averages ~5 premium reqs.
   # ---------------------------------------------------------------------------
   eval:
     name: "${{ matrix.agent || 'eval (skipped — no agent changes)' }}"
@@ -581,10 +581,10 @@ jobs:
           # to claude-opus-5.5 for TWO reasons:
           #   1. No self-grading bias — opus-5.5 is NOT in any runner
           #      roster (this workflow currently fixes the runner to
-          #      sonnet-5, but the rule holds: judge is always outside
+          #      sonnet-5.5, but the rule holds: judge is always outside
           #      whatever set of models we ever fan runners across).
           #   2. Judge capability ≥ runner — opus-5.5 is chosen as a
-          #      higher-capability judge than sonnet-5 so quality scores
+          #      higher-capability judge than sonnet-5.5 so quality scores
           #      have headroom and aren't capped by a same-tier judge.
           # If we ever add per-agent model overrides AND opus-5.5 lands in
           # a runner roster, re-pin the judge to a model still outside it.
@@ -596,7 +596,7 @@ jobs:
             echo "::group::waza run attempt ${attempt}/${max_attempts} for ${agent}"
             rc=0
             waza run "${spec}" \
-              --model "claude-sonnet-5" \
+              --model "claude-sonnet-5.5" \
               --judge-model "claude-opus-5.5" \
               --suggest \
               --recommend \
@@ -710,7 +710,7 @@ jobs:
         # quality signal.
         #
         # `waza quality` consumes ~1 premium Copilot request per leg via
-        # its LLM judge (claude-sonnet-5 by default). Failures are
+        # its LLM judge (claude-sonnet-5.5 by default). Failures are
         # tolerated with `|| true` so a flaky judge call doesn't tank
         # the whole leg.
         if: always()
@@ -1060,7 +1060,7 @@ jobs:
                     qualityRaw.trim(),
                     '```',
                     '',
-                    '_Scored by `waza quality` with `claude-sonnet-5` as LLM judge. The agent\'s `.agent.md` is staged as `SKILL.md` for analysis; treat dimensions as advisory signal (the rubric was authored for skills)._',
+                    '_Scored by `waza quality` with `claude-sonnet-5.5` as LLM judge. The agent\'s `.agent.md` is staged as `SKILL.md` for analysis; treat dimensions as advisory signal (the rubric was authored for skills)._',
                     '',
                     '</details>',
                   ].join('\n')
@@ -1171,7 +1171,7 @@ jobs:
               scopeBanner,
               scopeBanner ? '' : null,
               'Ran ' + totalLegs + ' agent eval' + (totalLegs === 1 ? '' : 's') +
-                ' against `claude-sonnet-5`. Each eval consumes ~5 premium Copilot requests; results are non-blocking — investigate failures via the workflow logs and the per-agent `waza-agent-results-*` artifacts.',
+                ' against `claude-sonnet-5.5`. Each eval consumes ~5 premium Copilot requests; results are non-blocking — investigate failures via the workflow logs and the per-agent `waza-agent-results-*` artifacts.',
               '',
               '> **How this works:** This workflow auto-syncs the canonical `.github/agents/<name>.agent.md` into the sibling mirror inside `.github/evals/agents/<name>/` before each run, so the score below reflects the version of the agent in this PR — not whatever was committed when the eval was first wired up.',
               '',

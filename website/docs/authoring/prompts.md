@@ -49,7 +49,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Description.** Stage 0 of the eval lifecycle — bootstrap a brand-new eval suite for a skill that currently has none. Scaffolds `eval.yaml` + positive / negative / off-topic task files, patches them to repo conventions (hybrid graders, concrete prompts, schema headers), registers the skill at the `expanded` tier in `manifest.yaml`, and runs a single-model smoke trial to confirm the suite is wired correctly.
 
-**Arguments.** `[skillName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5]`
+**Arguments.** `[skillName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5.5]`
 
 **Interactivity.** **Interactive.** Pauses for approval before appending to `manifest.yaml` and before running the smoke trial.
 
@@ -65,7 +65,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Description.** Stage 0 of the agent eval lifecycle — bootstrap a brand-new eval suite for a custom agent that currently has no evaluation. Scaffolds `.github/evals/agents/<agent>/` with `eval.yaml`, a mirror copy of the `.agent.md` (waza walks the directory under `skill_directories: ["."]`), positive and negative tasks, and an off-topic task with a `clean_refusal` grader that asserts the agent identifies itself and redirects to its specialty. Runs a single-model smoke trial. No edits to the canonical `.agent.md` or to `manifest.yaml` (agent evals are auto-discovered from the filesystem).
 
-**Arguments.** `[agentName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5]`
+**Arguments.** `[agentName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5.5]`
 
 **Interactivity.** **Interactive.** Pauses for approval before writing the eval directory and before running the smoke trial.
 
@@ -81,7 +81,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Description.** Cross-model benchmark for a single skill: runs `waza` eval once per model, captures results, compares with `waza compare`, and prints a one-line winner summary.
 
-**Arguments.** `[skillName=...] [models=claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8]`
+**Arguments.** `[skillName=...] [models=claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8]`
 
 **Interactivity.** Non-interactive once `skillName` is supplied. Prompts for the name if omitted.
 
@@ -93,7 +93,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Description.** Same as `skill-bench` but targets a custom agent (under `.github/evals/agents/<name>/`).
 
-**Arguments.** `[agentName=...] [models=claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8]`
+**Arguments.** `[agentName=...] [models=claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8]`
 
 **Use when.** Sweeping the model field for an agent. Pair with `/agent-promote` once the winner is clear.
 
@@ -123,7 +123,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Arguments.** `[skillName=...]`
 
-**Output.** A `PROMOTE` / `BLOCK` verdict with the specific criterion that gated the decision (e.g. `success_rate < 0.85 on gpt-5.4`). When `PROMOTE`, it suggests the `manifest.yaml` patch.
+**Output.** A `PROMOTE` / `BLOCK` verdict with the specific criterion that gated the decision (e.g. `success_rate < 0.85 on gpt-5.5`). When `PROMOTE`, it suggests the `manifest.yaml` patch.
 
 **Use when.** A skill has been stable in `expanded` for a few PRs and you're considering moving it to `pilot`.
 
@@ -131,7 +131,7 @@ The `agent: 'agent'` value pins execution to VS Code's generic chat agent (no sp
 
 **Description.** Assess whether a custom agent is production-ready: runs the eval suite across pilot-tier models, checks against numeric readiness criteria, and prints a graduation report.
 
-**Arguments.** `[agentName=...] [models=claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8]`
+**Arguments.** `[agentName=...] [models=claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8]`
 
 **Output.** A readiness verdict per criterion (persona-lock, off-topic refusal rate, trigger precision, budget compliance, answer-quality threshold) and an overall `GO` / `NO-GO`.
 

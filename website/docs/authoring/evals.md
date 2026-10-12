@@ -43,7 +43,7 @@ config:
   timeout_seconds: 60
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-5    # Default — CI overrides via --model per matrix leg
+  model: claude-sonnet-5.5    # Default — CI overrides via --model per matrix leg
 
 metrics:
   - name: trigger_precision
@@ -122,7 +122,7 @@ config:
   timeout_seconds: 480
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-5
+  model: claude-sonnet-5.5
   skill_directories:
     - "."                                       # picks up the .agent.md mirror
     - "../../../skills/my-skill-the-agent-uses" # picks up the real skill
@@ -184,21 +184,21 @@ skills:
 tiers:
   pilot:                                # Full 4-model fan-out
     models:
-      - name: claude-sonnet-5
-      - name: gpt-5.4
+      - name: claude-sonnet-5.5
+      - name: gpt-5.5
         baseline: true
       - name: gpt-5.3-codex
       - name: claude-opus-4.8
   expanded:                             # 2-model fan-out (lower cost)
     models:
-      - name: claude-sonnet-5
+      - name: claude-sonnet-5.5
       - name: gpt-5.3-codex
 ```
 
 | Tier | Models | Use when |
 |------|--------|----------|
-| `pilot` | 4 (claude-sonnet-5, gpt-5.4 baseline, gpt-5.3-codex, claude-opus-4.8) | Skill is stable; you want full cross-model signal |
-| `expanded` | 2 (claude-sonnet-5, gpt-5.3-codex) | Skill is new; cap quota cost while it stabilises |
+| `pilot` | 4 (claude-sonnet-5.5, gpt-5.5 baseline, gpt-5.3-codex, claude-opus-4.8) | Skill is stable; you want full cross-model signal |
+| `expanded` | 2 (claude-sonnet-5.5, gpt-5.3-codex) | Skill is new; cap quota cost while it stabilises |
 
 The PR workflows that consume the manifest:
 
