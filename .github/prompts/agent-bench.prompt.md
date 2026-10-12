@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 description: 'Cross-model benchmark for a single custom agent: runs waza eval once per model, captures results, compares with waza compare, and prints a one-line winner summary'
-argument-hint: '[agentName=...] [models=claude-sonnet-4.6,gpt-5.4,gpt-5.3-codex,claude-opus-4.6]'
+argument-hint: '[agentName=...] [models=claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8]'
 ---
 
 # Agent Bench
@@ -27,7 +27,7 @@ This is **non-interactive** — it runs to completion and reports results.
 * `${input:agentName}`: (Required) Bare agent name (e.g.
   `azure-policy-advisor`), matching the basename of
   `.github/agents/<name>.agent.md`. If omitted, ask once then proceed.
-* `${input:models:claude-sonnet-4.6,gpt-5.4,gpt-5.3-codex,claude-opus-4.6}`:
+* `${input:models:claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8}`:
   (Optional) Comma-separated list of waza model IDs to benchmark.
   Defaults to all four pilot-tier models. Run `waza models` to see the
   currently-supported IDs.
@@ -49,7 +49,7 @@ exit (eval below threshold) does not abort the benchmark.
    reference layout.
 4. Parse `${input:models}` by splitting on commas, trimming whitespace.
    Store as an array `models`. If empty or not provided, use the default
-   list: `claude-sonnet-4.6`, `gpt-5.4`, `gpt-5.3-codex`, `claude-opus-4.6`.
+   list: `claude-sonnet-5`, `gpt-5.4`, `gpt-5.3-codex`, `claude-opus-4.8`.
 5. Print a one-line preamble:
    `Benchmarking <agent> across <N> models: <model1>, <model2>, ...`
 

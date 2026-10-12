@@ -13,7 +13,7 @@ paths:
 
 defaults:
   engine: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5
   timeout: 300
   parallel: true
   workers: 4
@@ -25,7 +25,7 @@ cache:
   dir: .waza-cache
 
 dev:
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5
   target: medium-high
   maxIterations: 5
 

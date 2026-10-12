@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 description: 'Onboard a new skill into the waza eval harness: scaffold eval.yaml + tasks, patch to repo conventions (hybrid graders, concrete prompts, schema headers), register at the expanded tier in manifest.yaml, then run a smoke trial.'
-argument-hint: '[skillName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-4.6]'
+argument-hint: '[skillName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5]'
 ---
 
 # Skill Onboard
@@ -56,7 +56,7 @@ the manifest entry and before running the smoke trial.
   to under-cover the `DO NOT USE FOR:` boundary. Negative tasks carry
   the `trigger` grader only — refusals shouldn't call tools or be
   graded on answer quality.
-* `${input:smokeModel:claude-sonnet-4.6}`: (Optional) Model to use for
+* `${input:smokeModel:claude-sonnet-5}`: (Optional) Model to use for
   the final smoke trial. Default is the cheapest stable model in the
   matrix; override only if the skill is model-sensitive.
 
@@ -113,7 +113,7 @@ mkdir -p /tmp/waza-onboard/${skill}
 waza suggest ".github/skills/${skill}" \
   --apply \
   --output-dir "/tmp/waza-onboard/${skill}" \
-  --model "claude-sonnet-4.6" \
+  --model "claude-sonnet-5" \
   2>&1 | tail -10
 ```
 
@@ -149,7 +149,7 @@ Apply ALL of the following edits to the staged files before they leave
      timeout_seconds: 60
      parallel: false
      executor: copilot-sdk
-     model: claude-sonnet-4.6
+     model: claude-sonnet-5
    ```
 3. `metrics:` block must contain exactly one entry:
    ```yaml
@@ -354,7 +354,7 @@ graders wire up correctly — not a quality assessment.
 ```bash
 mkdir -p /tmp/waza-runs
 waza run ".github/evals/${skill}/eval.yaml" \
-  --model "${input:smokeModel:claude-sonnet-4.6}" \
+  --model "${input:smokeModel:claude-sonnet-5}" \
   --judge-model "claude-opus-4.7" \
   --no-cache \
   --output "/tmp/waza-runs/${skill}-smoke.json" \

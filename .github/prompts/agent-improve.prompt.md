@@ -125,7 +125,7 @@ waza tokens suggest ".github/agents/${agent}.agent.md" --format text \
   > "/tmp/waza-runs/${agent}-tokens.txt" 2>&1 &
 
 waza quality "waza-agent-stage/${agent}/SKILL.md" \
-  --model claude-sonnet-4.6 --format table \
+  --model claude-sonnet-5 --format table \
   | sed "s|waza-agent-stage/${agent}/SKILL.md|${agent}.agent.md|g" \
   > "/tmp/waza-runs/${agent}-quality.txt" 2>&1 &
 
@@ -317,7 +317,7 @@ cp ".github/agents/${agent}.agent.md" \
    "waza-agent-stage/${agent}/SKILL.md"
 
 waza quality "waza-agent-stage/${agent}/SKILL.md" \
-  --model claude-sonnet-4.6 --format table \
+  --model claude-sonnet-5 --format table \
   | sed "s|waza-agent-stage/${agent}/SKILL.md|${agent}.agent.md|g" \
   > "/tmp/waza-runs/${agent}-quality-after.txt" 2>&1
 

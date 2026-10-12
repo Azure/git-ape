@@ -44,12 +44,12 @@ skills:
 tiers:
   pilot:
     models:
-      - name: claude-sonnet-4.6
+      - name: claude-sonnet-5
       - name: gpt-5.4
         baseline: true
       - name: gpt-5.3-codex
-      - name: claude-opus-4.6
+      - name: claude-opus-4.8
   expanded:
     models:
-      - name: claude-sonnet-4.6
+      - name: claude-sonnet-5
       - name: gpt-5.3-codex

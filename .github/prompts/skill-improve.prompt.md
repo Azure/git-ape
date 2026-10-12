@@ -84,10 +84,10 @@ waza tokens suggest ".github/skills/${skill}/SKILL.md" --format text \
   > "/tmp/waza-runs/${skill}-tokens.txt" 2>&1 &
 
 waza quality ".github/skills/${skill}/SKILL.md" \
-  --model claude-sonnet-4.6 --format table \
+  --model claude-sonnet-5 --format table \
   > "/tmp/waza-runs/${skill}-quality.txt" 2>&1 &
 
-waza dev "${skill}" --copilot --model claude-sonnet-4.6 \
+waza dev "${skill}" --copilot --model claude-sonnet-5 \
   > "/tmp/waza-runs/${skill}-dev-iter1.md" 2>&1 &
 
 wait
@@ -111,7 +111,7 @@ rarely shift on small edits, and re-running quality costs a premium
 request each time):
 
 ```bash
-waza dev "${skill}" --copilot --model claude-sonnet-4.6 \
+waza dev "${skill}" --copilot --model claude-sonnet-5 \
   > "/tmp/waza-runs/${skill}-dev-iter${i}.md" 2>&1
 ```
 
@@ -198,7 +198,7 @@ the table for the summary.
 
 ```bash
 waza quality ".github/skills/${skill}/SKILL.md" \
-  --model claude-sonnet-4.6 --format table \
+  --model claude-sonnet-5 --format table \
   > "/tmp/waza-runs/${skill}-quality-after.txt" 2>&1
 ```
 

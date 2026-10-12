@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 description: 'Assess whether a custom agent is ready for production: runs the eval suite across pilot-tier models, checks against numeric readiness criteria, and prints a graduation report.'
-argument-hint: '[agentName=...] [models=claude-sonnet-4.6,gpt-5.4,gpt-5-codex,claude-opus-4.6]'
+argument-hint: '[agentName=...] [models=claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8]'
 ---
 
 # Agent Promote
@@ -33,7 +33,7 @@ This is **non-interactive** — it runs to completion and prints a report.
 * `${input:agentName}`: (Required) Bare agent name (e.g.
   `azure-policy-advisor`), matching the basename of
   `.github/agents/<name>.agent.md`. If omitted, ask once.
-* `${input:models:claude-sonnet-4.6,gpt-5.4,gpt-5-codex,claude-opus-4.6}`:
+* `${input:models:claude-sonnet-5,gpt-5.4,gpt-5.3-codex,claude-opus-4.8}`:
   (Optional) Comma-separated list of waza model IDs to assess.
   Defaults to the full pilot-tier matrix.
 
@@ -121,7 +121,7 @@ is NOT in any runner roster (pilot or expanded). Two reasons:
    every leg an independent grader.
 2. **Judge capability ≥ every runner.** `claude-opus-4.7` is chosen as
    a higher-capability judge than the current pilot/expanded runner mix
-   (sonnet-4.6, gpt-5.4, gpt-5-codex, opus-4.6) to reduce ceiling
+   (sonnet-5, gpt-5.4, gpt-5.3-codex, opus-4.8) to reduce ceiling
    effects when scoring the strongest runner outputs.
 
 Run sequentially — quota consumption stays predictable.
@@ -149,7 +149,7 @@ cp ".github/agents/${agent}.agent.md" \
    "waza-agent-stage/${agent}/SKILL.md"
 
 waza quality "waza-agent-stage/${agent}/SKILL.md" \
-  --model claude-sonnet-4.6 --format json \
+  --model claude-sonnet-5 --format json \
   | sed "s|waza-agent-stage/${agent}/SKILL.md|${agent}.agent.md|g" \
   > "/tmp/waza-promote/${agent}-quality.json" 2>&1
 

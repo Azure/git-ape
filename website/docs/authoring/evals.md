@@ -43,7 +43,7 @@ config:
   timeout_seconds: 60
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6    # Default — CI overrides via --model per matrix leg
+  model: claude-sonnet-5    # Default — CI overrides via --model per matrix leg
 
 metrics:
   - name: trigger_precision
@@ -122,7 +122,7 @@ config:
   timeout_seconds: 480
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5
   skill_directories:
     - "."                                       # picks up the .agent.md mirror
     - "../../../skills/my-skill-the-agent-uses" # picks up the real skill
@@ -136,7 +136,7 @@ The eval-directory copy of `*.agent.md` must be kept in sync with the production
 |--------|--------|-----------------|
 | `trigger` (implicit via `metrics.trigger_precision`) | Did the agent route to the right skill on positives, and stay quiet on negatives? | Always |
 | `behavior` | Tool-call budget, duration, or step-order assertions | Always (at minimum a `budget` config) |
-| `prompt` (LLM-as-judge) | Did the reply text meet a documented quality bar? Scored by `claude-sonnet-4.6`. | Always for positive tasks |
+| `prompt` (LLM-as-judge) | Did the reply text meet a documented quality bar? Scored by `claude-sonnet-5`. | Always for positive tasks |
 | `skill_invocation` | Did the agent invoke the specific tool calls the skill expects? | Skills that wrap MCP tools or specific CLIs |
 | `tool_constraint` | Did the agent stay within the declared tool allowlist? | Agent evals (waza auto-injects this from `.agent.md` `tools:` unless suppressed) |
 
@@ -184,21 +184,21 @@ skills:
 tiers:
   pilot:                                # Full 4-model fan-out
     models:
-      - name: claude-sonnet-4.6
+      - name: claude-sonnet-5
       - name: gpt-5.4
         baseline: true
-      - name: gpt-5-codex
-      - name: claude-opus-4.6
+      - name: gpt-5.3-codex
+      - name: claude-opus-4.8
   expanded:                             # 2-model fan-out (lower cost)
     models:
-      - name: claude-sonnet-4.6
-      - name: gpt-5-codex
+      - name: claude-sonnet-5
+      - name: gpt-5.3-codex
 ```
 
 | Tier | Models | Use when |
 |------|--------|----------|
-| `pilot` | 4 (claude-sonnet-4.6, gpt-5.4 baseline, gpt-5-codex, claude-opus-4.6) | Skill is stable; you want full cross-model signal |
-| `expanded` | 2 (claude-sonnet-4.6, gpt-5-codex) | Skill is new; cap quota cost while it stabilises |
+| `pilot` | 4 (claude-sonnet-5, gpt-5.4 baseline, gpt-5.3-codex, claude-opus-4.8) | Skill is stable; you want full cross-model signal |
+| `expanded` | 2 (claude-sonnet-5, gpt-5.3-codex) | Skill is new; cap quota cost while it stabilises |
 
 The PR workflows that consume the manifest:
 
