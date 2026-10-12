@@ -51,7 +51,8 @@ comment, and are currently **non-blocking**.
 
 Auth needs no PAT: the eval jobs use the built-in `GITHUB_TOKEN` with
 `permissions: copilot-requests: write`, and Copilot usage is billed to
-the org. PRs from forks are skipped. Set the repo variable
+the org. PRs from forks and Dependabot runs are skipped (a maintainer can
+validate them via `workflow_dispatch`). Set the repo variable
 `WAZA_EVALS_ENABLED=false` to turn both workflows off. See
 [CI requirements and cost controls][authoring-evals-ci].
 

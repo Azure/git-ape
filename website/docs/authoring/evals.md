@@ -239,12 +239,19 @@ needed.
   org credits. The preflight skips it with a notice. A maintainer can
   review the change and then run `workflow_dispatch` on a branch in this
   repo.
+- **Dependabot runs are skipped.** Dependabot's `GITHUB_TOKEN` is read-only
+  by default and may not be granted `copilot-requests`. Its weekly
+  `github-actions` bumps also touch these workflow files, which would select
+  the full matrix. The preflight skips any run whose actor or PR author is
+  `dependabot[bot]`, as the old PAT gate did. To validate a Dependabot bump,
+  a maintainer can run `workflow_dispatch` on its branch.
 
 > **Preflight gating:** both workflows start with a `preflight` job (check
 > name "Preflight (check secrets)", kept for required-check stability). It
 > sets `enabled=true` only for `workflow_dispatch` or a same-repo
-> `pull_request` when `WAZA_EVALS_ENABLED` is not `false`. Otherwise every
-> downstream job is skipped cleanly instead of failing red.
+> `pull_request` when the run is not from Dependabot and
+> `WAZA_EVALS_ENABLED` is not `false`. Otherwise every downstream job is
+> skipped cleanly instead of failing red.
 
 ## Local validation
 

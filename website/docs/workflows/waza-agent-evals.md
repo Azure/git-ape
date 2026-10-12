@@ -119,7 +119,8 @@ name: Waza agent evals
 #     >= v0.38.10 (embeds Copilot CLI 1.0.85). Same model as waza-evals.yml.
 #   - Cost controls: the repo variable `WAZA_EVALS_ENABLED=false` skips all
 #     eval jobs here and in waza-evals.yml (kill switch). PRs from forks
-#     are always skipped; run them via workflow_dispatch after review.
+#     and Dependabot runs are always skipped; run them via
+#     workflow_dispatch after review.
 #   - Comment posting uses the default token (only needs pull-requests: write).
 
 on:
@@ -166,6 +167,10 @@ jobs:
   #     credits, so they are skipped (maintainers can dispatch after review).
   #   - the repo variable WAZA_EVALS_ENABLED is not 'false' (kill switch —
   #     org billing ignores per-user budgets).
+  #   - the run is not from Dependabot (actor or PR author `dependabot[bot]`).
+  #     Dependabot's GITHUB_TOKEN is read-only by default and its
+  #     github-actions bumps touch this workflow, which would select the full
+  #     matrix; these runs were always skipped under the old PAT gate too.
   # When disabled, every downstream job is skipped cleanly (no red checks).
   # Job id, name and the `enabled` output are unchanged so downstream `if:`s
   # and any required-check configuration keep working.
@@ -178,10 +183,12 @@ jobs:
     outputs:
       enabled: ${{ steps.check.outputs.enabled }}
     steps:
-      - name: Check eval eligibility (event, fork, kill switch)
+      - name: Check eval eligibility (event, fork, Dependabot, kill switch)
         id: check
         env:
           EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           THIS_REPO: ${{ github.repository }}
           EVALS_ENABLED: ${{ vars.WAZA_EVALS_ENABLED }}
@@ -192,6 +199,9 @@ jobs:
           if [ "${kill_switch}" = "false" ]; then
             enabled=false
             echo "::notice::Repo variable WAZA_EVALS_ENABLED is 'false' (kill switch). Skipping all waza agent eval jobs."
+          elif [ "${ACTOR:-}" = "dependabot[bot]" ] || [ "${PR_AUTHOR:-}" = "dependabot[bot]" ]; then
+            enabled=false
+            echo "::notice::Run triggered by Dependabot. Its GITHUB_TOKEN is read-only by default and may not be granted copilot-requests, so all waza agent eval jobs are skipped. A maintainer can run workflow_dispatch on this branch to validate the change."
           elif [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
             :
           elif [ "${EVENT_NAME}" = "pull_request" ]; then
