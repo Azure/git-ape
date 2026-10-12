@@ -49,8 +49,15 @@ the [authoring docs][authoring-evals].
 Both run on PRs touching the relevant artifacts, post results as a PR
 comment, and are currently **non-blocking**.
 
+Auth needs no PAT: the eval jobs use the built-in `GITHUB_TOKEN` with
+`permissions: copilot-requests: write`, and Copilot usage is billed to
+the org. PRs from forks are skipped. Set the repo variable
+`WAZA_EVALS_ENABLED=false` to turn both workflows off. See
+[CI requirements and cost controls][authoring-evals-ci].
+
 [issue-61]: https://github.com/Azure/git-ape/issues/61
 [pr-40]: https://github.com/Azure/git-ape/pull/40
 [openai-evals]: https://github.com/openai/evals
 [waza]: https://github.com/microsoft/waza
 [authoring-evals]: https://azure.github.io/git-ape/docs/authoring/evals
+[authoring-evals-ci]: https://azure.github.io/git-ape/docs/authoring/evals#ci-requirements-and-cost-controls

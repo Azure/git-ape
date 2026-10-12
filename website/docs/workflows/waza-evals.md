@@ -112,11 +112,22 @@ name: Waza skill evals
 #
 # Notes:
 #   - waza's eval schema only supports `skill:`. Custom agents under
-#     .github/agents/*.agent.md are *not* evaluable by this workflow. See
-#     docs/WAZA.md "Agent evals" for the upstream limitation.
-#   - copilot-sdk needs a Copilot-scoped token. Default GITHUB_TOKEN does
-#     NOT carry that scope. We use the `COPILOT_GITHUB_TOKEN` repo secret.
-#     Comment posting uses the default token (only needs pull-requests: write).
+#     .github/agents/*.agent.md are *not* evaluable by this workflow; they
+#     run in waza-agent-evals.yml instead.
+#   - Auth: no PAT. waza's embedded Copilot CLI authenticates with the
+#     built-in GITHUB_TOKEN, passed as `COPILOT_GITHUB_TOKEN: github.token`
+#     to the `eval` job, which declares `permissions: copilot-requests: write`.
+#     Usage is billed to the org and requires the org policy "Allow use of
+#     Copilot CLI billed to the organization" (on by default). Needs a
+#     Copilot CLI that supports GITHUB_TOKEN auth (waza >= v0.38.10, which
+#     embeds Copilot CLI 1.0.85). Comment posting uses the default token
+#     (only needs pull-requests: write).
+#   - Cost controls: org billing ignores per-user Copilot budgets. Set the
+#     repo variable `WAZA_EVALS_ENABLED` to `false` to skip all eval jobs
+#     (kill switch); track spend via the org billing dashboard / cost
+#     centers. PRs from forks are always skipped (read-only token without
+#     copilot-requests, untrusted input spending org credits) — run them via
+#     workflow_dispatch after review.
 
 on:
   pull_request:
@@ -149,71 +160,67 @@ concurrency:
 # sibling azd-extension release at the same commit, and GitHub's
 # `releases/latest` endpoint returns whichever was published last, which has
 # bitten PR #109 with a 404 on the wrong asset.
+# Floor: v0.38.10 embeds Copilot CLI 1.0.85, which supports GITHUB_TOKEN
+# (copilot-requests) auth. v0.38.7 embedded a 1.0.64-0 pre-release that
+# predates it. Do not go below v0.38.10.
 env:
-  WAZA_VERSION: 'v0.38.7'
+  WAZA_VERSION: 'v0.38.10'
 
 # Note: there is no top-level skill list. The canonical list lives in
 # .github/evals/manifest.yaml and is read by the `prepare` job below.
 
 jobs:
   # ---------------------------------------------------------------------------
-  # preflight: verify that the COPILOT_GITHUB_TOKEN secret is configured.
-  # When absent, every downstream job is skipped cleanly (no red checks). The
-  # maintainer setup steps are in PR #109 / README.
+  # preflight: decide whether this run may spend Copilot requests. Evals
+  # authenticate with the built-in GITHUB_TOKEN (copilot-requests: write) and
+  # are billed to the org, so `enabled=true` only when ALL of these hold:
+  #   - the event is workflow_dispatch, or a pull_request whose head branch
+  #     lives in this repo. Fork PRs get a read-only token without
+  #     copilot-requests, carry prompt-injection risk, and would spend org
+  #     credits, so they are skipped (maintainers can dispatch after review).
+  #   - the repo variable WAZA_EVALS_ENABLED is not 'false' (kill switch —
+  #     org billing ignores per-user budgets).
+  # When disabled, every downstream job is skipped cleanly (no red checks).
+  # Job id, name and the `enabled` output are unchanged so downstream `if:`s
+  # and any required-check configuration keep working.
   # ---------------------------------------------------------------------------
   preflight:
     name: Preflight (check secrets)
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    permissions: {}
     outputs:
       enabled: ${{ steps.check.outputs.enabled }}
     steps:
-      - name: Check COPILOT_GITHUB_TOKEN availability
+      - name: Check eval eligibility (event, fork, kill switch)
         id: check
         env:
-          TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+          EVALS_ENABLED: ${{ vars.WAZA_EVALS_ENABLED }}
         run: |
-          if [ -z "${TOKEN:-}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::COPILOT_GITHUB_TOKEN secret is not set. Skipping all waza skill eval jobs. See repo README / PR #109 for setup."
-            exit 0
-          fi
-          # Token is set — verify it can actually read the private microsoft/waza
-          # repo (release downloads need access). Reject silently if 401/403/404.
-          # Capture headers + body for diagnostics (no token is ever printed).
-          hdr_file=$(mktemp)
-          body_file=$(mktemp)
-          http_code=$(curl -sS -D "${hdr_file}" -o "${body_file}" -w "%{http_code}" \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/microsoft/waza/releases/latest || true)
-          if [ "${http_code}" = "200" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "COPILOT_GITHUB_TOKEN can read microsoft/waza — eval jobs will run."
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::COPILOT_GITHUB_TOKEN cannot read microsoft/waza (HTTP ${http_code}). Skipping all waza skill eval jobs."
-            echo "--- diagnostic: response headers (token not included) ---"
-            grep -iE '^(http|x-oauth-scopes|x-accepted-oauth-scopes|x-github-sso|x-ratelimit-remaining|x-ratelimit-used|x-github-request-id):' "${hdr_file}" || true
-            echo "--- diagnostic: response body (first 500 bytes) ---"
-            head -c 500 "${body_file}" || true
-            echo
-            echo "--- diagnostic: token-user identity probe ---"
-            user_code=$(curl -sS -o "${body_file}.user" -w "%{http_code}" \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              https://api.github.com/user || true)
-            echo "GET /user -> HTTP ${user_code}"
-            if [ "${user_code}" = "200" ]; then
-              # Print only the login + token type, never the token itself.
-              jq -r '"token user: \(.login)  (type: \(.type))"' "${body_file}.user" 2>/dev/null || head -c 200 "${body_file}.user"
-            else
-              head -c 300 "${body_file}.user" || true
+          set -euo pipefail
+          enabled=true
+          kill_switch="$(printf '%s' "${EVALS_ENABLED:-}" | tr '[:upper:]' '[:lower:]')"
+          if [ "${kill_switch}" = "false" ]; then
+            enabled=false
+            echo "::notice::Repo variable WAZA_EVALS_ENABLED is 'false' (kill switch). Skipping all waza skill eval jobs."
+          elif [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            :
+          elif [ "${EVENT_NAME}" = "pull_request" ]; then
+            if [ "${HEAD_REPO}" != "${THIS_REPO}" ]; then
+              enabled=false
+              echo "::notice::Pull request comes from a fork (${HEAD_REPO:-unknown}). Fork PRs get a read-only token without copilot-requests and would spend org Copilot credits on untrusted input. Skipping all waza skill eval jobs; a maintainer can run them via workflow_dispatch after review."
             fi
-            echo
+          else
+            enabled=false
+            echo "::notice::Event '${EVENT_NAME}' is not eligible for waza skill evals. Skipping."
           fi
-          rm -f "${hdr_file}" "${body_file}" "${body_file}.user"
+          echo "enabled=${enabled}" >> "$GITHUB_OUTPUT"
+          if [ "${enabled}" = "true" ]; then
+            echo "waza skill evals enabled (event: ${EVENT_NAME}). Copilot usage authenticates with GITHUB_TOKEN and is billed to the org."
+          fi
 
   # ---------------------------------------------------------------------------
   # prepare: read .github/evals/manifest.yaml and decide which skills to
@@ -237,7 +244,7 @@ jobs:
       mode: ${{ steps.select.outputs.mode }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -387,13 +394,16 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.enabled == 'true'
     continue-on-error: true
+    # No model calls here — plain read-only GITHUB_TOKEN, no copilot-requests.
+    permissions:
+      contents: read
     env:
-      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
       WAZA_NO_UPDATE_CHECK: '1'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -440,7 +450,7 @@ jobs:
 
       - name: Upload token comparison artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: waza-tokens-compare
           path: .waza-results/tokens-compare.json
@@ -474,16 +484,23 @@ jobs:
         # or promoting a tier means editing .github/evals/manifest.yaml —
         # never this workflow.
         include: ${{ fromJSON(needs.prepare.outputs.legs) }}
+    # Job-level permissions replace the workflow-level set. This job only
+    # needs to check out the repo and spend Copilot requests; it never
+    # writes to the PR (the `comment` job does that).
+    permissions:
+      contents: read
+      copilot-requests: write
     env:
-      # copilot-sdk authenticates with this token. Default GITHUB_TOKEN does
-      # not carry Copilot scope, so we use a dedicated PAT in repo secrets.
-      # Also reused for the release-API lookup (only needs public-repo read).
-      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      # waza's embedded Copilot CLI (>= 1.0.85) authenticates with the
+      # built-in GITHUB_TOKEN when the job has `copilot-requests: write`;
+      # usage is billed to the org. COPILOT_GITHUB_TOKEN takes precedence
+      # over GH_TOKEN / GITHUB_TOKEN in the CLI's lookup order.
+      COPILOT_GITHUB_TOKEN: ${{ github.token }}
       WAZA_NO_UPDATE_CHECK: '1'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -699,7 +716,7 @@ jobs:
 
       - name: Upload eval artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: waza-results-${{ matrix.skill }}-${{ matrix.model }}
           path: .waza-results/
@@ -723,21 +740,21 @@ jobs:
       pull-requests: write
     steps:
       - name: Download all eval artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           pattern: waza-results-*
           merge-multiple: false
 
       - name: Download token comparison artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: waza-tokens-compare
           path: artifacts/waza-tokens-compare
         continue-on-error: true
 
       - name: Aggregate and post comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PREPARE_MODE: ${{ needs.prepare.outputs.mode }}
           PREPARE_REASON: ${{ needs.prepare.outputs.reason }}

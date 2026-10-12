@@ -207,7 +207,44 @@ The PR workflows that consume the manifest:
 
 Agent evals are discovered from the filesystem (every directory under `.github/evals/agents/` with an `eval.yaml` runs); they do not need a manifest entry.
 
-> **Preflight gating:** both workflows include a `preflight` job that probes the `COPILOT_GITHUB_TOKEN` secret. If the token is missing or lacks access to the private `microsoft/waza` repo (where waza releases live), downstream jobs are skipped cleanly instead of failing red. Maintainers can validate the secret end-to-end by checking that the matrix actually runs on the next PR.
+### CI requirements and cost controls
+
+Both workflows authenticate the Copilot CLI embedded in waza with the
+built-in `GITHUB_TOKEN`. No personal access token or repository secret is
+needed.
+
+- **Permissions.** Only the `eval` job spends Copilot requests. It declares
+  `permissions: { contents: read, copilot-requests: write }` and passes
+  `COPILOT_GITHUB_TOKEN: ${{ github.token }}` to waza. The `tokens` job makes
+  no model calls and runs with a read-only token.
+- **Org policy and billing.** Copilot usage from `GITHUB_TOKEN` is billed to
+  the organization that owns the repository. It requires the org policy
+  **Allow use of Copilot CLI billed to the organization**, which is on by
+  default. See [Using Copilot CLI in GitHub Actions](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions).
+- **waza version.** `GITHUB_TOKEN` auth needs a recent Copilot CLI. Both
+  workflows pin `WAZA_VERSION` to `v0.38.10` or later, which embeds
+  Copilot CLI 1.0.85.
+- **Cost controls.** Org billing ignores per-user Copilot budgets. Watch
+  spend on the org billing dashboard and, if needed, attribute it with a
+  cost center. To stop all eval runs at once, set the repository variable
+  `WAZA_EVALS_ENABLED` to `false`:
+
+  ```bash
+  gh variable set WAZA_EVALS_ENABLED --body false -R Azure/git-ape
+  ```
+
+  Delete the variable (or set it to anything else) to re-enable.
+- **Fork PRs are skipped.** A fork PR gets a read-only token without
+  `copilot-requests`, may carry prompt-injection payloads, and would spend
+  org credits. The preflight skips it with a notice. A maintainer can
+  review the change and then run `workflow_dispatch` on a branch in this
+  repo.
+
+> **Preflight gating:** both workflows start with a `preflight` job (check
+> name "Preflight (check secrets)", kept for required-check stability). It
+> sets `enabled=true` only for `workflow_dispatch` or a same-repo
+> `pull_request` when `WAZA_EVALS_ENABLED` is not `false`. Otherwise every
+> downstream job is skipped cleanly instead of failing red.
 
 ## Local validation
 

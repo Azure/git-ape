@@ -118,7 +118,7 @@ Then close with a "Next steps" line:
   fixtures, or task files as part of this prompt. Eval changes belong in
   a separate review.
 * **No agent files.** waza only evaluates skills. If the user passes an
-  agent name, stop and point them to `docs/WAZA.md` → "Agent evals".
+  agent name, stop and point them to `/agent-bench`.
 * **Cost transparency.** At the start (Step 1) always remind the user of
   the estimated premium request count: `models × tasks × trials_per_task`.
 
