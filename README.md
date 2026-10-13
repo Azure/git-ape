@@ -28,6 +28,33 @@ It is built for:
 - Auditable deployments: every run is saved under `.azure/deployments/`.
 - Drift detection between live Azure state and stored deployment artifacts via the `/azure-drift-detector` skill.
 
+### Portable Intent and Evidence
+
+Git-Ape preserves governance records even when no ISEE tooling is installed:
+
+- onboarding saves platform purpose and guardrails as a draft ADRP Intent;
+- every deployment saves its own draft Intent before execution;
+- completed and failed executions emit immutable AERP-compatible Evidence
+  bundles with exact artifact digests;
+- deploy workflows emit graph-bound structured traces so required gates and
+  transitions can be checked independently of agent self-report;
+- native records remain truthful: Intent is `draft`, Evidence is `generated`.
+
+Git-Ape uses its existing Bash, `jq`, and SHA-256 tooling for this producer
+contract. Installing the optional ISEE suite later does not require recreating
+the records. Run the scaffolded adoption command to validate and bind what
+Git-Ape already produced:
+
+```bash
+.github/git-ape/isee/adopt-existing.sh \
+  --deployment-id <id> \
+  --mode optional
+```
+
+ADRP can then ratify Intent, ASRP can add governed Structure and execution
+manifests, and AERP can independently validate and artifact-verify the existing
+Evidence. See [Portable Intent, Evidence, and ISEE Adoption](https://azure.github.io/git-ape/docs/deployment/intent-evidence).
+
 ## Git-Ape in action
 
 A short demo video of the onboarding and deploy experience using Git-Ape.
@@ -126,6 +153,7 @@ When you're done, clean up with:
 - [Examples](https://azure.github.io/git-ape/docs/deployment/examples): End-to-end deployment walkthroughs.
 - [Azure Setup](https://azure.github.io/git-ape/docs/getting-started/azure-setup): Azure MCP server configuration for VS Code.
 - [State Management](https://azure.github.io/git-ape/docs/deployment/state): How deployment artifacts are stored and reused.
+- [Intent, Evidence, and ISEE Adoption](https://azure.github.io/git-ape/docs/deployment/intent-evidence): Standalone records and later governance adoption.
 - [Onboarding](https://azure.github.io/git-ape/docs/getting-started/onboarding): Repository onboarding, OIDC, RBAC, and GitHub environment setup.
 - [Codespaces](https://azure.github.io/git-ape/docs/getting-started/codespaces): GitHub Codespaces and dev container setup.
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- **records:** preserve onboarding and deployment Intent as native ADRP-compatible drafts
+- **records:** emit immutable AERP-compatible Evidence bundles without requiring ISEE
+- **tracing:** capture graph-bound workflow execution traces and validate required transition receipts
+- **governance:** fail closed unless a deployment commit is an approved pull-request merge, with a persisted authorization receipt
+- **intent:** standardize repository decision records on `.github/decisions/` and bind multiple ADRP Intent records per deployment
+- **isee:** adopt existing Git-Ape Intent and Evidence after installing the optional suite
+- **governance:** enforce exact Intent, Structure, manifest, and deployment artifact bindings
+
+### Documentation
+
+- document standalone record status, structured traces, delayed ISEE adoption, and governed lifecycle semantics
+
 ## [0.3.0] - 2026-06-19
 
 Changes since [v0.2.0](https://github.com/Azure/git-ape/releases/tag/v0.2.0):

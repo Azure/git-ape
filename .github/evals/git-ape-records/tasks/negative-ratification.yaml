@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: negative-off-topic
+name: Negative - Off-topic scaling explanation
+description: A generic software architecture question should not trigger record emission.
+tags: [trigger, negative, off-topic]
+inputs:
+  prompt: "Explain the difference between horizontal and vertical scaling in one sentence."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-records/SKILL.md
+      mode: negative
+      threshold: 0.5

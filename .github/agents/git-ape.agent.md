@@ -127,6 +127,8 @@ Coordinate the deployment of Azure resources by delegating to specialized subage
 - `/azure-resource-visualizer` — Live Azure resource group diagramming
 - `/azure-role-selector` — Least-privilege RBAC role recommendations
 - `/azure-cost-estimator` — Real-time cost estimation via Azure Retail Prices API
+- `/git-ape-records` — Persist portable draft Intent and emit portable
+  post-execution Evidence without requiring optional governance tooling
 
 ## Pre-Deployment Drift Check (Optional)
 
@@ -182,6 +184,12 @@ The gatherer will interview the user to collect:
 - Naming preferences (uses **azure-naming-research** skill for CAF compliance)
 - Environment (dev/staging/prod)
 - Any special configuration needs
+- The problem, desired outcome, stakeholders, acceptance criteria, constraints,
+  and autonomy boundaries that make up deployment Intent
+
+After `requirements.json` is saved, invoke `/git-ape-records intent`. Confirm
+that `intent.json` and `intent-status.json` exist before template generation.
+The Intent is a portable ADRP draft; do not claim it is ratified.
 
 **CAF Naming:** The gatherer uses the `azure-naming-research` skill to:
 - Look up official CAF abbreviations for each resource type
@@ -380,6 +388,20 @@ Run post-deployment validation:
 - Verify security configurations
 - Test managed identity assignments (if applicable)
 
+After state and test artifacts are written, invoke `/git-ape-records evidence`.
+Before Evidence emission, capture the execution as explicit node and transition
+events with `/git-ape-records trace`. Use the canonical deploy graph, store the
+trace under `traces/<invocation>.json`, and store native validation under
+`trace-validations/<invocation>.json`. In GitHub Actions, workflow step outcomes
+are authoritative for this trace. In interactive mode, label the producer as
+agent-observed; do not describe it as independent verification.
+
+Evidence emission is mandatory standalone Git-Ape behavior. If AERP is
+installed, independently validate and verify the bundle and promote its status
+to `verified`; otherwise retain the truthful native status `generated`.
+Evidence failure does not rewrite Azure deployment state and must not trigger
+automatic rollback.
+
 **Final Output:** Provide deployment summary including:
 - Deployed resource IDs and endpoints
 - Integration test results
@@ -498,6 +520,13 @@ For each deployment, save:
 - `deployment.log` - Deployment progress and results
 - `tests.json` - Integration test results
 - `metadata.json` - Deployment ID, timestamp, user, status
+- `intent.json` - Portable `ape-decision-record/v1` draft created from captured
+  deployment Intent
+- `intent-status.json` - Draft/authority status and canonical fingerprint
+- `evidence/bundles/{invocation}.json` - Portable
+  `aerp-evidence-bundle/v1` execution Evidence
+- `evidence-status.json` - `generated`, `verified`, or `failed` independently
+  of Azure deployment status
 
 **In Headless Mode:** Commit these files to the branch so the PR shows full deployment artifacts. The PR diff becomes the deployment review.
 
@@ -509,9 +538,14 @@ mkdir -p .azure/deployments/$DEPLOYMENT_ID
 
 **After Each Stage:**
 - Requirements gathered → Save `.azure/deployments/$DEPLOYMENT_ID/requirements.json`
+- Intent captured → Save `.azure/deployments/$DEPLOYMENT_ID/intent.json` and
+  `.azure/deployments/$DEPLOYMENT_ID/intent-status.json`
 - Template generated → Save `.azure/deployments/$DEPLOYMENT_ID/template.json`, `.azure/deployments/$DEPLOYMENT_ID/architecture.md`, `.azure/deployments/$DEPLOYMENT_ID/security-analysis.md`, `.azure/deployments/$DEPLOYMENT_ID/policy-assessment.md`, and `.azure/deployments/$DEPLOYMENT_ID/policy-recommendations.json`
 - Deployment complete → Save `.azure/deployments/$DEPLOYMENT_ID/deployment.log`
 - Tests complete → Save `.azure/deployments/$DEPLOYMENT_ID/tests.json`
+- Execution recorded → Save an immutable bundle under
+  `.azure/deployments/$DEPLOYMENT_ID/evidence/bundles/` and update
+  `.azure/deployments/$DEPLOYMENT_ID/evidence-status.json`
 
 **Reuse Previous Deployments:**
 Users can reference previous deployments:

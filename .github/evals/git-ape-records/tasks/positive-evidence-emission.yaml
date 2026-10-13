@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-evidence-emission
+name: Positive - Emit portable Evidence
+description: Native Git-Ape should emit immutable generated Evidence after execution.
+tags: [trigger, positive]
+inputs:
+  prompt: "Use Git-Ape's native record producer to emit a portable AERP Evidence bundle for .azure/deployments/demo. state.json, tests.json, and intent.json exist. Use identity git-ape:test, target git-ape:test-target, environment test, and invocation run-1. I do not have ISEE installed."
+  files:
+    - path: .azure/deployments/demo/state.json
+      content: |
+        {"status":"succeeded","deploymentId":"demo"}
+    - path: .azure/deployments/demo/tests.json
+      content: |
+        {"status":"passed","resources":[]}
+    - path: .azure/deployments/demo/intent.json
+      content: |
+        {"schema_version":"ape-decision-record/v1","decision_id":"ADR-GIT-APE-DEMO","record_id":"00000000-0000-4000-8000-000000000001","record_version":1,"status":"draft","ratification":null}
+    - path: .github/git-ape/records/git-ape-records.sh
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        test "${1:-}" = "evidence"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --output) output="$2"; shift 2 ;;
+            --status-output) status="$2"; shift 2 ;;
+            *) shift ;;
+          esac
+        done
+        mkdir -p "$(dirname "$output")"
+        printf '%s\n' '{"schema_version":"aerp-evidence-bundle/v1","records":[]}' > "$output"
+        printf '%s\n' '{"status":"generated","authoritative":false,"independentlyVerified":false}' > "$status"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-records/SKILL.md
+      mode: positive
+      threshold: 0.5
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the previous response. PASS only if it:
+        1. Uses or names the native `git-ape-records.sh evidence` command.
+        2. Writes an immutable bundle under `evidence/bundles/`.
+        3. Keeps Evidence status as `generated` and independentlyVerified false.
+        4. Does not claim AERP verification or install optional tooling.
+        If all criteria are met, call `set_waza_grade_pass`; otherwise call
+        `set_waza_grade_fail` and identify the missing criteria.

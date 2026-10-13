@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/suuus/ape-context/schemas/ape-decision-record-v1.schema.json",
+  "title": "Ape Decision Record Profile 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "record_id",
+    "record_version",
+    "status",
+    "title",
+    "decision_statement",
+    "context",
+    "drivers",
+    "alternatives",
+    "selected_alternative",
+    "rationale",
+    "tradeoffs",
+    "authority",
+    "provenance",
+    "lifecycle",
+    "consequences",
+    "implementation",
+    "relationships",
+    "autonomy",
+    "gaps",
+    "ratification"
+  ],
+  "properties": {
+    "schema_version": {"const": "ape-decision-record/v1"},
+    "decision_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "record_id": {"type": "string", "format": "uuid"},
+    "record_version": {"type": "integer", "minimum": 1},
+    "status": {
+      "enum": [
+        "discovered",
+        "draft",
+        "under-review",
+        "ratified",
+        "effective",
+        "rejected",
+        "deprecated",
+        "superseded",
+        "expired",
+        "revoked"
+      ]
+    },
+    "title": {"type": "string", "minLength": 1},
+    "decision_statement": {"type": "string", "minLength": 1},
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["problem", "scope", "stakeholders", "concerns"],
+      "properties": {
+        "problem": {"type": "string", "minLength": 1},
+        "scope": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "stakeholders": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "concerns": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "category", "criterion", "source_refs"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "category": {
+            "enum": ["security", "cost", "compliance", "operations", "architecture", "product", "other"]
+          },
+          "criterion": {"type": "string", "minLength": 1},
+          "source_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+        }
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "description", "benefits", "drawbacks", "rejection_reason"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "description": {"type": "string"},
+          "benefits": {"type": "array", "items": {"type": "string"}},
+          "drawbacks": {"type": "array", "items": {"type": "string"}},
+          "rejection_reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "selected_alternative": {"type": "string", "minLength": 1},
+    "rationale": {"type": "string", "minLength": 1},
+    "tradeoffs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security", "cost", "compliance", "operations"],
+      "properties": {
+        "security": {"$ref": "#/$defs/tradeoff"},
+        "cost": {"$ref": "#/$defs/tradeoff"},
+        "compliance": {"$ref": "#/$defs/tradeoff"},
+        "operations": {"$ref": "#/$defs/tradeoff"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority_status", "decision_owner", "deciders", "approvers", "delegation_ref"],
+      "properties": {
+        "authority_status": {
+          "enum": ["authoritative", "advisory", "conflicting", "unknown", "user-confirmed"]
+        },
+        "decision_owner": {"type": ["string", "null"]},
+        "deciders": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "approvers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "delegation_ref": {"type": ["string", "null"]}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources", "activities", "agents"],
+      "properties": {
+        "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+        "activities": {"type": "array", "items": {"$ref": "#/$defs/activity"}},
+        "agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_at", "effective_at", "review_by", "expires_at", "review_triggers"],
+      "properties": {
+        "created_at": {"type": "string", "format": "date-time"},
+        "effective_at": {"type": ["string", "null"], "format": "date-time"},
+        "review_by": {"type": ["string", "null"], "format": "date-time"},
+        "expires_at": {"type": ["string", "null"], "format": "date-time"},
+        "review_triggers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "consequences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive", "negative", "risks", "actions"],
+      "properties": {
+        "positive": {"type": "array", "items": {"type": "string"}},
+        "negative": {"type": "array", "items": {"type": "string"}},
+        "risks": {"type": "array", "items": {"type": "string"}},
+        "actions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_refs", "artifact_refs", "evidence_refs"],
+      "properties": {
+        "policy_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "artifact_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revises", "supersedes", "invalidates", "implements", "depends_on"],
+      "properties": {
+        "revises": {"type": ["string", "null"]},
+        "supersedes": {"type": ["string", "null"]},
+        "invalidates": {"type": ["string", "null"]},
+        "implements": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "depends_on": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proceed", "always_ask", "never"],
+      "properties": {
+        "proceed": {"type": "array", "items": {"type": "string"}},
+        "always_ask": {"type": "array", "items": {"type": "string"}},
+        "never": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "gaps": {"type": "array", "items": {"type": "string"}},
+    "ratification": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "timestamp",
+            "confirmed_by",
+            "authority_role",
+            "approval_meaning",
+            "record_fingerprint",
+            "context_fingerprint",
+            "accepted_warnings",
+            "signature_ref"
+          ],
+          "properties": {
+            "status": {"const": "ratified"},
+            "timestamp": {"type": "string", "format": "date-time"},
+            "confirmed_by": {"type": "string", "minLength": 1},
+            "authority_role": {"type": ["string", "null"]},
+            "approval_meaning": {"type": "string", "minLength": 1},
+            "record_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "context_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "accepted_warnings": {"type": "array", "items": {"type": "string"}},
+            "signature_ref": {"type": ["string", "null"]}
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"enum": ["ratified", "effective"]}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "ratification": {"type": "object"}
+        }
+      },
+      "else": {
+        "properties": {
+          "ratification": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "tradeoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["impact", "summary", "evidence_refs", "accepted_risks"],
+      "properties": {
+        "impact": {"enum": ["positive", "negative", "mixed", "neutral", "unknown"]},
+        "summary": {"type": "string"},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "accepted_risks": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "uri", "title", "authority_status", "digest"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "title": {"type": ["string", "null"]},
+        "authority_status": {
+          "enum": ["authoritative", "advisory", "conflicting", "unknown", "user-confirmed"]
+        },
+        "digest": {"type": ["string", "null"]}
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "timestamp", "used", "associated_agents"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["discovery", "extraction", "generation", "review", "approval", "invalidation"]},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "used": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "associated_agents": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "name", "role", "acted_on_behalf_of"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["person", "organisation", "software-agent", "model"]},
+        "name": {"type": "string", "minLength": 1},
+        "role": {"type": "string", "minLength": 1},
+        "acted_on_behalf_of": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

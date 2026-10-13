@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azure.github.io/git-ape/schemas/git-ape-execution-graph-v1.schema.json",
+  "title": "Git-Ape Execution Graph v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "graphId", "entryNode", "successTerminal", "ordered", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": {"const": "git-ape-execution-graph/v1"},
+    "graphId": {"type": "string", "minLength": 1},
+    "entryNode": {"type": "string", "minLength": 1},
+    "successTerminal": {"type": "string", "minLength": 1},
+    "ordered": {"type": "boolean"},
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "requiredForSuccess"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "requiredForSuccess": {"type": "boolean"}
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "requiredEvidence"],
+        "properties": {
+          "from": {"type": "string", "minLength": 1},
+          "to": {"type": "string", "minLength": 1},
+          "requiredEvidence": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}

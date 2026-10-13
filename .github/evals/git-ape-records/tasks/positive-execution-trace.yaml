@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-execution-trace
+name: Positive - Capture structured execution trace
+description: Native Git-Ape should capture and validate graph-bound execution events before Evidence emission.
+tags: [trigger, positive]
+inputs:
+  prompt: "Use Git-Ape's native record producer to save and validate the observed events for deployment demo as an immutable execution trace. The graph is .azure/deployments/demo/execution-graphs/run-1.json and the events are .azure/deployments/demo/events.json. Use invocation run-1, workflow git-ape-deploy, identity git-ape:test, and outcome succeeded. I do not have ISEE or GraphCheck installed."
+  files:
+    - path: .azure/deployments/demo/execution-graphs/run-1.json
+      content: |
+        {"schemaVersion":"git-ape-execution-graph/v1","graphId":"demo","entryNode":"start","successTerminal":"done","ordered":true,"nodes":[{"id":"start","requiredForSuccess":true},{"id":"done","requiredForSuccess":true}],"edges":[{"from":"start","to":"done","requiredEvidence":["receipt"]}]}
+    - path: .azure/deployments/demo/events.json
+      content: |
+        [{"id":"node-start","type":"node","node":"start","status":"completed","recordedAt":"2026-10-05T12:00:00Z","evidence":[]},{"id":"edge-start-done","type":"transition","from":"start","to":"done","recordedAt":"2026-10-05T12:00:01Z","evidence":["receipt"]},{"id":"node-done","type":"node","node":"done","status":"completed","recordedAt":"2026-10-05T12:00:02Z","evidence":[]}]
+    - path: .github/git-ape/records/git-ape-records.sh
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        test "${1:-}" = "trace"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --output) output="$2"; shift 2 ;;
+            --validation-output) validation="$2"; shift 2 ;;
+            *) shift ;;
+          esac
+        done
+        mkdir -p "$(dirname "$output")" "$(dirname "$validation")"
+        printf '%s\n' '{"schemaVersion":"git-ape-execution-trace/v1","outcome":"succeeded","events":[]}' > "$output"
+        printf '%s\n' '{"schemaVersion":"git-ape-trace-validation/v1","status":"passed"}' > "$validation"
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-records/SKILL.md
+      mode: positive
+      threshold: 0.5
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the previous response. PASS only if it:
+        1. Uses or names the native `git-ape-records.sh trace` command.
+        2. Supplies the declared graph and events input.
+        3. Writes an immutable per-invocation trace and a validation report.
+        4. Does not require ISEE, Python, or GraphCheck.
+        5. Does not claim the trace is independently verified.
+        If all criteria are met, call `set_waza_grade_pass`; otherwise call
+        `set_waza_grade_fail` and identify the missing criteria.

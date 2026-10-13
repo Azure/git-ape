@@ -48,6 +48,8 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 |-------|-------------|:---------:|
 | [Azure Stack Deploy](./azure-stack-deploy) | Run an Azure Deployment Stack create (subscription scope) for a prepared Git-Ape deployment artifact and write state.json (schemaVersion 1.0). Use locally so the result matches the CI deploy workflow. | ✅ |
 | [Azure Stack Destroy](./azure-stack-destroy) | Tear down a Git-Ape deployment by ID. Reads `state.json` under `.azure/deployments/<id>/` to delete the Azure Deployment Stack and purge soft-deleted Key Vault / Cognitive Services. Refuses to run without `state.json`. Use for any local CLI or VS Code Git-Ape teardown so the result matches the CI destroy workflow. | ✅ |
+| [Git Ape Isee](./git-ape-isee) | Adopt and govern existing Git-Ape records after ISEE is installed. USE FOR: adopt existing standalone intent and evidence; run adopt-existing.sh; create isee-bindings.json; bind one or more ratified ADRP Intent records; bind ASRP Structure; verify existing AERP Evidence; enforce exact approved artifact bytes. DO NOT USE FOR: saving requirements.json as draft Intent, basic Evidence emission, installing ISEE, or Azure deployment execution. | ✅ |
+| [Git Ape Records](./git-ape-records) | Run Git-Ape's native Bash producer to save draft ADRP Intent, create and validate structured execution traces, and emit immutable AERP Evidence. USE FOR: save deployment intent; create intent.json; record a declared workflow path; validate transition receipts; emit portable evidence; fingerprint native records without ISEE. DO NOT USE FOR: ratifying Intent, authoring ASRP Structure, independently verifying Evidence, or deploying Azure resources. | ✅ |
 
 ## Skill Invocation in Deployment Flow
 

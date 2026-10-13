@@ -1,0 +1,147 @@
+[
+  {
+    "id": "node-intent",
+    "type": "node",
+    "node": "intent_captured",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:00Z",
+    "evidence": ["intent.json", "intent-status.json"],
+    "result": "draft"
+  },
+  {
+    "id": "edge-intent-governance",
+    "type": "transition",
+    "from": "intent_captured",
+    "to": "governance_preflight",
+    "recordedAt": "2026-10-05T12:00:01Z",
+    "evidence": ["intent-record"]
+  },
+  {
+    "id": "node-governance",
+    "type": "node",
+    "node": "governance_preflight",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:02Z",
+    "evidence": ["governance-status.json"],
+    "result": "standalone"
+  },
+  {
+    "id": "edge-governance-login",
+    "type": "transition",
+    "from": "governance_preflight",
+    "to": "azure_login",
+    "recordedAt": "2026-10-05T12:00:03Z",
+    "evidence": ["governance-status"]
+  },
+  {
+    "id": "node-login",
+    "type": "node",
+    "node": "azure_login",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:04Z",
+    "evidence": ["github-oidc"],
+    "result": "authenticated"
+  },
+  {
+    "id": "edge-login-validation",
+    "type": "transition",
+    "from": "azure_login",
+    "to": "template_validated",
+    "recordedAt": "2026-10-05T12:00:05Z",
+    "evidence": ["azure-session"]
+  },
+  {
+    "id": "node-validation",
+    "type": "node",
+    "node": "template_validated",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:06Z",
+    "evidence": ["template.json", "parameters.json"],
+    "result": "passed"
+  },
+  {
+    "id": "edge-validation-security",
+    "type": "transition",
+    "from": "template_validated",
+    "to": "security_gate",
+    "recordedAt": "2026-10-05T12:00:07Z",
+    "evidence": ["template-validation"]
+  },
+  {
+    "id": "node-security",
+    "type": "node",
+    "node": "security_gate",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:08Z",
+    "evidence": ["template-analyzer"],
+    "result": "passed"
+  },
+  {
+    "id": "edge-security-authorized",
+    "type": "transition",
+    "from": "security_gate",
+    "to": "deployment_authorized",
+    "recordedAt": "2026-10-05T12:00:09Z",
+    "evidence": ["security-result"]
+  },
+  {
+    "id": "node-authorized",
+    "type": "node",
+    "node": "deployment_authorized",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:10Z",
+    "evidence": ["authorization.json"],
+    "result": "verified-merged-pull-request"
+  },
+  {
+    "id": "edge-authorized-deploy",
+    "type": "transition",
+    "from": "deployment_authorized",
+    "to": "deployment_executed",
+    "recordedAt": "2026-10-05T12:00:11Z",
+    "evidence": ["authorization-receipt"]
+  },
+  {
+    "id": "node-deploy",
+    "type": "node",
+    "node": "deployment_executed",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:12Z",
+    "evidence": ["state.json"],
+    "result": "succeeded"
+  },
+  {
+    "id": "edge-deploy-tests",
+    "type": "transition",
+    "from": "deployment_executed",
+    "to": "integration_tests",
+    "recordedAt": "2026-10-05T12:00:13Z",
+    "evidence": ["deployment-state"]
+  },
+  {
+    "id": "node-tests",
+    "type": "node",
+    "node": "integration_tests",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:14Z",
+    "evidence": ["tests.json"],
+    "result": "passed"
+  },
+  {
+    "id": "edge-tests-state",
+    "type": "transition",
+    "from": "integration_tests",
+    "to": "state_recorded",
+    "recordedAt": "2026-10-05T12:00:15Z",
+    "evidence": ["test-results"]
+  },
+  {
+    "id": "node-state",
+    "type": "node",
+    "node": "state_recorded",
+    "status": "completed",
+    "recordedAt": "2026-10-05T12:00:16Z",
+    "evidence": ["state.json", "tests.json"],
+    "result": "succeeded"
+  }
+]
