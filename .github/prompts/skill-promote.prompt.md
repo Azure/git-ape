@@ -7,7 +7,7 @@ argument-hint: '[skillName=...]'
 # Skill Promote
 
 Assess whether a skill that lives in the **expanded eval tier** (2 models in
-CI: `claude-sonnet-4.6` + `gpt-5-codex`) has earned promotion to the **pilot
+CI: `claude-sonnet-5.5` + `gpt-5.3-codex`) has earned promotion to the **pilot
 tier** (full 4-model fan-out + `trials_per_task: 3` flake detection).
 
 This is **advisory**. The prompt produces a graduation report; an actual
@@ -25,7 +25,7 @@ This is **non-interactive** — it runs to completion and prints a report.
 
 * `${input:skillName}`: (Required) Skill directory name under
   `.github/skills/` (bare name, not a path). If omitted, ask once.
-* `${input:models:claude-sonnet-4.6,gpt-5.4,gpt-5-codex,claude-opus-4.6}`:
+* `${input:models:claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8}`:
   (Optional) Comma-separated list of waza model IDs to benchmark for
   promotion. Defaults to the full pilot-tier matrix.
 
@@ -69,23 +69,23 @@ for model in ${models[@]}; do
   echo "▶ Eval: ${model}"
   waza run ".github/evals/${skill}/eval.yaml" \
     --model "${model}" \
-    --judge-model "claude-opus-4.7" \
+    --judge-model "claude-opus-5.5" \
     --no-cache \
     --output "/tmp/waza-promote/${skill}-${model}.json" \
     2>&1 | tail -3
 done
 ```
 
-`--judge-model claude-opus-4.7` pins the LLM-as-judge to a model that
+`--judge-model claude-opus-5.5` pins the LLM-as-judge to a model that
 is NOT in any runner roster (pilot or expanded). Two reasons:
 
 1. **No self-grading bias.** When the same model is both runner and
    judge, that leg's prompt-grader verdicts conflate model capability
    with judge agreement. Pinning the judge outside the roster gives
    every leg an independent grader.
-2. **Judge capability ≥ every runner.** `claude-opus-4.7` is chosen as
+2. **Judge capability ≥ every runner.** `claude-opus-5.5` is chosen as
    a higher-capability judge than the current pilot/expanded runner mix
-   (sonnet-4.6, gpt-5.4, gpt-5-codex, opus-4.6) to reduce ceiling
+   (sonnet-5.5, gpt-5.5, gpt-5.3-codex, opus-4.8) to reduce ceiling
    effects when scoring the strongest runner outputs.
 
 Run sequentially — quota consumption stays predictable.

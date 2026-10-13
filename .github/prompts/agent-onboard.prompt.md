@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 description: 'Onboard a new custom agent into the waza eval harness: scaffold eval.yaml + tasks under .github/evals/agents/<name>/, mirror the .agent.md, patch to repo conventions (SDK CLI tool taxonomy, hybrid graders, off-topic persona-lock test), then run a smoke trial. No SKILL.md or manifest edits.'
-argument-hint: '[agentName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-4.6]'
+argument-hint: '[agentName=...] [positiveTasks={2|3|4}] [negativeTasks={1|2}] [smokeModel=claude-sonnet-5.5]'
 ---
 
 # Agent Onboard
@@ -67,7 +67,7 @@ writing the eval directory and before running the smoke trial.
   boundary. The off-topic task is authored separately (Step 4) and
   does not count against this budget. Negative tasks carry the
   `trigger` grader only.
-* `${input:smokeModel:claude-sonnet-4.6}`: (Optional) Model to use for
+* `${input:smokeModel:claude-sonnet-5.5}`: (Optional) Model to use for
   the final smoke trial. Default is the cheapest stable pilot-tier
   model; override only if the agent is model-sensitive.
 
@@ -181,7 +181,7 @@ config:
   timeout_seconds: 60
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5.5
   # MANDATORY for agents — waza walks this directory for SKILL.md or
   # *.agent.md mirrors. Without it the agent file is not discovered, the
   # auto-injected tool_constraint never fires, and /agent-promote's
@@ -446,19 +446,19 @@ graders wire up correctly — not a quality assessment.
 ```bash
 mkdir -p /tmp/waza-runs
 waza run ".github/evals/agents/${agent}/eval.yaml" \
-  --model "${input:smokeModel:claude-sonnet-4.6}" \
-  --judge-model "claude-opus-4.7" \
+  --model "${input:smokeModel:claude-sonnet-5.5}" \
+  --judge-model "claude-opus-5.5" \
   --no-cache \
   --output "/tmp/waza-runs/${agent}-onboard-smoke.json" \
   2>&1 | tail -10
 ```
 
-`--judge-model claude-opus-4.7` is fixed (NOT a parameter) for the
+`--judge-model claude-opus-5.5` is fixed (NOT a parameter) for the
 same reason as `/agent-promote`: judge sits outside every runner
 roster, so smoke verdicts cannot leak self-grading bias even if the
 operator changes `smokeModel`. `smokeModel` only swaps the runner.
 The one exception: if the operator sets `smokeModel` to
-`claude-opus-4.7` (the same value as `--judge-model`), the smoke run
+`claude-opus-5.5` (the same value as `--judge-model`), the smoke run
 becomes self-graded — avoid that pairing.
 
 Parse the result JSON and report:

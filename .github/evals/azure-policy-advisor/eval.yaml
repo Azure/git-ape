@@ -35,7 +35,7 @@ config:
   # (trigger, budget, lint). The prompt graders below require a real model
   # and are skipped under mock.
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5.5
 
 metrics:
   - name: trigger_precision

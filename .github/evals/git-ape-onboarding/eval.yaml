@@ -13,7 +13,7 @@ config:
   timeout_seconds: 180
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5.5
 
 metrics:
   - name: trigger_precision

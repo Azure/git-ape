@@ -34,11 +34,23 @@ name: Waza skill evals
 #
 # Notes:
 #   - waza's eval schema only supports `skill:`. Custom agents under
-#     .github/agents/*.agent.md are *not* evaluable by this workflow. See
-#     docs/WAZA.md "Agent evals" for the upstream limitation.
-#   - copilot-sdk needs a Copilot-scoped token. Default GITHUB_TOKEN does
-#     NOT carry that scope. We use the `COPILOT_GITHUB_TOKEN` repo secret.
-#     Comment posting uses the default token (only needs pull-requests: write).
+#     .github/agents/*.agent.md are *not* evaluable by this workflow; they
+#     run in waza-agent-evals.yml instead.
+#   - Auth: no PAT. waza's embedded Copilot CLI authenticates with the
+#     built-in GITHUB_TOKEN, passed as `COPILOT_GITHUB_TOKEN: github.token`
+#     to the `eval` job, which declares `permissions: copilot-requests: write`.
+#     Usage is billed to the org and requires the org policy "Allow use of
+#     Copilot CLI billed to the organization" (on by default). Needs a
+#     Copilot CLI that supports GITHUB_TOKEN auth (waza >= v0.38.10, which
+#     embeds Copilot CLI 1.0.85). Comment posting uses the default token
+#     (only needs pull-requests: write).
+#   - Cost controls: org billing ignores per-user Copilot budgets. Set the
+#     repo variable `WAZA_EVALS_ENABLED` to `false` to skip all eval jobs
+#     (kill switch); track spend via the org billing dashboard / cost
+#     centers. PRs from forks are always skipped (read-only token without
+#     copilot-requests, untrusted input spending org credits), and so are
+#     Dependabot runs (read-only token) — run them via workflow_dispatch
+#     after review.
 
 on:
   pull_request:
@@ -71,71 +83,76 @@ concurrency:
 # sibling azd-extension release at the same commit, and GitHub's
 # `releases/latest` endpoint returns whichever was published last, which has
 # bitten PR #109 with a 404 on the wrong asset.
+# Floor: v0.38.10 embeds Copilot CLI 1.0.85, which supports GITHUB_TOKEN
+# (copilot-requests) auth. v0.38.7 embedded a 1.0.64-0 pre-release that
+# predates it. Do not go below v0.38.10.
 env:
-  WAZA_VERSION: 'v0.38.7'
+  WAZA_VERSION: 'v0.38.10'
 
 # Note: there is no top-level skill list. The canonical list lives in
 # .github/evals/manifest.yaml and is read by the `prepare` job below.
 
 jobs:
   # ---------------------------------------------------------------------------
-  # preflight: verify that the COPILOT_GITHUB_TOKEN secret is configured.
-  # When absent, every downstream job is skipped cleanly (no red checks). The
-  # maintainer setup steps are in PR #109 / README.
+  # preflight: decide whether this run may spend Copilot requests. Evals
+  # authenticate with the built-in GITHUB_TOKEN (copilot-requests: write) and
+  # are billed to the org, so `enabled=true` only when ALL of these hold:
+  #   - the event is workflow_dispatch, or a pull_request whose head branch
+  #     lives in this repo. Fork PRs get a read-only token without
+  #     copilot-requests, carry prompt-injection risk, and would spend org
+  #     credits, so they are skipped (maintainers can dispatch after review).
+  #   - the repo variable WAZA_EVALS_ENABLED is not 'false' (kill switch —
+  #     org billing ignores per-user budgets).
+  #   - the run is not from Dependabot (actor or PR author `dependabot[bot]`).
+  #     Dependabot's GITHUB_TOKEN is read-only by default and its
+  #     github-actions bumps touch this workflow, which would select the full
+  #     matrix; these runs were always skipped under the old PAT gate too.
+  # When disabled, every downstream job is skipped cleanly (no red checks).
+  # Job id, name and the `enabled` output are unchanged so downstream `if:`s
+  # and any required-check configuration keep working.
   # ---------------------------------------------------------------------------
   preflight:
     name: Preflight (check secrets)
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    permissions: {}
     outputs:
       enabled: ${{ steps.check.outputs.enabled }}
     steps:
-      - name: Check COPILOT_GITHUB_TOKEN availability
+      - name: Check eval eligibility (event, fork, Dependabot, kill switch)
         id: check
         env:
-          TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+          EVALS_ENABLED: ${{ vars.WAZA_EVALS_ENABLED }}
         run: |
-          if [ -z "${TOKEN:-}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::COPILOT_GITHUB_TOKEN secret is not set. Skipping all waza skill eval jobs. See repo README / PR #109 for setup."
-            exit 0
-          fi
-          # Token is set — verify it can actually read the private microsoft/waza
-          # repo (release downloads need access). Reject silently if 401/403/404.
-          # Capture headers + body for diagnostics (no token is ever printed).
-          hdr_file=$(mktemp)
-          body_file=$(mktemp)
-          http_code=$(curl -sS -D "${hdr_file}" -o "${body_file}" -w "%{http_code}" \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/microsoft/waza/releases/latest || true)
-          if [ "${http_code}" = "200" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "COPILOT_GITHUB_TOKEN can read microsoft/waza — eval jobs will run."
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::COPILOT_GITHUB_TOKEN cannot read microsoft/waza (HTTP ${http_code}). Skipping all waza skill eval jobs."
-            echo "--- diagnostic: response headers (token not included) ---"
-            grep -iE '^(http|x-oauth-scopes|x-accepted-oauth-scopes|x-github-sso|x-ratelimit-remaining|x-ratelimit-used|x-github-request-id):' "${hdr_file}" || true
-            echo "--- diagnostic: response body (first 500 bytes) ---"
-            head -c 500 "${body_file}" || true
-            echo
-            echo "--- diagnostic: token-user identity probe ---"
-            user_code=$(curl -sS -o "${body_file}.user" -w "%{http_code}" \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              https://api.github.com/user || true)
-            echo "GET /user -> HTTP ${user_code}"
-            if [ "${user_code}" = "200" ]; then
-              # Print only the login + token type, never the token itself.
-              jq -r '"token user: \(.login)  (type: \(.type))"' "${body_file}.user" 2>/dev/null || head -c 200 "${body_file}.user"
-            else
-              head -c 300 "${body_file}.user" || true
+          set -euo pipefail
+          enabled=true
+          kill_switch="$(printf '%s' "${EVALS_ENABLED:-}" | tr '[:upper:]' '[:lower:]')"
+          if [ "${kill_switch}" = "false" ]; then
+            enabled=false
+            echo "::notice::Repo variable WAZA_EVALS_ENABLED is 'false' (kill switch). Skipping all waza skill eval jobs."
+          elif [ "${ACTOR:-}" = "dependabot[bot]" ] || [ "${PR_AUTHOR:-}" = "dependabot[bot]" ]; then
+            enabled=false
+            echo "::notice::Run triggered by Dependabot. Its GITHUB_TOKEN is read-only by default and may not be granted copilot-requests, so all waza skill eval jobs are skipped. A maintainer can run workflow_dispatch on this branch to validate the change."
+          elif [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            :
+          elif [ "${EVENT_NAME}" = "pull_request" ]; then
+            if [ "${HEAD_REPO}" != "${THIS_REPO}" ]; then
+              enabled=false
+              echo "::notice::Pull request comes from a fork (${HEAD_REPO:-unknown}). Fork PRs get a read-only token without copilot-requests and would spend org Copilot credits on untrusted input. Skipping all waza skill eval jobs; a maintainer can run them via workflow_dispatch after review."
             fi
-            echo
+          else
+            enabled=false
+            echo "::notice::Event '${EVENT_NAME}' is not eligible for waza skill evals. Skipping."
           fi
-          rm -f "${hdr_file}" "${body_file}" "${body_file}.user"
+          echo "enabled=${enabled}" >> "$GITHUB_OUTPUT"
+          if [ "${enabled}" = "true" ]; then
+            echo "waza skill evals enabled (event: ${EVENT_NAME}). Copilot usage authenticates with GITHUB_TOKEN and is billed to the org."
+          fi
 
   # ---------------------------------------------------------------------------
   # prepare: read .github/evals/manifest.yaml and decide which skills to
@@ -309,8 +326,11 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.enabled == 'true'
     continue-on-error: true
+    # No model calls here — plain read-only GITHUB_TOKEN, no copilot-requests.
+    permissions:
+      contents: read
     env:
-      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
       WAZA_NO_UPDATE_CHECK: '1'
 
     steps:
@@ -396,11 +416,18 @@ jobs:
         # or promoting a tier means editing .github/evals/manifest.yaml —
         # never this workflow.
         include: ${{ fromJSON(needs.prepare.outputs.legs) }}
+    # Job-level permissions replace the workflow-level set. This job only
+    # needs to check out the repo and spend Copilot requests; it never
+    # writes to the PR (the `comment` job does that).
+    permissions:
+      contents: read
+      copilot-requests: write
     env:
-      # copilot-sdk authenticates with this token. Default GITHUB_TOKEN does
-      # not carry Copilot scope, so we use a dedicated PAT in repo secrets.
-      # Also reused for the release-API lookup (only needs public-repo read).
-      GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      # waza's embedded Copilot CLI (>= 1.0.85) authenticates with the
+      # built-in GITHUB_TOKEN when the job has `copilot-requests: write`;
+      # usage is billed to the org. COPILOT_GITHUB_TOKEN takes precedence
+      # over GH_TOKEN / GITHUB_TOKEN in the CLI's lookup order.
+      COPILOT_GITHUB_TOKEN: ${{ github.token }}
       WAZA_NO_UPDATE_CHECK: '1'
 
     steps:
@@ -449,10 +476,10 @@ jobs:
           mkdir -p .waza-results
           spec=".github/evals/${{ matrix.skill }}/eval.yaml"
           # Slug used for filenames + artifact suffix; harmless when the
-          # model has dots (gpt-5.4) since GH Actions allows them.
+          # model has dots (gpt-5.5) since GH Actions allows them.
           slug="${{ matrix.skill }}-${{ matrix.model }}"
 
-          # gpt-5.4 (and any other model flagged `baseline: true` in the
+          # gpt-5.5 (and any other model flagged `baseline: true` in the
           # manifest) runs in --baseline (A/B) mode to cap quota cost while
           # still providing a reference point for cross-model comparison. All
           # other models run standard. The PR comment labels each leg.
@@ -483,15 +510,15 @@ jobs:
           # same eval suite across multiple models.
           #
           # --judge-model decouples the LLM-as-judge from the executor model
-          # and pins it to claude-opus-4.7 for TWO reasons:
-          #   1. No self-grading bias — opus-4.7 is NOT in any matrix tier
-          #      (pilot: sonnet-4.6, gpt-5.4, gpt-5-codex, opus-4.6;
-          #      expanded: sonnet-4.6, gpt-5-codex), so no runner leg is
+          # and pins it to claude-opus-5.5 for TWO reasons:
+          #   1. No self-grading bias — opus-5.5 is NOT in any matrix tier
+          #      (pilot: sonnet-5.5, gpt-5.5, gpt-5.3-codex, opus-4.8;
+          #      expanded: sonnet-5.5, gpt-5.3-codex), so no runner leg is
           #      ever judged by its own model.
-          #   2. Judge capability ≥ every runner — opus-4.7 is chosen as a
+          #   2. Judge capability ≥ every runner — opus-5.5 is chosen as a
           #      higher-capability judge than the runner mix to reduce
           #      ceiling effects when scoring the strongest runners.
-          # If a future tier ever adds opus-4.7 as a runner, the judge must
+          # If a future tier ever adds opus-5.5 as a runner, the judge must
           # be re-pinned to a model that is still outside the new roster.
           #
           # --suggest --recommend appends outcome-tied recommendations.
@@ -505,7 +532,7 @@ jobs:
             # shellcheck disable=SC2086
             waza run "${spec}" \
               --model "${{ matrix.model }}" \
-              --judge-model "claude-opus-4.7" \
+              --judge-model "claude-opus-5.5" \
               --suggest \
               --recommend \
               ${extra_flags} \
@@ -600,7 +627,7 @@ jobs:
           slug="${{ matrix.skill }}-${{ matrix.model }}"
           mkdir -p .waza-results
           # --judge-model omitted: this step uses the project default judge model
-          # (claude-sonnet-4.6 from .waza.yaml) for consistent quality scoring
+          # (claude-sonnet-5.5 from .waza.yaml) for consistent quality scoring
           # regardless of which executor model is running in this matrix leg.
           waza quality ".github/skills/${{ matrix.skill }}" --format table \
             > ".waza-results/${slug}-quality.txt" 2>&1 || true
@@ -848,7 +875,7 @@ jobs:
               '',
               '> **Legend:** Models flagged `baseline: true` in `.github/evals/manifest.yaml` (currently: `' +
                 (Array.from(baselineModels).join('`, `') || 'none') +
-                '`) run with `--baseline` (A/B mode) to cap quota. All other models run standard. Judge model is fixed at `claude-opus-4.7` across all legs.',
+                '`) run with `--baseline` (A/B mode) to cap quota. All other models run standard. Judge model is fixed at `claude-opus-5.5` across all legs.',
               '',
             ].filter((line) => line !== null).join('\n');
 

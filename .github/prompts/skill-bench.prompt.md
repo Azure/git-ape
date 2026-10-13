@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 description: 'Cross-model benchmark for a single skill: runs waza eval once per model, captures results, compares with waza compare, and prints a one-line winner summary'
-argument-hint: '[skillName=...] [models=claude-sonnet-4.6,gpt-5.4,gpt-5.3-codex,claude-opus-4.6]'
+argument-hint: '[skillName=...] [models=claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8]'
 ---
 
 # Skill Bench
@@ -23,7 +23,7 @@ This is **non-interactive** — it runs to completion and reports results.
 * `${input:skillName}`: (Required) Skill directory name under
   `.github/skills/`. Pass the bare name (e.g. `azure-cost-estimator`),
   not a path. If omitted, ask once then proceed.
-* `${input:models:claude-sonnet-4.6,gpt-5.4,gpt-5.3-codex,claude-opus-4.6}`:
+* `${input:models:claude-sonnet-5.5,gpt-5.5,gpt-5.3-codex,claude-opus-4.8}`:
   (Optional) Comma-separated list of waza model IDs to benchmark.
   Defaults to all four matrix models. Run `waza models` to see the
   currently-supported IDs.
@@ -41,7 +41,7 @@ exit (eval below threshold) does not abort the benchmark.
    report the missing path. Benchmarking requires an eval suite.
 3. Parse `${input:models}` by splitting on commas, trimming whitespace.
    Store as an array `models`. If empty or not provided, use the default
-   list: `claude-sonnet-4.6`, `gpt-5.4`, `gpt-5.3-codex`, `claude-opus-4.6`.
+   list: `claude-sonnet-5.5`, `gpt-5.5`, `gpt-5.3-codex`, `claude-opus-4.8`.
 4. Print a one-line preamble:
    `Benchmarking <skill> across <N> models: <model1>, <model2>, ...`
 
@@ -118,7 +118,7 @@ Then close with a "Next steps" line:
   fixtures, or task files as part of this prompt. Eval changes belong in
   a separate review.
 * **No agent files.** waza only evaluates skills. If the user passes an
-  agent name, stop and point them to `docs/WAZA.md` → "Agent evals".
+  agent name, stop and point them to `/agent-bench`.
 * **Cost transparency.** At the start (Step 1) always remind the user of
   the estimated premium request count: `models × tasks × trials_per_task`.
 

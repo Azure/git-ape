@@ -23,9 +23,17 @@ paths:
   # `prompt`, `continue_session: true`). SC2016 ("Expressions don't expand in
   # single quotes") is exactly the intent — single quotes prevent the shell
   # from interpolating. Silence for these two files only.
+  #
+  # `copilot-requests: write` is a valid GITHUB_TOKEN permission (lets the
+  # Copilot CLI authenticate with the built-in token, billed to the org — see
+  # https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions)
+  # but actionlint <= 1.7.12 does not know the scope yet. Drop this ignore
+  # once actionlint recognises it.
   ".github/workflows/waza-evals.yml":
     ignore:
       - 'shellcheck reported issue in this script: SC2016'
+      - 'unknown permission scope "copilot-requests"'
   ".github/workflows/waza-agent-evals.yml":
     ignore:
       - 'shellcheck reported issue in this script: SC2016'
+      - 'unknown permission scope "copilot-requests"'
