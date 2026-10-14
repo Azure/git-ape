@@ -73,9 +73,8 @@ jobs:
       - name: Assemble extension payload
         run: |
           set -euo pipefail
-          node -e 'const fs = require("fs"); if (fs.statSync("APE.png").size > 1024 * 1024) { console.error("Extension icon exceeds the Marketplace limit of 1 MB"); process.exit(1); }'
+          node -e 'const fs = require("fs"); if (fs.statSync("extension/marketplace-icon.png").size > 1024 * 1024) { console.error("Extension icon exceeds the Marketplace limit of 1 MB"); process.exit(1); }'
           cp LICENSE extension/
-          cp APE.png extension/
           cp -r .github extension/.github
           cp extension/package.template.json extension/package.json
 

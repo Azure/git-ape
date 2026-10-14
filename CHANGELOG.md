@@ -4,7 +4,7 @@
 
 ### Bug Fixes
 
-- **release:** resize the extension icon below the VS Code Marketplace's 1 MB limit and check icon size before packaging.
+- **release:** add a separate lower-resolution extension icon below the VS Code Marketplace's 1 MB limit, preserve the original `APE.png`, and check icon size before packaging.
 - **release:** configure the runner's Git identity before creating annotated release tags.
 
 ## [0.4.0] - 2026-10-14

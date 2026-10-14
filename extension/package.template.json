@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "publisher": "Git-ApeTeam",
   "license": "MIT",
-  "icon": "APE.png",
+  "icon": "marketplace-icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Azure/git-ape"
