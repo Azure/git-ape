@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.4.0] - 2026-10-14
+
+Changes since [v0.3.0](https://github.com/Azure/git-ape/releases/tag/v0.3.0):
+
+### Features
+
+- **onboarding:** add organization/enterprise distribution via `.github-private` managed plugin settings, with Bash and PowerShell scaffolders (`a06404f`).
+- **skills:** add a community skill registry, contribution template, and generated registry documentation (`f7df8b6`, `7429d83`).
+- **discovery:** publish an ARD catalog with representative queries for skill discovery (`3fddb17`, `d7739d2`).
+
+### Bug Fixes
+
+- **discovery:** serve the ARD catalog from the website and include `.well-known` files in the Pages artifact (`317c3bb`, `9bbec94`, `ee25fa5`).
+- **devcontainer:** restore Codespaces prebuild discovery after consolidating the development containers (`8c68d21`).
+- **workflows:** migrate agent workflows to tokenless Copilot authentication, restore daily status safe outputs, and tolerate empty workshop inventory matches (`fc5db7f`, `45f32f9`, `291405f`).
+- **evals:** authenticate waza evaluations with `GITHUB_TOKEN` instead of a PAT, skip Dependabot runs in preflight, and update the judge model to Claude Opus 5.5 (`406f576`, `77dc421`, `c47ee77`).
+- **agents:** update Git-Ape to Claude Opus 4.8 (`b62f38a`).
+
+### Documentation
+
+- **onboarding:** document enterprise distribution mode (`0d459b5`).
+- **discovery:** add the ARD reference page and sidebar entry (`09ab867`, `059d24b`).
+- **codespaces:** document the linters available in the unified development container (`ecc5949`).
+
+### Chores
+
+- **devcontainer:** consolidate development containers into agent-engineering (`e4e9239`).
+- **actions:** pin GitHub Actions to full-length commit SHAs (`7ddb994`).
+- **evals:** migrate off deprecated Claude 4.6 models, modernize the evaluation roster to Sonnet 5.5 and GPT-5.5, and pin waza to v0.38.7 (`d987167`, `9855969`, `35f3d94`).
+
+### Dependencies
+
+- Update GitHub Actions and website dependencies, including Docusaurus, React, TypeScript, Mermaid, DOMPurify, js-yaml, and shell-quote.
+
 ## [0.3.0] - 2026-06-19
 
 Changes since [v0.2.0](https://github.com/Azure/git-ape/releases/tag/v0.2.0):
