@@ -16,13 +16,12 @@ The plugin manifest defines the Git-Ape plugin metadata. The same manifest is co
 | Field | Value |
 |-------|-------|
 | **Name** | git-ape |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Description** | Intelligent agent system for deploying any Azure workload through GitHub Copilot. Provides guided, safe, and validated deployments using ARM templates, with built-in security analysis, cost estimation, and CI/CD pipeline integration. |
 | **Author** | Microsoft |
 | **License** | MIT |
 | **Agents Path** | `.github/agents/` |
 | **Skills Path** | `.github/skills/` |
-
 ## Keywords
 
 `azure` · `cloud` · `workloads` · `deployment` · `arm-templates` · `devops` · `security` · `cost-estimation` · `github-actions` · `copilot-agents`
@@ -33,7 +32,7 @@ The plugin manifest defines the Git-Ape plugin metadata. The same manifest is co
 {
   "name": "git-ape",
   "description": "Intelligent agent system for deploying any Azure workload through GitHub Copilot. Provides guided, safe, and validated deployments using ARM templates, with built-in security analysis, cost estimation, and CI/CD pipeline integration.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "Microsoft",
     "url": "https://github.com/Azure/git-ape"
