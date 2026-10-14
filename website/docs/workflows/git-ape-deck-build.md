@@ -85,7 +85,7 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -207,7 +207,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.affected.outputs.skip != 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
 
@@ -270,7 +270,7 @@ jobs:
 
       - name: Upload screenshots as artifact
         if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: workshop-deck-screenshots-${{ github.run_id }}
           path: .deck-screenshots/
