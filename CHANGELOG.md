@@ -28,7 +28,7 @@ Changes since [v0.3.0](https://github.com/Azure/git-ape/releases/tag/v0.3.0):
 
 - **devcontainer:** consolidate development containers into agent-engineering (`e4e9239`).
 - **actions:** pin GitHub Actions to full-length commit SHAs (`7ddb994`).
-- **evals:** migrate off deprecated Claude 4.6 models, modernize the evaluation roster to Sonnet 5.5 and GPT-5.5, and pin waza to v0.38.7 (`d987167`, `9855969`, `35f3d94`).
+- **evals:** migrate off deprecated Claude 4.6 models, modernize the evaluation roster to Sonnet 5.5 and GPT-5.5, and pin waza to v0.38.10 for `GITHUB_TOKEN` authentication (`d987167`, `9855969`, `406f576`).
 
 ### Dependencies
 
