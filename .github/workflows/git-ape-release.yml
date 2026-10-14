@@ -128,6 +128,8 @@ jobs:
             exit 0
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
@@ -267,6 +269,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          node -e 'const fs = require("fs"); if (fs.statSync("APE.png").size > 1024 * 1024) { console.error("Extension icon exceeds the Marketplace limit of 1 MB"); process.exit(1); }'
           cp LICENSE extension/
           cp APE.png extension/
           cp -r .github extension/.github
