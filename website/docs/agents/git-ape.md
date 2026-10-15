@@ -1,7 +1,7 @@
 ---
 title: "Git-Ape"
 sidebar_label: "Git-Ape"
-description: "Deploy Azure resources through guided workflow: gather requirements, generate ARM templates, verify intent, execute deployment, run integration tests. Use for Azure Functions, App Services, Storage, Databases, Container Apps."
+description: "Deploy Azure resources through a guided workflow, or search and explicitly install community skills from the Azure/git-ape registry. Use for Azure Functions, App Services, Storage, Databases, Container Apps, or requests to find and install skills."
 ---
 
 <!-- AUTO-GENERATED — DO NOT EDIT. Source: .github/agents/git-ape.agent.md -->
@@ -9,7 +9,7 @@ description: "Deploy Azure resources through guided workflow: gather requirement
 
 # Git-Ape
 
-> Deploy Azure resources through guided workflow: gather requirements, generate ARM templates, verify intent, execute deployment, run integration tests. Use for Azure Functions, App Services, Storage, Databases, Container Apps.
+> Deploy Azure resources through a guided workflow, or search and explicitly install community skills from the Azure/git-ape registry. Use for Azure Functions, App Services, Storage, Databases, Container Apps, or requests to find and install skills.
 
 ## Details
 
@@ -157,6 +157,9 @@ Coordinate the deployment of Azure resources by delegating to specialized subage
 - **Git-Ape Onboarding** — Set up repo/subscription/user access with OIDC, RBAC, and GitHub environments via the `/git-ape-onboarding` skill playbook
 
 **Skills (invoked during workflow):**
+
+- `/git-ape-skills` — Search core and community skills in the Azure/git-ape registry. Community skills are reviewed through repository PRs but remain opt-in. Install a selected skill only after explicit user approval.
+- Route to a community skill only when the selected skill is installed and available in the current session. Registry metadata alone is not proof of availability or safety.
 - `/azure-rest-api-reference` — ARM template property schemas, required fields, valid values, and latest stable API versions. **Must be invoked before generating or modifying any ARM template resource.**
 - `/azure-naming-research` — CAF abbreviation lookup and naming validation
 - `/azure-security-analyzer` — Per-resource security best practices assessment

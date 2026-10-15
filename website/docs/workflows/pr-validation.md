@@ -28,7 +28,7 @@ description: "GitHub Actions workflow: PR Validation"
 |----------|-------|
 | **Display Name** | Structural Validation |
 | **Runs On** | `ubuntu-latest` |
-| **Steps** | 4 |
+| **Steps** | 5 |
 
 ### `markdownlint`
 
@@ -76,6 +76,9 @@ jobs:
 
       - name: Run structural validation
         run: node scripts/validate-structure.js
+
+      - name: Test skill discovery and opt-in installation
+        run: node --test scripts/tests/skill-discovery.test.js
 
   markdownlint:
     name: "Markdown Lint"

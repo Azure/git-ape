@@ -10,7 +10,7 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Contribution Model
 
-- **Skills** are community-contributable via Pull Request, either as first-party skills (`.github/skills/<name>/`) or as third-party **community skills** (`.github/skills/community/<name>/`) — see [Contributing a Community Skill](#contributing-a-community-skill).
+- **Skills** are community-contributable via Pull Request, either as core skills (`.github/skills/<name>/`) or opt-in **community skills** (`.github/community-skills/<name>/`) — see [Contributing a Community Skill](#contributing-a-community-skill).
 - **Agents** are maintainer-curated. To propose agent changes, open a Discussion first.
 
 ## Adding a New Skill
@@ -88,7 +88,7 @@ docs page) — no separate registration step is required.
 ### Where they live
 
 ```
-.github/skills/community/
+.github/community-skills/
 └── your-skill-name/
     └── SKILL.md
 ```
@@ -131,6 +131,23 @@ The only functional differences are the directory location and the required
 Community skills are clearly labeled as **third-party, not maintained by the
 Git-Ape team** wherever they're listed (registry, docs pages), so users can
 make an informed choice about trusting them.
+
+### Discovery and explicit workspace installation
+
+Community sources remain in Azure/git-ape and are reviewed through repository
+PRs. Review provides oversight and provenance, not a guarantee of safety.
+The source directory is outside core's `.github/skills/` loader path and
+excluded from the VSIX; core ships only community registry metadata.
+
+Use `/git-ape-skills search <capability>` to search the unified registry.
+Search does not activate or install anything. To install a selected skill, use
+`/git-ape-skills install <name>` and approve the pinned Azure/git-ape commit and
+destination repository. The bundled Node.js helper uses authenticated `gh` to
+download the complete skill directory into `.github/skills/<name>/`, preserving
+scripts and references. It refuses overwrites, does not run skill scripts, and
+writes `.git-ape-provenance.json`. A client reload or new session may be needed.
+External `metadata.source` URLs provide attribution only, never install sources.
+Dependencies on files outside a community skill's directory are not supported.
 
 ## Proposing Agent Changes
 
@@ -182,7 +199,7 @@ site. Decision rationale for the harness choice lives in
 4. **Submit a PR** — Fill in the PR template and describe your changes.
 5. **CI checks run automatically** — The PR validation workflow verifies:
    - YAML frontmatter has required fields (`name`, `description` for skills; `description` for agents)
-   - Community skills (`.github/skills/community/<name>/`) additionally require `metadata.author`
+   - Community skills (`.github/community-skills/<name>/`) additionally require `metadata.author`
    - Skill `name` matches its parent directory name
    - All skill/agent directories use kebab-case
    - Every skill directory contains a `SKILL.md` file

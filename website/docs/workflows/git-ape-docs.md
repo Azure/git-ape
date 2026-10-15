@@ -13,7 +13,7 @@ description: "GitHub Actions workflow: Git-Ape: Docs Deploy"
 
 ## Triggers
 
-- **`push`** — branches: `["main"]` — paths: `.github/agents/**, .github/skills/**, .github/workflows/**...`
+- **`push`** — branches: `["main"]` — paths: `.github/agents/**, .github/skills/**, .github/community-skills/**...`
 
 
 ## Permissions
@@ -58,6 +58,7 @@ on:
     paths:
       - '.github/agents/**'
       - '.github/skills/**'
+      - '.github/community-skills/**'
       - '.github/workflows/**'
       - '.github/plugin/**'
       - 'docs/**'

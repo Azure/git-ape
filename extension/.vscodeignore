@@ -8,6 +8,7 @@ package.template.json
 .github/actionlint.yaml
 .github/dependabot.yml
 .github/aw/**
+.github/community-skills/**
 .github/copilot/**
 .github/evals/**
 .github/plugins/**

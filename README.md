@@ -74,6 +74,12 @@ Use this path if you want to pull the latest from GitHub on every update, or if 
 3. Alternatively, open the Command Palette (`⇧⌘P` on macOS, `Ctrl+Shift+P` on Windows/Linux), run **Chat: Install Plugin From Source**, and enter `https://github.com/Azure/git-ape`.
 4. Verify the agents and skills appear in Copilot Chat (for example, type `@git-ape` or `/prereq-check`).
 
+Use `/git-ape-skills search <capability>` to search the unified core and
+[community skill registry](https://azure.github.io/git-ape/docs/skills/registry).
+Community sources are reviewed through Azure/git-ape PRs but are not loaded
+with core. Explicitly approve `/git-ape-skills install <name>` to copy a selected
+skill and its supporting files from a pinned Git-Ape commit into your workspace.
+
 #### Option C: Copilot CLI plugin
 
 ```bash

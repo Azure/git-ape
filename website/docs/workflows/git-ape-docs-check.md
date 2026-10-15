@@ -13,7 +13,7 @@ description: "GitHub Actions workflow: Git-Ape: Docs Check"
 
 ## Triggers
 
-- **`pull_request`** — paths: `.github/agents/**, .github/skills/**, .github/workflows/git-ape-plan.yml...`
+- **`pull_request`** — paths: `.github/agents/**, .github/skills/**, .github/community-skills/**...`
 
 
 ## Permissions
@@ -46,6 +46,8 @@ on:
     paths:
       - '.github/agents/**'
       - '.github/skills/**'
+      - '.github/community-skills/**'
+      - 'scripts/generate-docs.js'
       - '.github/workflows/git-ape-plan.yml'
       - '.github/workflows/git-ape-deploy.yml'
       - '.github/workflows/git-ape-destroy.yml'

@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/agents/**'
       - '.github/skills/**'
+      - '.github/community-skills/**'
       - '.github/workflows/**'
       - '.github/plugin/**'
       - 'docs/**'

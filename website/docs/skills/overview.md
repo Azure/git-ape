@@ -48,6 +48,7 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 |-------|-------------|:---------:|
 | [Azure Stack Deploy](./azure-stack-deploy) | Run an Azure Deployment Stack create (subscription scope) for a prepared Git-Ape deployment artifact and write state.json (schemaVersion 1.0). Use locally so the result matches the CI deploy workflow. | ✅ |
 | [Azure Stack Destroy](./azure-stack-destroy) | Tear down a Git-Ape deployment by ID. Reads `state.json` under `.azure/deployments/<id>/` to delete the Azure Deployment Stack and purge soft-deleted Key Vault / Cognitive Services. Refuses to run without `state.json`. Use for any local CLI or VS Code Git-Ape teardown so the result matches the CI destroy workflow. | ✅ |
+| [Git Ape Skills](./git-ape-skills) | Search the Git-Ape core and community skill registry, or explicitly install a selected community skill from Azure/git-ape. USE FOR: find a skill, search capabilities, list community skills, install a community skill. DO NOT USE FOR: automatically installing search results or invoking skills not available in the current session. | ✅ |
 
 ## Skill Invocation in Deployment Flow
 

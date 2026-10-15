@@ -23,7 +23,7 @@ Git-Ape uses a multi-agent architecture where `@git-ape` is the central orchestr
 | [Azure Resource Deployer](./azure-resource-deployer) | Execute ARM template deployments to Azure. Monitor deployment progress, handle failures with rollback options, verify resource creation. Use only after user has confirmed deployment intent. | ❌ |
 | [Azure Template Generator](./azure-template-generator) | Generate ARM templates from requirements. Apply Azure best practices, validate schema, show what-if analysis. Echo deployment intent for user confirmation. Use after requirements gathering is complete. | ❌ |
 | [Git-Ape Onboarding](./git-ape-onboarding) | Onboard a new repository, subscription(s), and user access for Git-Ape using the git-ape-onboarding skill playbook. Configures OIDC, RBAC, GitHub environments, and secrets. | ✅ |
-| [Git-Ape](./git-ape) | Deploy Azure resources through guided workflow: gather requirements, generate ARM templates, verify intent, execute deployment, run integration tests. Use for Azure Functions, App Services, Storage, Databases, Container Apps. | ✅ |
+| [Git-Ape](./git-ape) | Deploy Azure resources through a guided workflow, or search and explicitly install community skills from the Azure/git-ape registry. Use for Azure Functions, App Services, Storage, Databases, Container Apps, or requests to find and install skills. | ✅ |
 
 ## Orchestration Architecture
 
