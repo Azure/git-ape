@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_AW_CI_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Detect affected tracks
         id: affected
@@ -132,7 +132,7 @@ jobs:
           # tracks so prior pending changes aren't lost when this run only
           # rebuilds a subset.
           if [[ ${#DECK_TRACKS[@]} -gt 0 ]] && [[ "$REBUILD_ALL" == "false" ]]; then
-            EXISTING=$(GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh pr list --head "$AUTO_BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+            EXISTING=$(GH_TOKEN="${{ secrets.GH_AW_CI_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}" gh pr list --head "$AUTO_BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || true)
             if [[ -n "$EXISTING" && "$EXISTING" != "null" ]]; then
               REBUILD_ALL=true
               REASONS+=("auto-PR #${EXISTING} already open; rebuilding all tracks to preserve pending changes")
@@ -237,7 +237,7 @@ jobs:
         if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
         id: sync_issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_AW_CI_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           NUM=$(gh issue list --label workshop-sync --state open --json number --jq '.[0].number' 2>/dev/null || true)
@@ -252,7 +252,7 @@ jobs:
       - name: Push to auto branch and open/update PR
         if: steps.affected.outputs.skip != 'true' && steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_AW_CI_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.affected.outputs.reason }}
           ONLY: ${{ steps.affected.outputs.only }}
           SYNC_ISSUE: ${{ steps.sync_issue.outputs.number }}
