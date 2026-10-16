@@ -1,5 +1,7 @@
 ---
 name: saas-assessment-report
+metadata:
+  author: dawright22
 description: "Orchestrates a comprehensive SaaS platform assessment against WAF, CAF, CIS, NIST, PCI-DSS, HIPAA, SOC 2, FedRAMP, and SaaS maturity frameworks. Generates a print-ready HTML report (save as PDF from browser). Use when the user wants to assess a SaaS repo, generate a compliance report, or audit an Azure SaaS platform."
 argument-hint: "Path to the repo to assess, or 'current' for the active workspace"
 user-invocable: true
