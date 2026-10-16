@@ -4,6 +4,8 @@ description: "Assesses ISV readiness for Microsoft Solutions Partner with Certif
 argument-hint: "Path to the repo to assess, target designation (azure, bizapps, modernwork, security, industry-ai), or 'current' for active workspace"
 user-invocable: true
 last_updated: "2026-08-28"
+metadata:
+  author: dawright22
 ---
 
 # Certified Software Designation (CSD) Assessment Skill
