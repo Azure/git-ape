@@ -113,13 +113,14 @@ or:
 /git-ape-onboarding
 ```
 
-The skill collects five inputs (or uses sensible defaults):
+The skill collects six inputs (or uses sensible defaults):
 
 1. **GitHub repository URL** — for example, `https://github.com/your-org/your-repo`
 2. **Entra ID App Registration name** — for example, `sp-git-ape-your-repo`
 3. **Mode** — single or multi-environment
 4. **Azure subscription(s)** — defaults to your current `az` subscription
 5. **RBAC role(s)** — Contributor (default) or Contributor + User Access Administrator
+6. **Runner type** — public GitHub-hosted (default) or private self-hosted runners in your Azure subscription (ACI / ACA / AKS, optionally VNet-injected). You can start public and switch later.
 
 ### Example: single environment
 
@@ -487,6 +488,82 @@ This adds four workflows:
 | `git-ape-deploy.yml` | Merge to main | ARM deployment |
 | `git-ape-destroy.yml` | PR merge with `destroy-requested` status | Delete resource group |
 | `git-ape-verify.yml` | Manual dispatch | Verify OIDC and RBAC health |
+
+All four workflows resolve their runner from a single variable, so they run on
+public GitHub-hosted runners by default and can be pointed at private runners
+later without editing the workflows:
+
+```yaml
+runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
+```
+
+---
+
+### Step 6: Choose your runner (optional)
+
+By default the workflows run on **public GitHub-hosted `ubuntu-latest`** — no
+infrastructure required. To run them on **private self-hosted runners** inside
+your Azure subscription (for private connectivity or policy reasons), provision
+runners and set one variable.
+
+| `GIT_APE_RUNNER_LABEL` | Effect |
+|------------------------|--------|
+| **unset** (default) | Jobs run on GitHub-hosted `ubuntu-latest`. |
+| set to a label (default `git-ape-runner`) | Jobs target your self-hosted runners registered with that label. |
+
+**Runner types:**
+
+- **Self-hosted (subscription)** — runners are Azure resources with outbound
+  internet; control over image, region, and identity without a VNet.
+- **VNet-injected** — runners run inside a subnet you manage, for private
+  connectivity to Azure resources (no public egress except to GitHub).
+
+**Platforms** (on-demand reference IaC ships with the onboarding skill under
+[`templates/runners/`](https://github.com/Azure/git-ape/tree/main/.github/skills/git-ape-onboarding/templates/runners)):
+
+| Platform | What it provisions |
+|----------|--------------------|
+| **ACI** | ARM `template.json` — a container group running an ephemeral runner. |
+| **ACA** (recommended) | Deployed as a **Git-Ape deployment** — see below. A KEDA `github-runner`-scaled Container Apps Job (scale-to-zero) with managed identity, ACR, and Key Vault. |
+| **AKS** | Actions Runner Controller (ARC) via Helm `values.yaml`. |
+
+#### Git-Ape deploying Git-Ape (ACA runners)
+
+The ACA runner path is itself a **first-class Git-Ape deployment**. Rather than an
+imperative `az deployment group create`, onboarding scaffolds a subscription-scoped
+deployment artifact to `.azure/deployments/git-ape-runners/`
+(source: [`templates/deployments/git-ape-runners/`](https://github.com/Azure/git-ape/tree/main/.github/skills/git-ape-onboarding/templates/deployments/git-ape-runners)).
+The runner infrastructure then flows through Git-Ape's own managed pipeline:
+
+- **Architecture diagram** — `architecture.md` (topology + bootstrap sequence).
+- **Cost estimate** — via the `azure-cost-estimator` skill on the template.
+- **Deploy** — `az stack sub create --action-on-unmanage deleteAll` (the same
+  Deployment Stack primitive every Git-Ape deployment uses), producing `state.json`.
+- **Destroy** — single-command teardown via the `azure-stack-destroy` skill.
+
+The PAT is never in git, ARM parameters, or deployment history — the stack creates
+an empty Key Vault and the token is set post-deploy with `az keyvault secret set`;
+the ACA Job reads it as a Key Vault secret reference.
+
+**Bootstrap ordering (the self-hosting loop):** the first `git-ape-runners` deploy
+runs on `ubuntu-latest` (or your local machine) because the private runner does not
+exist yet. Once it is online and `GIT_APE_RUNNER_LABEL` is set, every subsequent
+Git-Ape run — including updates to the runner stack itself — executes on the private
+runner. Git-Ape ends up deploying and maintaining the very runners that run Git-Ape.
+
+Once a runner is online (with the `git-ape-runner` label), flip the switch:
+
+```bash
+# Switch to private runners
+gh variable set GIT_APE_RUNNER_LABEL --repo your-org/your-repo --body "git-ape-runner"
+
+# Clean fallback to GitHub-hosted runners
+gh variable delete GIT_APE_RUNNER_LABEL --repo your-org/your-repo
+```
+
+The GitHub registration credential is the only secret — source it from Key Vault,
+never inline it. Azure access uses a user-assigned managed identity. Run
+`@Git-Ape Onboarding` and pick a private runner to be walked through provisioning.
 
 ---
 

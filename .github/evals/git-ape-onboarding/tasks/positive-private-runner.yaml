@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-private-runner
+name: Positive — Onboard with private VNet-injected runner
+description: Onboard request that selects private self-hosted runners (ACA, VNet-injected) — clear trigger plus runner-selection handling.
+tags: [trigger, positive, runner]
+inputs:
+  prompt: "Onboard this repository for Git-Ape, but I don't want to use GitHub-hosted runners — the deployment jobs must run on private self-hosted runners inside my Azure subscription, VNet-injected, on Azure Container Apps. Set up OIDC, RBAC, the GitHub environments, and tell me how the runner side works. My repo is a fresh local Git repo."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/git-ape-onboarding/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  # answer_quality (LLM-as-judge): scoped per-task on positives so a flaky
+  # judge call only zeroes out this task, not the whole leg. See eval.yaml.
+  #
+  # IMPORTANT: waza prompt graders are binary (set_waza_grade_pass = 1.0,
+  # set_waza_grade_fail = 0.0). They are NOT 1–5 rubrics. The judge has NO
+  # access to the agent's response unless continue_session: true is set — it
+  # resumes the agent's own session so it can read the response.
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to onboard a fresh repo for Git-Ape AND to run the
+        deployment workflows on PRIVATE self-hosted runners (VNet-injected,
+        on Azure Container Apps) instead of GitHub-hosted runners.
+
+        The skill GATES on prerequisites and required user inputs before
+        executing any state-changing commands. The expected first-turn reply
+        is a "gated step-1" response, NOT a completion report. Runner
+        selection is one of the required inputs.
+
+        PASS criteria — the response must satisfy ALL FOUR of:
+          1. It is a gated handoff: prereq/auth status is shown OR required
+             inputs are requested before any execution (a numbered list or
+             explicit question block counts).
+          2. It requests at least THREE required inputs from: target GitHub
+             repository, Azure subscription ID, RBAC role, default region,
+             project / deployment name, onboarding mode.
+          3. It correctly handles the runner request — satisfy ANY ONE of:
+             (a) acknowledges the chosen private runner (self-hosted /
+             VNet-injected and/or Azure Container Apps / ACA) as the runner
+             type to configure; (b) explains the GIT_APE_RUNNER_LABEL
+             variable switch (public ubuntu-latest by default → private when
+             the label is set); or (c) points the user at the runner
+             reference IaC under templates/runners/ (ACI/ACA/AKS). It must
+             NOT ignore the runner request or claim GitHub-hosted is the only
+             option.
+          4. It does NOT claim to have already provisioned runners, set
+             GIT_APE_RUNNER_LABEL, configured OIDC, created federated
+             credentials/environments, or assigned RBAC. The reply waits for
+             user input + auth before continuing. (Fabricated "I've
+             configured X" / "I provisioned Y" before inputs → FAIL.)
+
+        If ALL FOUR are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.
