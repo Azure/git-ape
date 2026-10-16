@@ -3,6 +3,8 @@ name: aws-cloudwatch
 description: "AWS CloudWatch monitoring for logs, metrics, alarms, and dashboards. Use when setting up monitoring, creating alarms, querying logs with Insights, configuring metric filters, building dashboards, or troubleshooting application issues."
 argument-hint: "Metric namespace, service, or monitoring scenario to look up (e.g. 'Lambda error rate alarm', 'Logs Insights query', 'custom metric', 'dashboard widget')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

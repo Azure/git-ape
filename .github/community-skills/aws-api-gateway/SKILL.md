@@ -3,6 +3,8 @@ name: aws-api-gateway
 description: "AWS API Gateway for REST and HTTP API management. Use when creating APIs, configuring integrations, setting up authorization, managing stages, implementing rate limiting, or troubleshooting API issues."
 argument-hint: "API type, integration pattern, or issue to look up (e.g. 'HTTP API Lambda proxy', 'JWT authorizer', 'CORS configuration', '502 Bad Gateway')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

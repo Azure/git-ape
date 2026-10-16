@@ -3,6 +3,8 @@ name: aws-secrets-manager
 description: "AWS Secrets Manager for secure secret storage and rotation. Use when storing credentials, configuring automatic rotation, managing secret versions, retrieving secrets in applications, or integrating with RDS."
 argument-hint: "Secret type, rotation configuration, or access pattern to look up (e.g. 'RDS secret rotation', 'caching secrets in Lambda', 'resource policy', 'cross-account access')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

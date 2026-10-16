@@ -3,6 +3,8 @@ name: aws-ec2
 description: "AWS EC2 virtual machine management for instances, AMIs, and networking. Use when launching instances, configuring security groups, managing key pairs, troubleshooting connectivity, or automating instance lifecycle."
 argument-hint: "Instance type, operation, or issue to look up (e.g. 't3.micro web server', 'security group SSH rule', 'IMDSv2', 'spot instance request')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

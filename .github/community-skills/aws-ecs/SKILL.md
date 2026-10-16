@@ -3,6 +3,8 @@ name: aws-ecs
 description: "AWS ECS container orchestration for running Docker containers. Use when deploying containerized applications, configuring task definitions, setting up services, managing clusters, or troubleshooting container issues."
 argument-hint: "Container workload type, issue, or configuration to look up (e.g. 'Fargate task definition', 'service with load balancer', 'container keeps restarting')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

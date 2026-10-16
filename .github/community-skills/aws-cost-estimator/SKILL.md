@@ -3,6 +3,8 @@ name: aws-cost-estimator
 description: "Estimate monthly costs for AWS resources using the AWS Pricing API. Parses CloudFormation templates to identify resources, service types, and regions, then looks up real AWS retail pricing. Produces a per-resource cost breakdown with monthly totals. Use during template generation or when user asks about costs."
 argument-hint: "CloudFormation template JSON/YAML or list of AWS resources with instance types and region"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

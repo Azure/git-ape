@@ -3,6 +3,8 @@ name: aws-bedrock
 description: "AWS Bedrock foundation models for generative AI. Use when invoking foundation models, building AI applications, creating embeddings, configuring model access, or implementing RAG patterns."
 argument-hint: "Model name, capability, or pattern to look up (e.g. 'Claude text generation', 'Titan embeddings', 'streaming response', 'RAG with knowledge base')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

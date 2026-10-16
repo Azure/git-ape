@@ -3,6 +3,8 @@ name: aws-sqs
 description: "AWS SQS message queue service for decoupled architectures. Use when creating queues, configuring dead-letter queues, managing visibility timeouts, implementing FIFO ordering, or integrating with Lambda."
 argument-hint: "Queue type, configuration, or issue to look up (e.g. 'FIFO queue', 'dead-letter queue', 'Lambda event source', 'visibility timeout')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

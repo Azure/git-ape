@@ -3,6 +3,8 @@ name: aws-cloudformation
 description: "AWS CloudFormation infrastructure as code for stack management. Use when writing templates, deploying stacks, managing drift, troubleshooting deployments, or organizing infrastructure with nested stacks."
 argument-hint: "Template section, resource type, or operation to look up (e.g. 'Parameters section', 'Lambda function resource', 'change set', 'drift detection')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

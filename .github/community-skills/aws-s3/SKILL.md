@@ -3,6 +3,8 @@ name: aws-s3
 description: "AWS S3 object storage for bucket management, object operations, and access control. Use when creating buckets, uploading files, configuring lifecycle policies, setting up static websites, managing permissions, or implementing cross-region replication."
 argument-hint: "Bucket operation, policy type, or storage class to look up (e.g. 'block public access', 'presigned URL', 'lifecycle rule for Glacier')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

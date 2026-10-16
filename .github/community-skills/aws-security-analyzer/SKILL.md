@@ -3,6 +3,8 @@ name: aws-security-analyzer
 description: "Analyze CloudFormation templates and AWS resource configurations against security best practices. Produces per-resource security assessment with severity ratings. Use during template generation before deployment confirmation or to audit existing AWS configurations."
 argument-hint: "CloudFormation template JSON/YAML or list of AWS resource configurations to analyze"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

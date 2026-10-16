@@ -3,6 +3,8 @@ name: aws-step-functions
 description: "AWS Step Functions workflow orchestration with state machines. Use when designing workflows, implementing error handling, configuring parallel execution, integrating with AWS services, or debugging executions."
 argument-hint: "Workflow pattern, state type, or issue to look up (e.g. 'parallel state', 'map state iteration', 'error handling with retry/catch', 'Express vs Standard workflow')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

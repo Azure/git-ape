@@ -3,6 +3,8 @@ name: aws-eventbridge
 description: "AWS EventBridge serverless event bus for event-driven architectures. Use when creating rules, configuring event patterns, setting up scheduled events, integrating with SaaS, or building cross-account event routing."
 argument-hint: "Event source, pattern type, or scheduling scenario to look up (e.g. 'custom event bus rule', 'S3 event pattern', 'scheduled rate expression', 'cross-account event routing')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

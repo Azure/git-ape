@@ -3,6 +3,8 @@ name: aws-iam
 description: "AWS Identity and Access Management for users, roles, policies, and permissions. Use when creating IAM policies, configuring cross-account access, setting up service roles, troubleshooting permission errors, or managing access control."
 argument-hint: "Service name, principal type, or policy action to look up (e.g. 'Lambda execution role', 'cross-account trust policy', 'S3 read-only policy')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

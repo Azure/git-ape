@@ -3,6 +3,8 @@ name: aws-dynamodb
 description: "AWS DynamoDB NoSQL database for scalable data storage. Use when designing table schemas, writing queries, configuring indexes, managing capacity, implementing single-table design, or troubleshooting performance issues."
 argument-hint: "Table design pattern, operation, or issue to look up (e.g. 'single-table design', 'GSI query', 'conditional write', 'throttling')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

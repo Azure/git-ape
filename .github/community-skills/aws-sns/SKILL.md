@@ -3,6 +3,8 @@ name: aws-sns
 description: "AWS SNS notification service for pub/sub messaging. Use when creating topics, managing subscriptions, configuring message filtering, sending notifications, or setting up fan-out patterns."
 argument-hint: "Topic type, subscription protocol, or pattern to look up (e.g. 'FIFO topic', 'Lambda subscription', 'message filter policy', 'fan-out to SQS')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

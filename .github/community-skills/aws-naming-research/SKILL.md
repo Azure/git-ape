@@ -3,6 +3,8 @@ name: aws-naming-research
 description: "Research AWS resource naming conventions and constraints for a given service. Use when you need to look up naming rules (length, valid characters, scope), recommended patterns, and uniqueness requirements for AWS resources. Triggers on: AWS naming rules research, resource naming constraints, S3 bucket name validation."
 argument-hint: "AWS service or resource type to look up (e.g. 'S3 bucket', 'Lambda function', 'IAM role', 'RDS instance')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

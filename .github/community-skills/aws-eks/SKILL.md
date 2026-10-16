@@ -3,6 +3,8 @@ name: aws-eks
 description: "AWS EKS Kubernetes management for clusters, node groups, and workloads. Use when creating clusters, configuring IRSA, managing node groups, deploying applications, or integrating with AWS services."
 argument-hint: "Kubernetes component or AWS integration to look up (e.g. 'IRSA service account', 'managed node group', 'CoreDNS addon', 'cluster autoscaler')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

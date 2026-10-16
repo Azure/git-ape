@@ -3,6 +3,8 @@ name: aws-rds
 description: "AWS RDS relational database service for managed databases. Use when provisioning databases, configuring backups, managing replicas, troubleshooting connectivity, or optimizing performance."
 argument-hint: "Database engine, feature, or issue to look up (e.g. 'PostgreSQL Multi-AZ', 'read replica', 'IAM authentication', 'Performance Insights')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

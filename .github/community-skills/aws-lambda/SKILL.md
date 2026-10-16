@@ -3,6 +3,8 @@ name: aws-lambda
 description: "AWS Lambda serverless functions for event-driven compute. Use when creating functions, configuring triggers, debugging invocations, optimizing cold starts, setting up event source mappings, or managing layers."
 argument-hint: "Function name, runtime, trigger type, or issue to diagnose (e.g. 'Python S3 trigger', 'cold start optimization', 'SQS event source mapping')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 

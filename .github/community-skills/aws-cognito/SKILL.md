@@ -3,6 +3,8 @@ name: aws-cognito
 description: "AWS Cognito user authentication and authorization service. Use when setting up user pools, configuring identity pools, implementing OAuth flows, managing user attributes, or integrating with social identity providers."
 argument-hint: "Auth flow, token type, or feature to look up (e.g. 'user pool app client', 'OAuth authorization code flow', 'JWKS token validation', 'identity pool AWS credentials')"
 user-invocable: true
+metadata:
+  author: dawright22
 last_updated: "2026-04-15"
 ---
 
