@@ -7,6 +7,9 @@
  *
  * Usage: node scripts/generate-docs.js
  *
+ * Required for every first-party or community skill PR. Commit the regenerated
+ * .github/skills/registry.json and changed website/docs/ files with the sources.
+ *
  * This script is idempotent — safe to run repeatedly. It overwrites only
  * files marked with the AUTO-GENERATED header.
  */
