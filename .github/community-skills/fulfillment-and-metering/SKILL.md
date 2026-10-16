@@ -4,6 +4,8 @@ description: "Implements Azure Marketplace SaaS fulfillment APIs and metered bil
 argument-hint: "Billing dimensions, entitlement model, meter events, and reconciliation process"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # Fulfillment and Metering

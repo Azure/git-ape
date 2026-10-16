@@ -4,6 +4,8 @@ description: "Implements automated tenant onboarding, provisioning, upgrade, sus
 argument-hint: "Provisioning SLA, onboarding approvals, data retention policy, and lifecycle states"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Tenant Lifecycle Automation

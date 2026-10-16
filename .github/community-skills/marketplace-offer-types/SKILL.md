@@ -4,6 +4,8 @@ description: "Provides offer-type decision guidance and implementation pathways 
 argument-hint: "Product packaging preference, hosting model, billing model, and customer procurement requirements"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # Marketplace Offer Types

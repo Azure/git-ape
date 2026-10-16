@@ -4,6 +4,8 @@ description: "Guides onboarding to Azure Marketplace: publisher setup, technical
 argument-hint: "Publisher profile state, legal entities, pricing model, and target geographies"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # Marketplace Onboarding

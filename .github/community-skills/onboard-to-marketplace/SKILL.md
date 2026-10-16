@@ -4,6 +4,8 @@ description: "End-to-end onboarding flow for Azure Marketplace SaaS publication,
 argument-hint: "Publisher account state, offer type, pricing model, and target markets"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # Onboard to Marketplace

@@ -4,6 +4,8 @@ description: "Implements production scale, reliability, and observability patter
 argument-hint: "SLO targets, peak concurrency, DR objectives, and telemetry tooling preferences"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Scale and SRE

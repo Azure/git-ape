@@ -4,6 +4,8 @@ description: "Bootstraps and customizes the Azure Commercial Marketplace SaaS Ac
 argument-hint: "Accelerator deployment model, identity provider, integration points, and product-specific customizations"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # SaaS Accelerator Bootstrap

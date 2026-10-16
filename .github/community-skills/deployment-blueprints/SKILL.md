@@ -4,6 +4,8 @@ description: "Provides implementation blueprints and deployment sequencing for A
 argument-hint: "Preferred IaC tool, target topology, deployment environments, and release cadence"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Deployment Blueprints

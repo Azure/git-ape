@@ -4,6 +4,8 @@ description: "Designs and validates tenancy models (shared, pooled, siloed, hybr
 argument-hint: "Tenant count, data isolation requirements, noisy-neighbor tolerance, and regulatory constraints"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Tenant Isolation Models

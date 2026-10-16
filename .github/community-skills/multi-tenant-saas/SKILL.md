@@ -1,14 +1,16 @@
 ---
-name: multi-tenant_SaaS
+name: multi-tenant-saas
 description: "Primary orchestration skill for building a multi-tenant Azure SaaS platform, integrating ISV landing zone guidance, SaaS Accelerator patterns, and marketplace publication workflows."
 argument-hint: "SaaS product type, target tenants, regions, compliance needs, and preferred offer model"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Multi-Tenant SaaS Orchestrator
 
-Use this skill as the top-level entrypoint: `/git-ape:multi-tenant_SaaS`.
+Use this skill as the top-level entrypoint: `/git-ape:multi-tenant-saas`.
 
 ## What this skill does
 

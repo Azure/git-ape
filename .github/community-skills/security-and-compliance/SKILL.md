@@ -4,6 +4,8 @@ description: "Defines security architecture and compliance controls for multi-te
 argument-hint: "Compliance frameworks, data residency requirements, tenant trust model, and encryption policy"
 user-invocable: true
 last_updated: "2026-08-17"
+metadata:
+  author: dawright22
 ---
 
 # Security and Compliance

@@ -4,6 +4,8 @@ description: "Builds the Azure ISV landing zone baseline for identity, networkin
 argument-hint: "Subscription model, management group strategy, network topology, and environment count"
 user-invocable: true
 last_updated: "2026-06-12"
+metadata:
+  author: dawright22
 ---
 
 # ISV Landing Zone Foundation
