@@ -50,6 +50,25 @@ Skills are focused capabilities invoked by agents at specific stages of the depl
 | [Azure Stack Destroy](./azure-stack-destroy) | Tear down a Git-Ape deployment by ID. Reads `state.json` under `.azure/deployments/<id>/` to delete the Azure Deployment Stack and purge soft-deleted Key Vault / Cognitive Services. Refuses to run without `state.json`. Use for any local CLI or VS Code Git-Ape teardown so the result matches the CI destroy workflow. | ✅ |
 | [Git Ape Skills](./git-ape-skills) | Search the Git-Ape core and community skill registry, or explicitly install a selected community skill from Azure/git-ape. USE FOR: find a skill, search capabilities, list community skills, install a community skill. DO NOT USE FOR: automatically installing search results or invoking skills not available in the current session. | ✅ |
 
+## Community Skills
+
+Skills reviewed through PRs under `.github/community-skills/`. Not bundled with core; install explicitly through `/git-ape-skills`. See each skill's author for provenance.
+
+| Skill | Description | Author | Maturity | Invocable after install |
+|-------|-------------|--------|----------|:---------:|
+| [Deployment Blueprints](./community/deployment-blueprints) | Provides implementation blueprints and deployment sequencing for Azure SaaS reference topologies. | dawright22 | experimental | ✅ |
+| [Fulfillment And Metering](./community/fulfillment-and-metering) | Implements Azure Marketplace SaaS fulfillment APIs and metered billing event flows for transactable offers. | dawright22 | experimental | ✅ |
+| [Isv Landing Zone Foundation](./community/isv-landing-zone-foundation) | Builds the Azure ISV landing zone baseline for identity, networking, governance, security, and environment separation. | dawright22 | experimental | ✅ |
+| [Marketplace Offer Types](./community/marketplace-offer-types) | Provides offer-type decision guidance and implementation pathways for Azure Marketplace and related commercial offer models. | dawright22 | experimental | ✅ |
+| [Marketplace Onboarding](./community/marketplace-onboarding) | Guides onboarding to Azure Marketplace: publisher setup, technical configuration, validation, and launch readiness. | dawright22 | experimental | ✅ |
+| [Multi Tenant Saas](./community/multi-tenant-saas) | Primary orchestration skill for building a multi-tenant Azure SaaS platform, integrating ISV landing zone guidance, SaaS Accelerator patterns, and marketplace publication workflows. | dawright22 | experimental | ✅ |
+| [Onboard To Marketplace](./community/onboard-to-marketplace) | End-to-end onboarding flow for Azure Marketplace SaaS publication, from Partner Center readiness to final go-live checks. | dawright22 | experimental | ✅ |
+| [Saas Accelerator Bootstrap](./community/saas-accelerator-bootstrap) | Bootstraps and customizes the Azure Commercial Marketplace SaaS Accelerator as a starting point for transactable SaaS offers. | dawright22 | experimental | ✅ |
+| [Scale And Sre](./community/scale-and-sre) | Implements production scale, reliability, and observability patterns for multi-tenant SaaS platforms. | dawright22 | experimental | ✅ |
+| [Security And Compliance](./community/security-and-compliance) | Defines security architecture and compliance controls for multi-tenant SaaS, including identity, secrets, data protection, and auditability. | dawright22 | experimental | ✅ |
+| [Tenant Isolation Models](./community/tenant-isolation-models) | Designs and validates tenancy models (shared, pooled, siloed, hybrid) with security, cost, and scale trade-offs. | dawright22 | experimental | ✅ |
+| [Tenant Lifecycle Automation](./community/tenant-lifecycle-automation) | Implements automated tenant onboarding, provisioning, upgrade, suspension, and offboarding workflows. | dawright22 | experimental | ✅ |
+
 ## Skill Invocation in Deployment Flow
 
 ```mermaid
