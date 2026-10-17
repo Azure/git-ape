@@ -353,6 +353,19 @@ Always assess and recommend policies for: identity, networking, storage, compute
 - Policy gate is **advisory** (not blocking) — surfaces findings without halting deployment
 - During onboarding, ask the user about compliance framework and enforcement mode preferences and update this section accordingly
 
+## Landing Zone Context
+
+If `.azure/landing-zone-context.json` is present in the workspace (produced by `/azure-landing-zone-discovery`), Git-Ape agents MUST read it before generating templates and respect its constraints:
+
+- **`policies.allowedLocations[]`** — Reject any region not in this list (or, when empty/missing, fall back to the default-region rules above).
+- **`policies.requiredTags[]`** — Inject these tag keys into every resource's `tags` block; surface missing values to the user.
+- **`policies.denyEffects[]`** / **`policies.alzCanonicalAssignments[]`** — Cross-check the template against these before the security gate. Findings already enforced at the tenant level are marked `✓ inherited` instead of re-recommended.
+- **`sharedServices.logAnalytics`**, **`sharedServices.acr`**, **`sharedServices.keyVault`** — Prefer these over creating new platform resources; wire diagnostic settings to the shared Log Analytics workspace.
+- **`networking.topology` = `hub-spoke`** — Generate hub-VNet peering and link private endpoints to `networking.privateDnsZones[]`.
+- **`landingZoneDetection.confidence`** — `high` = auto-apply; `medium` = confirm with user before applying ALZ-specific behavior; `low`/`none` = use explicit policy fields only and treat the tenant as standalone; missing = skip LZ-aware logic.
+
+If the context file is missing, deploy in standalone mode. Do **not** force `/azure-landing-zone-discovery` — many users deploy into solo subscriptions.
+
 ### Rules
 
 1. **Cite evidence**: Every "✅ Applied" finding must reference the exact ARM property path and value from the template. No exceptions.
