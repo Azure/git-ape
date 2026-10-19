@@ -210,6 +210,26 @@ site. Decision rationale for the harness choice lives in
 
 ## Pull Request Process
 
+### Required registry and documentation refresh
+
+Every PR that adds, updates, renames, or removes a first-party or community
+skill **must** run the generator from the repository root before submission:
+
+```bash
+node scripts/generate-docs.js
+```
+
+Install the website dependencies first if needed (see [Development Setup](#development-setup)).
+Commit the regenerated `.github/skills/registry.json` and all changed generated
+files under `website/docs/` in the same PR as the skill changes. This includes
+community skill pages under `website/docs/skills/community/` and the skills
+overview and registry pages. Do not edit generated files manually.
+
+The registry powers `/git-ape-skills search`; adding a source `SKILL.md` alone
+does not publish its metadata to search. If regeneration produces no changes,
+state that in the PR description. The Docs Check workflow is advisory, but
+the refresh and inclusion of changed outputs are required for skill PRs.
+
 1. **Fork and branch** — Create a feature branch from `main`.
 2. **Make your changes** — Follow the directory structure and naming conventions above.
 3. **Run validation locally** (optional):
@@ -218,7 +238,9 @@ site. Decision rationale for the harness choice lives in
    node scripts/validate-structure.js
    ```
 
-4. **Submit a PR** — Fill in the PR template and describe your changes.
+4. **Refresh generated outputs and submit a PR** — For every skill PR, complete
+   the required refresh above and include its changed outputs. Fill in the PR
+   template and describe your changes.
 5. **CI checks run automatically** — The PR validation workflow verifies:
    - YAML frontmatter has required fields (`name`, `description` for skills; `description` for agents)
    - Community skills (`.github/community-skills/<name>/`) additionally require `metadata.author`
@@ -252,7 +274,7 @@ cd website && npm ci && cd ..
 # Run structural validation
 node scripts/validate-structure.js
 
-# Generate documentation (optional)
+# Regenerate registry and documentation (required for every skill PR)
 node scripts/generate-docs.js
 ```
 
