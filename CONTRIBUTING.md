@@ -17,7 +17,10 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ### Directory Structure
 
-Each skill lives in its own directory under `.github/skills/`:
+First-party skills live in their own directories under `.github/skills/`.
+For community contributions, use the [community skill template and source
+layout](#contributing-a-community-skill) instead; the schema and naming rules
+below apply to both tiers.
 
 ```
 .github/skills/
@@ -115,9 +118,28 @@ metadata:
 ---
 ```
 
-Start from [`.github/templates/COMMUNITY_SKILL.template.md`](.github/templates/COMMUNITY_SKILL.template.md)
-rather than the first-party `SKILL.template.md` — it includes the required
-`metadata.author` field and an `## Attribution` section.
+### Required authoring template
+
+New community skills **must** start from
+[`.github/templates/COMMUNITY_SKILL.template.md`](.github/templates/COMMUNITY_SKILL.template.md),
+not the first-party `SKILL.template.md`.
+
+1. Copy the template to `.github/community-skills/<name>/SKILL.md`, using a
+   kebab-case directory name that exactly matches the skill's `name` field.
+2. Replace the scaffold's `title`/`description` frontmatter with the real skill
+   frontmatter shown in the template. Set `metadata.author` and remove the
+   template instruction block and every `TODO` placeholder.
+3. Complete the `When to Use`, `Procedure`, `Outputs`, `Constraints`, and
+   `Attribution` sections. Keep attribution consistent with `metadata.author`
+   and the optional `metadata.source`, and identify where to request support.
+4. Keep any supporting `scripts/` and `references/` inside the skill's own
+   directory so explicit installation can copy the complete skill.
+
+`.github/community-skills/<name>/SKILL.md` is the authoring source of truth.
+Do not author community contributions in `.github/skills/` (the core and
+installed-skill loader path) or `website/docs/skills/community/` (generated
+documentation). Follow the template for new skills and use it as the checklist
+when updating existing community skills.
 
 ### Review bar
 
