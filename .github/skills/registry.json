@@ -1,5 +1,5 @@
 {
-  "$comment": "AUTO-GENERATED — DO NOT EDIT. Sources: .github/skills/ and .github/community-skills/. Regenerate with `node scripts/generate-docs.js`.",
+  "$comment": "AUTO-GENERATED — DO NOT EDIT. Sources: .github/skills/, .github/community-skills/, and .github/skill-packs/. Regenerate with `node scripts/generate-docs.js`.",
   "schemaVersion": 1,
   "skills": [
     {
@@ -229,7 +229,7 @@
     {
       "name": "git-ape-skills",
       "tier": "first-party",
-      "description": "Search the Git-Ape core and community skill registry, or explicitly install a selected community skill from Azure/git-ape. USE FOR: find a skill, search capabilities, list community skills, install a community skill. DO NOT USE FOR: automatically installing search results or invoking skills not available in the current session.",
+      "description": "Search Git-Ape core skills, community skills, and named packs, or explicitly install community skills and packs from Azure/git-ape into a workspace. USE FOR: find a skill, search capabilities, list community skills or packs, install a community skill or pack. DO NOT USE FOR: automatically installing search results, global installation, or invoking skills not available in the current session.",
       "path": ".github/skills/git-ape-skills",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-skills",
       "userInvocable": true,
@@ -394,5 +394,6 @@
       "maturity": "experimental",
       "source": null
     }
-  ]
+  ],
+  "packs": []
 }
