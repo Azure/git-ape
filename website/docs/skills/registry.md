@@ -35,11 +35,24 @@ The raw, machine-readable version lives at [`.github/skills/registry.json`](http
 | [Git Ape Skills](./git-ape-skills) | first-party | Microsoft | stable | Search the Git-Ape core and community skill registry, or explicitly install a selected community skill from Azure/git-ape. USE FOR: find a skill, search capabilities, list community skills, install a community skill. DO NOT USE FOR: automatically installing search results or invoking skills not available in the current session. |
 | [Prereq Check](./prereq-check) | first-party | Git-Ape | stable | Validate Git-Ape CLI tool installation (az, gh, jq, git), versions, and auth sessions. Shows platform-specific install commands for anything missing. USE FOR: check Git-Ape prerequisites, what do I need to install for Git-Ape, verify Git-Ape CLI tools, az: command not found, gh: command not found, jq: command not found, git: command not found, az missing, gh missing, jq missing, git missing, fresh machine setup for Git-Ape, dev container setup for Git-Ape, before running git-ape-onboarding, az login required, gh auth login, auth expired, not logged in, outdated az version, minimum az version, upgrade az. DO NOT USE FOR: Anything else. This skill is narrowly scoped to prerequisites checks for Git-Ape's CLI tools and auth sessions. Do not use it for any other purpose. |
 
-## Community Skills (0)
+## Community Skills (12)
 
 Community skills are maintained by their listed authors. Review provides oversight, not a guarantee of safety. Use `/git-ape-skills search <query>` to discover skills and `/git-ape-skills install <name>` to explicitly copy a selected skill from a pinned Azure/git-ape revision into your workspace. Scripts and references are copied too; existing files are never overwritten.
 
-_No community skills have been contributed yet. See [Contributing a Community Skill](https://github.com/Azure/git-ape/blob/main/CONTRIBUTING.md#contributing-a-community-skill) to add the first one._
+| Skill | Tier | Author | Maturity | Description |
+|-------|------|--------|----------|-------------|
+| [Deployment Blueprints](./community/deployment-blueprints) | community | dawright22 | experimental | Provides implementation blueprints and deployment sequencing for Azure SaaS reference topologies. |
+| [Fulfillment And Metering](./community/fulfillment-and-metering) | community | dawright22 | experimental | Implements Azure Marketplace SaaS fulfillment APIs and metered billing event flows for transactable offers. |
+| [Isv Landing Zone Foundation](./community/isv-landing-zone-foundation) | community | dawright22 | experimental | Builds the Azure ISV landing zone baseline for identity, networking, governance, security, and environment separation. |
+| [Marketplace Offer Types](./community/marketplace-offer-types) | community | dawright22 | experimental | Provides offer-type decision guidance and implementation pathways for Azure Marketplace and related commercial offer models. |
+| [Marketplace Onboarding](./community/marketplace-onboarding) | community | dawright22 | experimental | Guides onboarding to Azure Marketplace: publisher setup, technical configuration, validation, and launch readiness. |
+| [Multi Tenant Saas](./community/multi-tenant-saas) | community | dawright22 | experimental | Primary orchestration skill for building a multi-tenant Azure SaaS platform, integrating ISV landing zone guidance, SaaS Accelerator patterns, and marketplace publication workflows. |
+| [Onboard To Marketplace](./community/onboard-to-marketplace) | community | dawright22 | experimental | End-to-end onboarding flow for Azure Marketplace SaaS publication, from Partner Center readiness to final go-live checks. |
+| [Saas Accelerator Bootstrap](./community/saas-accelerator-bootstrap) | community | dawright22 | experimental | Bootstraps and customizes the Azure Commercial Marketplace SaaS Accelerator as a starting point for transactable SaaS offers. |
+| [Scale And Sre](./community/scale-and-sre) | community | dawright22 | experimental | Implements production scale, reliability, and observability patterns for multi-tenant SaaS platforms. |
+| [Security And Compliance](./community/security-and-compliance) | community | dawright22 | experimental | Defines security architecture and compliance controls for multi-tenant SaaS, including identity, secrets, data protection, and auditability. |
+| [Tenant Isolation Models](./community/tenant-isolation-models) | community | dawright22 | experimental | Designs and validates tenancy models (shared, pooled, siloed, hybrid) with security, cost, and scale trade-offs. |
+| [Tenant Lifecycle Automation](./community/tenant-lifecycle-automation) | community | dawright22 | experimental | Implements automated tenant onboarding, provisioning, upgrade, suspension, and offboarding workflows. |
 
 ## Contributing to the Registry
 
