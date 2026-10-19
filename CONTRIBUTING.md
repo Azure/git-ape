@@ -17,7 +17,10 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ### Directory Structure
 
-Each skill lives in its own directory under `.github/skills/`:
+First-party skills live in their own directories under `.github/skills/`.
+For community contributions, use the [community skill template and source
+layout](#contributing-a-community-skill) instead; the schema and naming rules
+below apply to both tiers.
 
 ```
 .github/skills/
@@ -76,6 +79,30 @@ Brief overview of the skill.
 3. Step three
 ```
 
+## Contributing a Community Pack
+
+Packs collect independent community skills for explicit workspace installation.
+They are not merged skills, dependencies, global installs, or client UI groups.
+
+1. Copy `.github/templates/SKILL_PACK.template.json` to
+   `.github/skill-packs/<name>/pack.json`.
+2. Supply exactly `name`, `description`, `author`, and `skills`. The name must
+   match its directory, be portable lowercase kebab-case (at most 100 characters),
+   and not be a Windows reserved device name. Description and author must be
+   non-empty strings without control characters.
+3. List every member explicitly by its existing community skill name in `skills`.
+   Empty lists, duplicates, missing members, and first-party members are rejected.
+   Packs may share members; installation never overwrites an already installed skill.
+   No wildcard expansion or nested packs are supported.
+4. Run `node --test scripts/tests/*.test.js` and `node scripts/generate-docs.js`.
+   Commit the generated `.github/skills/registry.json` and changed website docs
+   with the manifest. The generator validates manifests and creates the pack catalog.
+5. Review installation using `plan-pack <name> --workspace <directory>` in the
+   `git-ape-skills` helper. Explicitly approve the pinned commit, full member list,
+   and destination before `install-pack <name> --workspace <directory>
+   --revision <approved-full-sha> --yes`. Installation copies all supporting files,
+   records pack membership per member, and never runs community code.
+
 ## Contributing a Community Skill
 
 Git-Ape maintains a **skill registry** so third parties can build and ship
@@ -115,9 +142,28 @@ metadata:
 ---
 ```
 
-Start from [`.github/templates/COMMUNITY_SKILL.template.md`](.github/templates/COMMUNITY_SKILL.template.md)
-rather than the first-party `SKILL.template.md` — it includes the required
-`metadata.author` field and an `## Attribution` section.
+### Required authoring template
+
+New community skills **must** start from
+[`.github/templates/COMMUNITY_SKILL.template.md`](.github/templates/COMMUNITY_SKILL.template.md),
+not the first-party `SKILL.template.md`.
+
+1. Copy the template to `.github/community-skills/<name>/SKILL.md`, using a
+   kebab-case directory name that exactly matches the skill's `name` field.
+2. Replace the scaffold's `title`/`description` frontmatter with the real skill
+   frontmatter shown in the template. Set `metadata.author` and remove the
+   template instruction block and every `TODO` placeholder.
+3. Complete the `When to Use`, `Procedure`, `Outputs`, `Constraints`, and
+   `Attribution` sections. Keep attribution consistent with `metadata.author`
+   and the optional `metadata.source`, and identify where to request support.
+4. Keep any supporting `scripts/` and `references/` inside the skill's own
+   directory so explicit installation can copy the complete skill.
+
+`.github/community-skills/<name>/SKILL.md` is the authoring source of truth.
+Do not author community contributions in `.github/skills/` (the core and
+installed-skill loader path) or `website/docs/skills/community/` (generated
+documentation). Follow the template for new skills and use it as the checklist
+when updating existing community skills.
 
 ### Review bar
 
@@ -188,6 +234,26 @@ site. Decision rationale for the harness choice lives in
 
 ## Pull Request Process
 
+### Required registry and documentation refresh
+
+Every PR that adds, updates, renames, or removes a first-party or community
+skill **must** run the generator from the repository root before submission:
+
+```bash
+node scripts/generate-docs.js
+```
+
+Install the website dependencies first if needed (see [Development Setup](#development-setup)).
+Commit the regenerated `.github/skills/registry.json` and all changed generated
+files under `website/docs/` in the same PR as the skill changes. This includes
+community skill pages under `website/docs/skills/community/` and the skills
+overview and registry pages. Do not edit generated files manually.
+
+The registry powers `/git-ape-skills search`; adding a source `SKILL.md` alone
+does not publish its metadata to search. If regeneration produces no changes,
+state that in the PR description. The Docs Check workflow is advisory, but
+the refresh and inclusion of changed outputs are required for skill PRs.
+
 1. **Fork and branch** — Create a feature branch from `main`.
 2. **Make your changes** — Follow the directory structure and naming conventions above.
 3. **Run validation locally** (optional):
@@ -196,7 +262,9 @@ site. Decision rationale for the harness choice lives in
    node scripts/validate-structure.js
    ```
 
-4. **Submit a PR** — Fill in the PR template and describe your changes.
+4. **Refresh generated outputs and submit a PR** — For every skill PR, complete
+   the required refresh above and include its changed outputs. Fill in the PR
+   template and describe your changes.
 5. **CI checks run automatically** — The PR validation workflow verifies:
    - YAML frontmatter has required fields (`name`, `description` for skills; `description` for agents)
    - Community skills (`.github/community-skills/<name>/`) additionally require `metadata.author`
@@ -230,7 +298,7 @@ cd website && npm ci && cd ..
 # Run structural validation
 node scripts/validate-structure.js
 
-# Generate documentation (optional)
+# Regenerate registry and documentation (required for every skill PR)
 node scripts/generate-docs.js
 ```
 

@@ -1,7 +1,7 @@
 ---
 name: git-ape-skills
-description: "Search the Git-Ape core and community skill registry, or explicitly install a selected community skill from Azure/git-ape. USE FOR: find a skill, search capabilities, list community skills, install a community skill. DO NOT USE FOR: automatically installing search results or invoking skills not available in the current session."
-argument-hint: "search <capability> | install <skill-name>"
+description: "Search Git-Ape core skills, community skills, and named packs, or explicitly install community skills and packs from Azure/git-ape into a workspace. USE FOR: find a skill, search capabilities, list community skills or packs, install a community skill or pack. DO NOT USE FOR: automatically installing search results, global installation, or invoking skills not available in the current session."
+argument-hint: "search <capability> | install <skill-name> | plan-pack <pack-name> | install-pack <pack-name>"
 user-invocable: true
 ---
 
@@ -15,6 +15,7 @@ included in the VSIX. Review is oversight, not a guarantee of safety.
 
 - Find a capability, list skills, or inspect a skill's author and source.
 - Explicitly install one community skill into a chosen workspace.
+- Discover or explicitly install a named pack of independent community skills.
 
 ## Procedure
 
@@ -22,7 +23,7 @@ included in the VSIX. Review is oversight, not a guarantee of safety.
    `search <query>`. The helper reads the bundled `.github/skills/registry.json`
    without network access or file changes. Alternatively read that registry
    directly if Node.js is unavailable.
-2. Present matches with name, description, tier, author, source, and docs.
+2. Present matches with name, description, tier (or `kind: pack`), author, source, and docs.
    Clearly distinguish core skills from community skills that are only listed.
    Do not invoke a listed community skill unless it is available in this session.
 3. For an installation request, identify the destination workspace and explain
@@ -39,6 +40,33 @@ included in the VSIX. Review is oversight, not a guarantee of safety.
    overwritten, and skill scripts are not executed by installation. Tell the
    user to reload or start a new session if the client has not discovered the
    new workspace skill. Do not claim it is available until verified.
+
+## Pack installation
+
+Packs are explicit member lists in `.github/skill-packs/<name>/pack.json`.
+Each member remains an independent skill; packs do not introduce UI grouping.
+
+1. Search with `search <query>`. Pack metadata and member names are searchable.
+   An older registry without `packs` still supports individual skill discovery.
+2. Run `plan-pack <name> --workspace <directory> [--revision <full-sha>]`.
+   This resolves one pinned Azure/git-ape commit and returns pack metadata, the
+   complete member list, exact source files/hashes and destinations, the generated
+   provenance file, and conflicts. It verifies the pinned pack manifest against
+   the registry and makes **no writes**. Stop on validation
+   errors and resolve conflicts without overwriting existing skills.
+3. Show the plan and request explicit approval of its **full commit SHA, entire
+   member list, files, and workspace destination**. Never infer approval from
+   search or preview. Pack installation is workspace-only, not personal/global.
+4. After approval, run
+   `install-pack <name> --workspace <directory> --revision <approved-full-sha> --yes`.
+   A full pinned SHA is required. The helper repeats all source/destination
+   validation, downloads and hash-verifies **all** members before the first final
+   write, and refuses overwrites (including dangling symlinks and case collisions).
+   Failed installation removes only its newly created member directories;
+   cleanup failures are surfaced explicitly for manual review.
+5. Report destinations and each member's provenance, including the pack name.
+   Do not execute community scripts or install their dependencies. Ask the user
+   to reload or start a new session and verify discovery before invoking skills.
 
 ## Outputs
 
