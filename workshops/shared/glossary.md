@@ -32,6 +32,7 @@
 | **@azure-policy-advisor** | Assesses ARM templates against Azure Policy frameworks (CIS, NIST). Recommends policy assignments. |
 | **@azure-iac-exporter** | Exports existing Azure resources to ARM templates. Brings live infrastructure under IaC management. |
 | **@git-ape-onboarding** | Sets up OIDC, RBAC, GitHub environments, and secrets for CI/CD pipeline integration. |
+| **@azure-requirements-gatherer** | The "Requirements Gatherer" from Tracks 1 and 2 — asks clarifying questions to turn a natural-language request into complete deployment parameters before any template is generated. |
 
 ## Git-Ape Skills
 
@@ -48,3 +49,8 @@
 | `/azure-policy-advisor` | Assesses templates against compliance frameworks and recommends policies. |
 | `/azure-resource-visualizer` | Generates Mermaid architecture diagrams from deployed resource groups. |
 | `/git-ape-onboarding` | Guided setup of OIDC, RBAC, GitHub environments, and secrets. |
+| `/azure-resource-availability` | Validates region, runtime/SKU, resource-provider, and quota availability before a template is generated — the "availability check" in Track 1 Lab 2. |
+| `/azure-stack-deploy` | Deploys a prepared Git-Ape artifact as an Azure Deployment Stack (`az stack sub create --action-on-unmanage deleteAll`) and writes `state.json`. Drives `@git-ape`'s deploy step in every track. |
+| `/azure-stack-destroy` | Tears down a deployment's Azure Deployment Stack in one idempotent call, including a soft-delete purge sweep. Use this instead of `az group delete` for any Git-Ape-managed deployment. |
+| `/azure-rest-api-reference` | Looks up exact ARM/REST property schemas and stable API versions for a resource type. Used internally by the Template Generator before writing resources — not invoked directly by attendees today. |
+| `/git-ape-skills` | Searches the core + community skill registry (`.github/skills/registry.json`) and, with explicit approval, installs a reviewed community skill into a workspace at a pinned commit. |

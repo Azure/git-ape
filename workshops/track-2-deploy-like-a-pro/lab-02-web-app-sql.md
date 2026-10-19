@@ -144,3 +144,4 @@ You will see this in action in Lab 3 when we deliberately break a security contr
 - Template generator agent: `.github/agents/azure-template-generator.agent.md` (search for `inner scope` and `bestpractices`)
 - Deployer agent: `.github/agents/azure-resource-deployer.agent.md`
 - Security analyzer: `.github/skills/azure-security-analyzer/SKILL.md` (the evidence rule)
+- Before writing any ARM resource, the Template Generator looks up exact property schemas and stable API versions via `.github/skills/azure-rest-api-reference/SKILL.md` — this is why generated templates rarely fail on unknown/misspelled properties.

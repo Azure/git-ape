@@ -57,7 +57,7 @@ Progress indicator:
 
 ## Step 3: Resource availability gate
 
-Before generating any template, the agent runs an **availability check**:
+Before generating any template, the agent runs an **availability check** (the `/azure-resource-availability` skill):
 
 - Is the region open for your subscription?
 - Is the Python 3.11 runtime supported in that region?

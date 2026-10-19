@@ -87,14 +87,15 @@ gh run list --workflow=git-ape-destroy.yml --limit 1
 gh run watch
 ```
 
-The workflow:
+The workflow reads `state.json` for the stack name and calls `/azure-stack-destroy` under the hood (the same primitive used for local CLI/VS Code teardown):
 
-1. Reads the resource group name from `state.json`
-2. Inventories all resources in the group
-3. Deletes subscription-scoped resources first (role assignments)
-4. Deletes the resource group
-5. Updates `state.json` and `metadata.json` to `destroyed`
-6. Commits the updated state to the repo
+1. Reads `state.json` for the deployment stack name (`stackId`).
+2. Runs `az stack sub show` to inventory every resource the stack manages — across resource groups and subscription scope (role assignments, policy assignments).
+3. Runs `az stack sub delete --action-on-unmanage deleteAll --bypass-stack-out-of-sync-error true` — one call deletes everything the stack owns, no orphans.
+4. Purges soft-deletable resources that linger after stack deletion (Key Vault, Cognitive Services) unless flagged `purgeProtected: true`.
+5. Updates `state.json` and `metadata.json` to `destroyed` and commits the updated state to the repo.
+
+If the stack is already gone, the workflow records `already-destroyed` and exits `0` — safe to re-run.
 
 ## Step 5: Verify Destruction
 
@@ -134,47 +135,20 @@ The deployment directory still exists with the full audit trail — template, se
 
 ### Clean Up Remaining Resources
 
-If you have other workshop resources still deployed:
+If you have other workshop resources still deployed from earlier labs, use `/azure-stack-destroy` for each deployment ID rather than a raw `az group delete`:
 
-**Bash / macOS / Linux:**
-
-```bash
-# List all workshop resource groups
-az group list --query "[?starts_with(name, 'rg-')].name" -o tsv
-
-# Delete each one
-az group delete --name <resource-group-name> --yes --no-wait
+```text
+@git-ape /azure-stack-destroy deploy-XXXXXXXX-XXXXXX
 ```
 
-**PowerShell / Windows:**
-
-```powershell
-# List all workshop resource groups
-az group list --query "[?starts_with(name, 'rg-')].name" -o tsv
-
-# Delete each one
-az group delete --name <resource-group-name> --yes --no-wait
-```
+> **Why not `az group delete`?** A Git-Ape deployment stack often spans multiple resource groups plus subscription-scope resources (role/policy assignments) — a single `az group delete` only cleans one RG. `/azure-stack-destroy` also purges soft-deletable resources (Key Vault, Cognitive Services) that otherwise linger for 7-90 days and block re-deploying with the same name. Reserve `az group delete` for resource groups you created by hand outside Git-Ape.
 
 ### What's Next?
 
-- **Explore more skills:** Browse the [full skill catalog](https://github.com/Azure/git-ape)
+- **Explore more skills:** Search the core + community skill registry with `/git-ape-skills search <capability>` (e.g. `/git-ape-skills search cost`), or browse the [full skill catalog](https://github.com/Azure/git-ape). Community entries are reviewed through Azure/git-ape PRs but installed only with your explicit approval, pinned to a commit — see `.github/skills/git-ape-skills/SKILL.md`.
 - **Architecture review:** Ask `@azure-principal-architect` to review any deployment
 - **Contribute:** Open a PR to improve workshop content or add new scenarios
 
 ## Step 6: The destroy contract
 
-git-ape-destroy.yml triggers when metadata.json status flips to destroy-requested and the PR merges, OR via manual workflow_dispatch with confirm=destroy. Both require PR review.
-
-## Step 7: What the workflow does
-
-1. Reads state.json for the stack name.
-2. Runs az stack sub show to inventory managed resources.
-3. Runs az stack sub delete --action-on-unmanage deleteAll.
-4. Updates metadata.json status to destroyed; commits back.
-
-The --action-on-unmanage deleteAll flag removes every resource across all RGs, role assignments, policy assignments -- in one call. No orphans.
-
-## Step 8: Idempotency
-
-If the stack is already gone, the workflow records already-destroyed and exits 0. Safe to re-run.
+`git-ape-destroy.yml` triggers when `metadata.json` status flips to `destroy-requested` and the PR merges, OR via manual `workflow_dispatch` with `confirm=destroy`. Both require PR review.
