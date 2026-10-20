@@ -12,7 +12,7 @@ description: "AWS API Gateway for REST and HTTP API management. Use when creatin
 > AWS API Gateway for REST and HTTP API management. Use when creating APIs, configuring integrations, setting up authorization, managing stages, implementing rate limiting, or troubleshooting API issues.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-api-gateway` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-api-gateway` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

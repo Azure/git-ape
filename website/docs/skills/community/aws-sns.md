@@ -12,7 +12,7 @@ description: "AWS SNS notification service for pub/sub messaging. Use when creat
 > AWS SNS notification service for pub/sub messaging. Use when creating topics, managing subscriptions, configuring message filtering, sending notifications, or setting up fan-out patterns.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-sns` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-sns` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

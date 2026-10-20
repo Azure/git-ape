@@ -81,8 +81,8 @@ Brief overview of the skill.
 
 ## Contributing a Community Pack
 
-Packs collect independent community skills for explicit workspace installation.
-They are not merged skills, dependencies, global installs, or client UI groups.
+Packs collect independent community skills for explicit project or personal installation.
+They are not merged skills, dependencies, global plugin installs, or client UI groups.
 
 1. Copy `.github/templates/SKILL_PACK.template.json` to
    `.github/skill-packs/<name>/pack.json`.
@@ -97,9 +97,11 @@ They are not merged skills, dependencies, global installs, or client UI groups.
 4. Run `node --test scripts/tests/*.test.js` and `node scripts/generate-docs.js`.
    Commit the generated `.github/skills/registry.json` and changed website docs
    with the manifest. The generator validates manifests and creates the pack catalog.
-5. Review installation using `plan-pack <name> --workspace <directory>` in the
-   `git-ape-skills` helper. Explicitly approve the pinned commit, full member list,
-   and destination before `install-pack <name> --workspace <directory>
+5. Choose "This project only" (`--scope workspace --workspace <directory>`) or
+   "All my projects" (`--scope personal`, no project/path question). Review using
+   `plan-pack <name> <scope-options>` in the `git-ape-skills` helper.
+   Explicitly approve the pinned commit, full member list, files, scope,
+   and resolved destination before `install-pack <name> <same-scope-options>
    --revision <approved-full-sha> --yes`. Installation copies all supporting files,
    records pack membership per member, and never runs community code.
 
@@ -178,7 +180,7 @@ Community skills are clearly labeled as **third-party, not maintained by the
 Git-Ape team** wherever they're listed (registry, docs pages), so users can
 make an informed choice about trusting them.
 
-### Discovery and explicit workspace installation
+### Discovery and explicit project or personal installation
 
 Community sources remain in Azure/git-ape and are reviewed through repository
 PRs. Review provides oversight and provenance, not a guarantee of safety.
@@ -186,12 +188,25 @@ The source directory is outside core's `.github/skills/` loader path and
 excluded from the VSIX; core ships only community registry metadata.
 
 Use `/git-ape-skills search <capability>` to search the unified registry.
-Search does not activate or install anything. To install a selected skill, use
+Search reads local registry metadata, not installed status, and does not activate
+or install anything. To install a selected skill, use
 `/git-ape-skills install <name>` and approve the pinned Azure/git-ape commit and
-destination repository. The bundled Node.js helper uses authenticated `gh` to
-download the complete skill directory into `.github/skills/<name>/`, preserving
+resolved destination. Ask "This project only" vs "All my projects" before asking
+for a project folder. Resolve the current project when possible; ask for a folder
+only when needed for workspace scope. The bundled Node.js helper uses authenticated
+`gh` to download the complete skill directory into
+`<workspace>/.github/skills/<name>/` (`--scope workspace --workspace <directory>`)
+or `os.homedir()/.copilot/skills/<name>/` (`--scope personal`, no `--workspace`), preserving
 scripts and references. It refuses overwrites, does not run skill scripts, and
-writes `.git-ape-provenance.json`. A client reload or new session may be needed.
+writes `.git-ape-provenance.json`. Use `plan <name> <scope-options>` to preview a
+single skill without writes, even if the personal root does not exist. Approve
+its exact files, full commit SHA, scope, and resolved destination before
+`install <name> <same-scope-options> --revision <approved-full-sha> --yes`.
+CLI scope defaults to workspace and still requires an existing workspace;
+invalid scope or personal combined with `--workspace` is rejected.
+Both scopes install file-based skills, not a global plugin or App sidebar group.
+Personal discovery depends on client support; reload or start a new session and
+verify discovery before claiming the skill is active.
 External `metadata.source` URLs provide attribution only, never install sources.
 Dependencies on files outside a community skill's directory are not supported.
 

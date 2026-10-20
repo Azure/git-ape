@@ -12,7 +12,7 @@ description: "Defines security architecture and compliance controls for multi-te
 > Defines security architecture and compliance controls for multi-tenant SaaS, including identity, secrets, data protection, and auditability.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install security-and-compliance` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install security-and-compliance` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

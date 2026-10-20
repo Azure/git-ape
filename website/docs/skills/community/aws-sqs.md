@@ -12,7 +12,7 @@ description: "AWS SQS message queue service for decoupled architectures. Use whe
 > AWS SQS message queue service for decoupled architectures. Use when creating queues, configuring dead-letter queues, managing visibility timeouts, implementing FIFO ordering, or integrating with Lambda.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-sqs` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-sqs` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

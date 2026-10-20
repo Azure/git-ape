@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
@@ -137,12 +138,27 @@ function readBlob(entry, api) {
   return content;
 }
 
-function prepare(name, workspace, { revision, api = githubApi } = {}, isPack = false) {
+function resolveTarget(workspace, { scope = 'workspace', homedir = os.homedir } = {}) {
+  if (!['workspace', 'personal'].includes(scope)) throw new Error('Scope must be workspace or personal.');
+  if (scope === 'personal' && workspace !== undefined) {
+    throw new Error('--workspace cannot be combined with personal scope.');
+  }
+  if (scope === 'workspace' && (typeof workspace !== 'string' || !workspace.trim())) {
+    throw new Error('Workspace scope requires --workspace <directory>.');
+  }
+  const root = scope === 'personal' ? path.join(homedir(), '.copilot', 'skills') : path.resolve(workspace);
+  assertPlainDirectory(root);
+  if (scope === 'workspace' && !lstat(root)) throw new Error(`Workspace does not exist: ${root}`);
+  const destinationRoot = scope === 'personal' ? root : path.join(root, '.github', 'skills');
+  assertPlainDirectory(destinationRoot);
+  return { root, destinationRoot, scope };
+}
+
+function prepare(name, workspace, options = {}, isPack = false) {
+  const { revision, api = githubApi } = options;
+  const target = resolveTarget(workspace, options);
   assertName(name);
   if (revision !== undefined && !REVISION_RE.test(revision)) throw new Error('Revision must be a full 40-character lowercase commit SHA.');
-  const root = path.resolve(workspace);
-  assertPlainDirectory(root);
-  if (!lstat(root)) throw new Error(`Workspace does not exist: ${root}`);
   const commit = revision || api('commits/main').sha;
   if (!REVISION_RE.test(commit)) throw new Error('GitHub did not return a valid commit SHA.');
   const response = api(`contents/.github/skills/registry.json?ref=${commit}`);
@@ -157,7 +173,7 @@ function prepare(name, workspace, { revision, api = githubApi } = {}, isPack = f
     if (matches.length !== 1 || skill.path !== `.github/community-skills/${member}`) {
       throw new Error(`No installable community skill '${member}' in ${REPOSITORY}@${commit}`);
     }
-    return { skill, destination: path.join(root, '.github', 'skills', member) };
+    return { skill, destination: path.join(target.destinationRoot, member) };
   });
   const tree = api(`git/trees/${commit}?recursive=1`);
   if (tree.truncated || !Array.isArray(tree.tree)) throw new Error('GitHub returned an incomplete source tree.');
@@ -176,13 +192,13 @@ function prepare(name, workspace, { revision, api = githubApi } = {}, isPack = f
     }
   }
   const conflicts = members.map((member) => destinationConflict(member.destination)).filter(Boolean);
-  return { root, revision: commit, pack, members, conflicts };
+  return { ...target, revision: commit, pack, members, conflicts };
 }
 
-function planPack(name, workspace, options) {
-  const plan = prepare(name, workspace, options, true);
+function preview(plan) {
   return {
-    repository: REPOSITORY, revision: plan.revision, pack: plan.pack, conflicts: plan.conflicts,
+    repository: REPOSITORY, revision: plan.revision, scope: plan.scope,
+    destinationRoot: plan.destinationRoot, pack: plan.pack, conflicts: plan.conflicts,
     members: plan.members.map(({ skill, destination, files }) => ({
       name: skill.name, sourcePath: skill.path, destination,
       files: files.map(({ relative, sha, mode }) => ({ path: relative, sha, mode, destination: path.join(destination, ...relative.split('/')) })),
@@ -191,16 +207,26 @@ function planPack(name, workspace, options) {
   };
 }
 
+function planSkill(name, workspace, options) {
+  return preview(prepare(name, workspace, options));
+}
+
+function planPack(name, workspace, options) {
+  return preview(prepare(name, workspace, options, true));
+}
+
 function executeInstall(plan, api) {
   if (plan.conflicts.length) throw new Error(plan.conflicts.join('\n'));
-  // Stage inside the selected workspace, never in a global temporary directory.
+  assertPlainDirectory(plan.root);
+  if (plan.scope === 'personal') fs.mkdirSync(plan.root, { recursive: true });
+  // Stage inside the selected root, never in a global temporary directory.
   const staging = fs.mkdtempSync(path.join(plan.root, '.git-ape-stage-'));
   const created = [];
   let failure;
   let result;
   const cleanupErrors = [];
   try {
-    for (const { skill, files } of plan.members) {
+    for (const { skill, files, destination } of plan.members) {
       const directory = path.join(staging, skill.name);
       fs.mkdirSync(directory);
       for (const entry of files) {
@@ -211,6 +237,7 @@ function executeInstall(plan, api) {
       }
       fs.writeFileSync(path.join(directory, '.git-ape-provenance.json'), JSON.stringify({
         repository: REPOSITORY, revision: plan.revision, skill: skill.name, sourcePath: skill.path,
+        scope: plan.scope, destination,
         ...(plan.pack ? { pack: plan.pack.name, packSourcePath: `.github/skill-packs/${plan.pack.name}/pack.json` } : {}),
       }, null, 2) + '\n', { flag: 'wx' });
     }
@@ -227,7 +254,10 @@ function executeInstall(plan, api) {
       created.push({ destination, stat: fs.lstatSync(destination) });
       fs.cpSync(path.join(staging, skill.name), destination, { recursive: true, errorOnExist: true, force: false });
     }
-    result = { revision: plan.revision, destinations: plan.members.map((member) => member.destination) };
+    result = {
+      revision: plan.revision, scope: plan.scope, destinationRoot: plan.destinationRoot,
+      destinations: plan.members.map((member) => member.destination),
+    };
   } catch (error) {
     failure = error;
     for (const { destination, stat } of created.reverse()) {
@@ -247,16 +277,18 @@ function executeInstall(plan, api) {
   return result;
 }
 
-function installSkill(name, workspace, { revision, approved = false, api = githubApi } = {}) {
+function installSkill(name, workspace, options = {}) {
+  const { approved = false, api = githubApi } = options;
   if (!approved) throw new Error('Installation requires explicit approval (--yes).');
-  const result = executeInstall(prepare(name, workspace, { revision, api }), api);
-  return { destination: result.destinations[0], revision: result.revision };
+  const { destinations, ...result } = executeInstall(prepare(name, workspace, options), api);
+  return { ...result, destination: destinations[0] };
 }
 
-function installPack(name, workspace, { revision, approved = false, api = githubApi } = {}) {
+function installPack(name, workspace, options = {}) {
+  const { revision, approved = false, api = githubApi } = options;
   if (!approved) throw new Error('Installation requires explicit approval (--yes).');
   if (!revision || !REVISION_RE.test(revision)) throw new Error('Pack installation requires a pinned full 40-character lowercase commit SHA.');
-  const plan = prepare(name, workspace, { revision, api }, true);
+  const plan = prepare(name, workspace, options, true);
   return { pack: name, ...executeInstall(plan, api) };
 }
 
@@ -267,27 +299,30 @@ function main(args) {
     console.log(JSON.stringify(searchSkills(registry, rest.join(' ')), null, 2));
     return;
   }
-  if (['install', 'plan-pack', 'install-pack'].includes(command)) {
+  if (['plan', 'install', 'plan-pack', 'install-pack'].includes(command)) {
     const [name, ...options] = rest;
     let workspace;
     let revision;
+    let scope;
     let approved = false;
     for (let i = 0; i < options.length; i++) {
-      if (options[i] === '--workspace' || options[i] === '--revision') {
+      if (['--workspace', '--revision', '--scope'].includes(options[i])) {
         const option = options[i];
         const value = options[++i];
         if (!value || value.startsWith('--')) throw new Error(`${option} requires a value.`);
+        if (option === '--scope' && scope !== undefined) throw new Error('--scope must only be specified once.');
         if (option === '--workspace') workspace = value;
-        else revision = value;
-      } else if (options[i] === '--yes' && command !== 'plan-pack') approved = true;
+        else if (option === '--revision') revision = value;
+        else scope = value;
+      } else if (options[i] === '--yes' && !command.startsWith('plan')) approved = true;
       else throw new Error(`Unknown option: ${options[i]}`);
     }
-    if (!name || !workspace) throw new Error(`${command} requires a name and --workspace <directory>.`);
-    const action = command === 'plan-pack' ? planPack : command === 'install-pack' ? installPack : installSkill;
-    console.log(JSON.stringify(action(name, workspace, { revision, approved }), null, 2));
+    if (!name) throw new Error(`${command} requires a name.`);
+    const action = { plan: planSkill, install: installSkill, 'plan-pack': planPack, 'install-pack': installPack }[command];
+    console.log(JSON.stringify(action(name, workspace, { revision, approved, scope }), null, 2));
     return;
   }
-  throw new Error('Usage: skills.js search [query] | install|plan-pack|install-pack <name> --workspace <directory> [--revision <sha>] [--yes]');
+  throw new Error('Usage: skills.js search [query] | plan|install|plan-pack|install-pack <name> [--scope workspace|personal] [--workspace <directory>] [--revision <sha>] [--yes]');
 }
 
 if (require.main === module) {
@@ -295,4 +330,4 @@ if (require.main === module) {
   catch (error) { console.error(`Git-Ape skills: ${error.message}`); process.exitCode = 1; }
 }
 
-module.exports = { searchSkills, installSkill, planPack, installPack, validatePacks };
+module.exports = { searchSkills, planSkill, installSkill, planPack, installPack, validatePacks };

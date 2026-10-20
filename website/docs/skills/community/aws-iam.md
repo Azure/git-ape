@@ -12,7 +12,7 @@ description: "AWS Identity and Access Management for users, roles, policies, and
 > AWS Identity and Access Management for users, roles, policies, and permissions. Use when creating IAM policies, configuring cross-account access, setting up service roles, troubleshooting permission errors, or managing access control.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-iam` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-iam` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

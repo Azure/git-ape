@@ -12,7 +12,7 @@ description: "End-to-end onboarding flow for Azure Marketplace SaaS publication,
 > End-to-end onboarding flow for Azure Marketplace SaaS publication, from Partner Center readiness to final go-live checks.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install onboard-to-marketplace` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install onboard-to-marketplace` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

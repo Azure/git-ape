@@ -12,7 +12,7 @@ description: "Research AWS resource naming conventions and constraints for a giv
 > Research AWS resource naming conventions and constraints for a given service. Use when you need to look up naming rules (length, valid characters, scope), recommended patterns, and uniqueness requirements for AWS resources. Triggers on: AWS naming rules research, resource naming constraints, S3 bucket name validation.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-naming-research` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install aws-naming-research` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

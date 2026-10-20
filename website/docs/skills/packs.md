@@ -51,14 +51,26 @@ Use the helper in `.github/skills/git-ape-skills/scripts/skills.js`:
 ```text
 node skills.js plan-pack <name> --workspace <directory> [--revision <full-sha>]
 node skills.js install-pack <name> --workspace <directory> --revision <approved-full-sha> --yes
+
+node skills.js plan-pack <name> --scope personal [--revision <full-sha>]
+node skills.js install-pack <name> --scope personal --revision <approved-full-sha> --yes
 ```
 
-Preview resolves one Azure/git-ape commit and lists exact member files, destinations, and conflicts without writes.
+Ask **"This project only" vs "All my projects"** before asking for a project folder.
+For this project, resolve the current workspace if possible and ask for a folder only when needed.
+Workspace scope (the CLI default, or `--scope workspace`) requires an existing `--workspace` and resolves
+`<workspace>/.github/skills/`. Personal scope resolves `os.homedir()/.copilot/skills/` automatically,
+requires no project or raw path question, and rejects `--workspace`.
+Invalid scopes and ambiguous combinations fail before network access or writes.
+
+Preview resolves one Azure/git-ape commit and lists scope, exact member files, destinations, and conflicts without writes,
+even if the personal root does not yet exist.
 The pinned source manifest must validate and match the registry.
-Approve that commit, complete member list, and destination before installation. Installation repeats validation,
+Approve that full commit SHA, complete member list, files, scope, and resolved destination before installation using the same scope options. Installation repeats validation,
 downloads and verifies every file before any final copy, never overwrites, and records pack membership in each
 member's `.git-ape-provenance.json`. Failures roll back only newly created member directories and report cleanup errors.
-Scripts and dependencies are never executed. Installation is workspace-only; reload or start a new session to discover skills.
+Scripts and dependencies are never executed. Both scopes install file-based skills, not a global plugin or App sidebar groups.
+Discovery depends on client support; reload or start a new session and verify discovery before claiming skills are active.
 Older registries without a `packs` array remain supported.
 
 To contribute, copy [the pack scaffold](https://github.com/Azure/git-ape/blob/main/.github/templates/SKILL_PACK.template.json),

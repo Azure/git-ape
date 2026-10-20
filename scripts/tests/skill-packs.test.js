@@ -128,6 +128,7 @@ test('successful installation stages all files before final writes and records m
     const provenance = JSON.parse(fs.readFileSync(path.join(destination, '.git-ape-provenance.json')));
     assert.deepEqual(provenance, {
       repository: 'Azure/git-ape', revision, skill: skills[index].name, sourcePath: skills[index].path,
+      scope: 'workspace', destination,
       pack: pack.name, packSourcePath: `.github/skill-packs/${pack.name}/pack.json`,
     });
   }
@@ -281,4 +282,136 @@ test('rollback cleanup errors are surfaced instead of hiding partial installatio
   });
   assert.throws(() => install(root), /Copy failed; cleanup failed:.*Access denied/);
   mocked.mock.restore();
+});
+
+test('personal pack preview resolves all members without a workspace or writes to a missing root', (t) => {
+  const home = directory(t);
+  const { api } = fixture();
+  const result = planPack(pack.name, undefined, { scope: 'personal', homedir: () => home, api });
+  assert.equal(result.scope, 'personal');
+  assert.equal(result.destinationRoot, path.join(home, '.copilot', 'skills'));
+  assert.equal(result.revision, revision);
+  assert.deepEqual(result.pack.skills, pack.skills);
+  assert.deepEqual(result.members.map((member) => member.destination),
+    skills.map((skill) => path.join(result.destinationRoot, skill.name)));
+  assert.ok(result.members.every((member) => member.files.length === 3));
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('personal pack install stages all members before final writes and records personal pack provenance', (t) => {
+  const home = directory(t);
+  const root = path.join(home, '.copilot', 'skills');
+  const { api } = fixture({
+    beforeBlob: () => {
+      for (const skill of skills) assert.equal(fs.existsSync(path.join(root, skill.name)), false);
+    },
+  });
+  const result = installPack(pack.name, undefined, {
+    scope: 'personal', homedir: () => home, api, approved: true, revision,
+  });
+  assert.equal(result.scope, 'personal');
+  assert.equal(result.destinationRoot, root);
+  assert.deepEqual(result.destinations, skills.map((skill) => path.join(root, skill.name)));
+  for (const destination of result.destinations) {
+    const provenance = JSON.parse(fs.readFileSync(path.join(destination, '.git-ape-provenance.json')));
+    assert.equal(provenance.scope, 'personal');
+    assert.equal(provenance.destination, destination);
+    assert.equal(provenance.pack, pack.name);
+    assert.equal(provenance.revision, revision);
+    assert.ok(fs.existsSync(path.join(destination, 'scripts', 'check.js')));
+  }
+  assert.deepEqual(fs.readdirSync(root).sort(), pack.skills);
+});
+
+test('pack scope defaults to workspace and rejects invalid, ambiguous or missing workspace targets before networking', (t) => {
+  const home = directory(t);
+  const { api } = fixture();
+  const implicit = planPack(pack.name, home, { api });
+  assert.equal(implicit.scope, 'workspace');
+  assert.equal(implicit.destinationRoot, path.join(home, '.github', 'skills'));
+  assert.deepEqual(planPack(pack.name, home, { scope: 'workspace', api }), implicit);
+  const offline = () => { throw new Error('Unexpected network'); };
+  for (const action of [planPack, installPack]) {
+    const options = { api: offline, approved: true, revision, homedir: () => home };
+    for (const scope of ['', 'global', null]) {
+      assert.throws(() => action(pack.name, home, { ...options, scope }), /Scope must be/);
+    }
+    assert.throws(() => action(pack.name, home, { ...options, scope: 'personal' }), /cannot be combined/);
+    assert.throws(() => action(pack.name, undefined, options), /requires --workspace/);
+    assert.throws(() => action(pack.name, path.join(home, 'absent'), options), /Workspace does not exist/);
+  }
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('personal packs still require approval and a pinned full SHA without creating the root', (t) => {
+  const home = directory(t);
+  const options = { scope: 'personal', homedir: () => home, api: () => { throw new Error('Unexpected network'); } };
+  assert.throws(() => installPack(pack.name, undefined, { ...options, revision }), /explicit approval/);
+  for (const invalid of [undefined, '', 'main', 'a'.repeat(39), 'A'.repeat(40)]) {
+    assert.throws(() => installPack(pack.name, undefined, {
+      ...options, approved: true, revision: invalid,
+    }), /pinned full/);
+  }
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('personal pack conflicts preserve existing skills and prevent all final member writes', (t) => {
+  for (const obstacle of ['existing', 'case', 'symlink']) {
+    const home = directory(t);
+    const root = path.join(home, '.copilot', 'skills');
+    const destination = path.join(root, obstacle === 'case' ? 'Member-Two' : 'member-two');
+    fs.mkdirSync(root, { recursive: true });
+    if (obstacle === 'symlink') {
+      fs.symlinkSync(path.join(home, 'missing-target'), destination, process.platform === 'win32' ? 'junction' : 'dir');
+    } else {
+      fs.mkdirSync(destination);
+      fs.writeFileSync(path.join(destination, 'keep'), 'keep');
+    }
+    const options = { scope: 'personal', homedir: () => home, ...fixture(), revision };
+    assert.match(planPack(pack.name, undefined, options).conflicts.join(), /collision|overwrite/);
+    assert.throws(() => installPack(pack.name, undefined, { ...options, approved: true }), /collision|overwrite/);
+    assert.equal(fs.existsSync(path.join(root, 'member-one')), false);
+    assert.deepEqual(fs.readdirSync(root), [path.basename(destination)]);
+    if (obstacle === 'symlink') fs.unlinkSync(destination);
+    else assert.equal(fs.readFileSync(path.join(destination, 'keep'), 'utf8'), 'keep');
+  }
+});
+
+test('personal pack failed or corrupt later download leaves no final members or staging', (t) => {
+  for (const outcome of ['network', 'corrupt']) {
+    const home = directory(t);
+    const root = path.join(home, '.copilot', 'skills');
+    let count = 0;
+    const { api } = fixture({
+      blobResponse: (endpoint, blobs) => {
+        if (++count < 5) return blobs.get(endpoint.slice('git/blobs/'.length));
+        if (outcome === 'network') throw new Error('Network failure');
+        return { encoding: 'base64', content: Buffer.from('corrupt').toString('base64') };
+      },
+    });
+    assert.throws(() => installPack(pack.name, undefined, {
+      scope: 'personal', homedir: () => home, api, revision, approved: true,
+    }), /Network failure|integrity check/);
+    assert.deepEqual(fs.readdirSync(root), []);
+  }
+});
+
+test('personal pack final-copy failure rolls back only owned directories and keeps unrelated content', (t) => {
+  const home = directory(t);
+  const root = path.join(home, '.copilot', 'skills');
+  const unrelated = path.join(root, 'unrelated');
+  fs.mkdirSync(unrelated, { recursive: true });
+  fs.writeFileSync(path.join(unrelated, 'keep'), 'keep');
+  const copy = fs.cpSync;
+  let count = 0;
+  t.mock.method(fs, 'cpSync', (...args) => {
+    if (++count === 2) throw new Error('Final copy failed');
+    return copy(...args);
+  });
+  assert.throws(() => installPack(pack.name, undefined, {
+    scope: 'personal', homedir: () => home, ...fixture(), revision, approved: true,
+  }), /Final copy failed/);
+  assert.deepEqual(fs.readdirSync(root), ['unrelated']);
+  assert.equal(fs.readFileSync(path.join(unrelated, 'keep'), 'utf8'), 'keep');
 });

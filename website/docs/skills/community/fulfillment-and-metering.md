@@ -12,7 +12,7 @@ description: "Implements Azure Marketplace SaaS fulfillment APIs and metered bil
 > Implements Azure Marketplace SaaS fulfillment APIs and metered billing event flows for transactable offers.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install fulfillment-and-metering` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install fulfillment-and-metering` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details
