@@ -79,6 +79,30 @@ Brief overview of the skill.
 3. Step three
 ```
 
+## Contributing a Community Pack
+
+Packs collect independent community skills for explicit workspace installation.
+They are not merged skills, dependencies, global installs, or client UI groups.
+
+1. Copy `.github/templates/SKILL_PACK.template.json` to
+   `.github/skill-packs/<name>/pack.json`.
+2. Supply exactly `name`, `description`, `author`, and `skills`. The name must
+   match its directory, be portable lowercase kebab-case (at most 100 characters),
+   and not be a Windows reserved device name. Description and author must be
+   non-empty strings without control characters.
+3. List every member explicitly by its existing community skill name in `skills`.
+   Empty lists, duplicates, missing members, and first-party members are rejected.
+   Packs may share members; installation never overwrites an already installed skill.
+   No wildcard expansion or nested packs are supported.
+4. Run `node --test scripts/tests/*.test.js` and `node scripts/generate-docs.js`.
+   Commit the generated `.github/skills/registry.json` and changed website docs
+   with the manifest. The generator validates manifests and creates the pack catalog.
+5. Review installation using `plan-pack <name> --workspace <directory>` in the
+   `git-ape-skills` helper. Explicitly approve the pinned commit, full member list,
+   and destination before `install-pack <name> --workspace <directory>
+   --revision <approved-full-sha> --yes`. Installation copies all supporting files,
+   records pack membership per member, and never runs community code.
+
 ## Contributing a Community Skill
 
 Git-Ape maintains a **skill registry** so third parties can build and ship

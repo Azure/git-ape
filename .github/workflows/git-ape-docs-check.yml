@@ -6,6 +6,7 @@ on:
       - '.github/agents/**'
       - '.github/skills/**'
       - '.github/community-skills/**'
+      - '.github/skill-packs/**'
       - 'scripts/generate-docs.js'
       - '.github/workflows/git-ape-plan.yml'
       - '.github/workflows/git-ape-deploy.yml'
