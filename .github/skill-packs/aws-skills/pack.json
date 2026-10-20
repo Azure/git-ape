@@ -1,0 +1,28 @@
+{
+  "name": "aws-skills",
+  "description": "AWS service guidance for compute, storage, networking, identity, messaging, monitoring, security, and cost estimation.",
+  "author": "dawright22",
+  "skills": [
+    "aws-api-gateway",
+    "aws-bedrock",
+    "aws-cloudformation",
+    "aws-cloudwatch",
+    "aws-cognito",
+    "aws-cost-estimator",
+    "aws-dynamodb",
+    "aws-ec2",
+    "aws-ecs",
+    "aws-eks",
+    "aws-eventbridge",
+    "aws-iam",
+    "aws-lambda",
+    "aws-naming-research",
+    "aws-rds",
+    "aws-s3",
+    "aws-secrets-manager",
+    "aws-security-analyzer",
+    "aws-sns",
+    "aws-sqs",
+    "aws-step-functions"
+  ]
+}
