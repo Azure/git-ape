@@ -1,0 +1,8 @@
+{
+  "name": "example-pack",
+  "description": "Describe the capabilities this pack collects.",
+  "author": "Your name or GitHub handle",
+  "skills": [
+    "replace-with-existing-community-skill"
+  ]
+}

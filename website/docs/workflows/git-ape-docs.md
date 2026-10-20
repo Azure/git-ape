@@ -59,6 +59,7 @@ on:
       - '.github/agents/**'
       - '.github/skills/**'
       - '.github/community-skills/**'
+      - '.github/skill-packs/**'
       - '.github/workflows/**'
       - '.github/plugin/**'
       - 'docs/**'
