@@ -1,0 +1,171 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": "git-ape-onboarding",
+    "description": "Git-Ape self-hosted runner on Azure Container Instances (ACI). Provisions a container group that registers an ephemeral GitHub Actions runner with the label 'git-ape-runner' (override via parameter). Leave subnetId empty for a self-hosted (subscription) runner; set it to a delegated subnet for VNet injection. The GitHub credential is the only secret and must be sourced from Key Vault. Azure access uses an optional user-assigned managed identity, never stored keys.\n\nDeploy:\n  az group create -n rg-git-ape-runners -l eastus\n  az deployment group create -g rg-git-ape-runners -f template.json -p @parameters.json"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the runner. Defaults to the resource group location."
+      }
+    },
+    "runnerName": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Name of the container group / runner instance."
+      }
+    },
+    "githubOwnerRepo": {
+      "type": "string",
+      "metadata": {
+        "description": "GitHub target in <owner>/<repo> form for repo-scoped runners, or the org/owner name for org-scoped runners."
+      }
+    },
+    "runnerScope": {
+      "type": "string",
+      "defaultValue": "repo",
+      "allowedValues": [
+        "repo",
+        "org"
+      ],
+      "metadata": {
+        "description": "Runner registration scope."
+      }
+    },
+    "runnerLabels": {
+      "type": "string",
+      "defaultValue": "git-ape-runner",
+      "metadata": {
+        "description": "Comma-separated runner labels. Must include the value used for the GIT_APE_RUNNER_LABEL workflow variable."
+      }
+    },
+    "githubAccessToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Long-lived GitHub PAT used to register the runner. Requires a fine-grained PAT with Actions + Administration (Read & Write) permissions, or a classic PAT with repo scope. Do NOT use a short-lived registration token — it expires in ~1h. Source from Key Vault - never commit it."
+      }
+    },
+    "runnerImage": {
+      "type": "string",
+      "defaultValue": "ghcr.io/actions/actions-runner:latest",
+      "metadata": {
+        "description": "Runner container image. IMPORTANT: the stock image shown here neither includes az/gh/jq nor self-registers a runner. Build the custom image from ../Dockerfile (which adds those tools and a registration entrypoint) and push it to your ACR, then set this parameter to '<acr-name>.azurecr.io/git-ape-runner:latest'."
+      }
+    },
+    "userAssignedIdentityId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of a user-assigned managed identity for the runner to access Azure. Leave empty for none."
+      }
+    },
+    "subnetId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of a delegated subnet for VNet injection. Leave empty for a non-VNet (public-egress) runner."
+      }
+    },
+    "ephemeral": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Register the runner as ephemeral (one job per registration, then re-register). Recommended."
+      }
+    },
+    "cpuCores": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "vCPU cores for the runner container."
+      }
+    },
+    "memoryInGB": {
+      "type": "int",
+      "defaultValue": 4,
+      "metadata": {
+        "description": "Memory (GB) for the runner container."
+      }
+    }
+  },
+  "variables": {
+    "isOrgScope": "[equals(parameters('runnerScope'), 'org')]",
+    "hasIdentity": "[not(empty(parameters('userAssignedIdentityId')))]",
+    "isVnet": "[not(empty(parameters('subnetId')))]",
+    "scopeEnv": "[if(variables('isOrgScope'), createArray(createObject('name', 'ORG_NAME', 'value', parameters('githubOwnerRepo'))), createArray(createObject('name', 'REPO_URL', 'value', concat('https://github.com/', parameters('githubOwnerRepo')))))]",
+    "baseEnv": [
+      {
+        "name": "RUNNER_SCOPE",
+        "value": "[parameters('runnerScope')]"
+      },
+      {
+        "name": "RUNNER_NAME_PREFIX",
+        "value": "[parameters('runnerName')]"
+      },
+      {
+        "name": "LABELS",
+        "value": "[parameters('runnerLabels')]"
+      },
+      {
+        "name": "EPHEMERAL",
+        "value": "[if(parameters('ephemeral'), 'true', 'false')]"
+      },
+      {
+        "name": "DISABLE_AUTO_UPDATE",
+        "value": "true"
+      },
+      {
+        "name": "ACCESS_TOKEN",
+        "secureValue": "[parameters('githubAccessToken')]"
+      }
+    ],
+    "environmentVariables": "[concat(variables('scopeEnv'), variables('baseEnv'))]",
+    "identityBlock": "[if(variables('hasIdentity'), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(parameters('userAssignedIdentityId'), createObject())), createObject('type', 'None'))]",
+    "subnetIds": "[if(variables('isVnet'), createArray(createObject('id', parameters('subnetId'))), json('null'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('runnerName')]",
+      "location": "[parameters('location')]",
+      "identity": "[variables('identityBlock')]",
+      "properties": {
+        "sku": "Standard",
+        "osType": "Linux",
+        "restartPolicy": "Always",
+        "containers": [
+          {
+            "name": "[parameters('runnerName')]",
+            "properties": {
+              "image": "[parameters('runnerImage')]",
+              "resources": {
+                "requests": {
+                  "cpu": "[parameters('cpuCores')]",
+                  "memoryInGB": "[parameters('memoryInGB')]"
+                }
+              },
+              "environmentVariables": "[variables('environmentVariables')]"
+            }
+          }
+        ],
+        "subnetIds": "[variables('subnetIds')]"
+      }
+    }
+  ],
+  "outputs": {
+    "runnerId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.ContainerInstance/containerGroups', parameters('runnerName'))]"
+    },
+    "runnerLabel": {
+      "type": "string",
+      "value": "[parameters('runnerLabels')]"
+    }
+  }
+}
