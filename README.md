@@ -78,7 +78,11 @@ Use `/git-ape-skills search <capability>` to search the unified core and
 [community skill registry](https://azure.github.io/git-ape/docs/skills/registry).
 Community sources are reviewed through Azure/git-ape PRs but are not loaded
 with core. Explicitly approve `/git-ape-skills install <name>` to copy a selected
-skill and its supporting files from a pinned Git-Ape commit into your workspace.
+skill and its supporting files from a pinned Git-Ape commit. Choose **This project
+only** (`<workspace>/.github/skills/`) or **All my projects**
+(`os.homedir()/.copilot/skills/`), then approve the preview's resolved destination.
+Personal scope requires no project path and installs file-based skills, not a
+global plugin or App sidebar groups. Reload and verify client discovery before use.
 
 #### Option C: Copilot CLI plugin
 

@@ -12,7 +12,7 @@ description: "Designs and validates tenancy models (shared, pooled, siloed, hybr
 > Designs and validates tenancy models (shared, pooled, siloed, hybrid) with security, cost, and scale trade-offs.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install tenant-isolation-models` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install tenant-isolation-models` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

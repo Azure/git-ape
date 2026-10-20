@@ -2,8 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const os = require('node:os');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
-const { searchSkills, installSkill } = require('../../.github/skills/git-ape-skills/scripts/skills');
+const { searchSkills, planSkill, installSkill } = require('../../.github/skills/git-ape-skills/scripts/skills');
 const { buildSkillRegistry } = require('../generate-docs');
 
 const REVISION = 'a'.repeat(40);
@@ -142,4 +144,123 @@ test('core plugin and VSIX do not expose community source as executable skills',
   assert.ok(extension.contributes.chatSkills.every((skill) => !skill.path.includes('community-skills')));
   assert.match(fs.readFileSync(path.join(root, 'extension', '.vscodeignore'), 'utf8'),
     /^\.github\/community-skills\/\*\*$/m);
+});
+
+test('single preview defaults to workspace, supports explicit workspace, and requires an existing project', (t) => {
+  const root = workspace(t);
+  const { api } = mockApi();
+  const implicit = planSkill(community.name, root, { api });
+  assert.deepEqual(planSkill(community.name, root, { api, scope: 'workspace' }), implicit);
+  assert.equal(implicit.scope, 'workspace');
+  assert.equal(implicit.destinationRoot, path.join(root, '.github', 'skills'));
+  assert.equal(implicit.members[0].destination, path.join(implicit.destinationRoot, community.name));
+  assert.deepEqual(fs.readdirSync(root), []);
+  const offline = () => { throw new Error('Unexpected network'); };
+  assert.throws(() => planSkill(community.name, undefined, { api: offline }), /requires --workspace/);
+  assert.throws(() => planSkill(community.name, path.join(root, 'missing'), { api: offline }), /Workspace does not exist/);
+  assert.throws(() => installSkill(community.name, path.join(root, 'missing'), {
+    api: offline, approved: true,
+  }), /Workspace does not exist/);
+});
+
+test('personal single preview uses os.homedir without a project and makes no writes to a missing root', (t) => {
+  const home = workspace(t);
+  t.mock.method(os, 'homedir', () => home);
+  const { api, calls } = mockApi();
+  const result = planSkill(community.name, undefined, { scope: 'personal', api });
+  assert.equal(result.scope, 'personal');
+  assert.equal(result.destinationRoot, path.join(home, '.copilot', 'skills'));
+  const member = result.members[0];
+  assert.equal(member.destination, path.join(result.destinationRoot, community.name));
+  assert.equal(member.files.length, 3);
+  assert.equal(member.files[0].destination, path.join(member.destination, 'SKILL.md'));
+  assert.equal(member.provenanceFile, path.join(member.destination, '.git-ape-provenance.json'));
+  assert.equal(calls.some((call) => call.startsWith('git/blobs/')), false);
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('personal single installation creates its root only after approval and records scope and destination', (t) => {
+  const home = workspace(t);
+  const options = { scope: 'personal', homedir: () => home, ...mockApi() };
+  assert.throws(() => installSkill(community.name, undefined, options), /explicit approval/);
+  assert.deepEqual(fs.readdirSync(home), []);
+  const result = installSkill(community.name, undefined, { ...options, approved: true, revision: REVISION });
+  assert.equal(result.scope, 'personal');
+  assert.equal(result.destinationRoot, path.join(home, '.copilot', 'skills'));
+  assert.equal(result.destination, path.join(result.destinationRoot, community.name));
+  assert.ok(fs.existsSync(path.join(result.destination, 'scripts', 'check.js')));
+  const provenance = JSON.parse(fs.readFileSync(path.join(result.destination, '.git-ape-provenance.json')));
+  assert.equal(provenance.scope, 'personal');
+  assert.equal(provenance.destination, result.destination);
+  assert.equal(provenance.revision, REVISION);
+  assert.deepEqual(fs.readdirSync(result.destinationRoot), [community.name]);
+  assert.throws(() => installSkill(community.name, undefined, { ...options, approved: true }), /overwrite/);
+});
+
+test('scope validation rejects invalid and ambiguous single targets before network access or writes', (t) => {
+  const home = workspace(t);
+  const api = () => { throw new Error('Unexpected network'); };
+  for (const action of [planSkill, installSkill]) {
+    for (const scope of ['', 'global', 'PERSONAL', null]) {
+      assert.throws(() => action(community.name, home, { scope, api, approved: true }), /Scope must be/);
+    }
+    for (const project of [home, '']) {
+      assert.throws(() => action(community.name, project, {
+        scope: 'personal', homedir: () => home, api, approved: true,
+      }), /cannot be combined/);
+    }
+  }
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('CLI parses scope for previews and installs and rejects bad options without networking', (t) => {
+  const home = workspace(t);
+  const helper = path.resolve(__dirname, '../../.github/skills/git-ape-skills/scripts/skills.js');
+  for (const command of ['plan', 'install', 'plan-pack', 'install-pack']) {
+    const approval = command.startsWith('install') ? ['--yes', '--revision', REVISION] : [];
+    for (const [options, message] of [
+      [['--scope', 'personal', '--workspace', home], /cannot be combined/],
+      [['--scope', 'global'], /Scope must be/],
+      [['--scope', 'personal', '--scope', 'workspace', '--workspace', home], /--scope must only be specified once/],
+      [['--scope', 'workspace'], /requires --workspace/],
+      [[], /requires --workspace/],
+      [['--scope'], /--scope requires a value/],
+    ]) {
+      const result = spawnSync(process.execPath, [helper, command, community.name, ...options, ...approval], {
+        encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home },
+      });
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, message);
+    }
+  }
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test('personal single download failure cleans staging without installing files', (t) => {
+  const home = workspace(t);
+  const root = path.join(home, '.copilot', 'skills');
+  assert.throws(() => installSkill(community.name, undefined, {
+    scope: 'personal', homedir: () => home, approved: true, ...mockApi({ failBlob: true }),
+  }), /Network failure/);
+  assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test('personal root and parent symlinks, files and case collisions are rejected', (t) => {
+  for (const obstacle of ['symlink', 'file', 'case']) {
+    const home = workspace(t);
+    const parent = path.join(home, '.copilot');
+    if (obstacle === 'symlink') {
+      const outside = path.join(home, 'outside');
+      fs.mkdirSync(outside);
+      fs.symlinkSync(outside, parent, process.platform === 'win32' ? 'junction' : 'dir');
+    } else if (obstacle === 'file') fs.writeFileSync(parent, 'keep');
+    else fs.mkdirSync(path.join(home, '.Copilot'));
+    const api = () => { throw new Error('Unexpected network'); };
+    for (const action of [planSkill, installSkill]) {
+      assert.throws(() => action(community.name, undefined, {
+        scope: 'personal', homedir: () => home, api, approved: true,
+      }), /real directories|Case collision/);
+    }
+    if (obstacle === 'symlink') fs.unlinkSync(parent);
+  }
 });

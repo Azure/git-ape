@@ -479,6 +479,20 @@
       "source": null
     },
     {
+      "name": "csd-assessment-report",
+      "tier": "community",
+      "description": "Assesses ISV readiness for Microsoft Solutions Partner with Certified Software Designations (CSD). Evaluates Marketplace readiness, technical interoperability, customer success metrics, and Industry AI alignment. Generates a print-ready HTML report (save as PDF). Use when assessing CSD readiness for Azure, Business Applications, Modern Work, Security, or Industry AI designations.",
+      "path": ".github/community-skills/csd-assessment-report",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/csd-assessment-report",
+      "userInvocable": true,
+      "bundled": false,
+      "author": "dawright22",
+      "license": null,
+      "version": null,
+      "maturity": "experimental",
+      "source": null
+    },
+    {
       "name": "deployment-blueprints",
       "tier": "community",
       "description": "Provides implementation blueprints and deployment sequencing for Azure SaaS reference topologies.",
@@ -523,7 +537,7 @@
     {
       "name": "git-ape-skills",
       "tier": "first-party",
-      "description": "Search Git-Ape core skills, community skills, and named packs, or explicitly install community skills and packs from Azure/git-ape into a workspace. USE FOR: find a skill, search capabilities, list community skills or packs, install a community skill or pack. DO NOT USE FOR: automatically installing search results, global installation, or invoking skills not available in the current session.",
+      "description": "Search Git-Ape core skills, community skills, and named packs, or explicitly install community skills and packs from Azure/git-ape for this project or all your projects. USE FOR: find a skill, search capabilities, list community skills or packs, install a community skill or pack. DO NOT USE FOR: automatically installing search results, global plugin installation, or invoking skills not available in the current session.",
       "path": ".github/skills/git-ape-skills",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/git-ape-skills",
       "userInvocable": true,
@@ -624,6 +638,20 @@
       "description": "Bootstraps and customizes the Azure Commercial Marketplace SaaS Accelerator as a starting point for transactable SaaS offers.",
       "path": ".github/community-skills/saas-accelerator-bootstrap",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/saas-accelerator-bootstrap",
+      "userInvocable": true,
+      "bundled": false,
+      "author": "dawright22",
+      "license": null,
+      "version": null,
+      "maturity": "experimental",
+      "source": null
+    },
+    {
+      "name": "saas-assessment-report",
+      "tier": "community",
+      "description": "Orchestrates a comprehensive SaaS platform assessment against WAF, CAF, CIS, NIST, PCI-DSS, HIPAA, SOC 2, FedRAMP, and SaaS maturity frameworks. Generates a print-ready HTML report (save as PDF from browser). Use when the user wants to assess a SaaS repo, generate a compliance report, or audit an Azure SaaS platform.",
+      "path": ".github/community-skills/saas-assessment-report",
+      "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/saas-assessment-report",
       "userInvocable": true,
       "bundled": false,
       "author": "dawright22",

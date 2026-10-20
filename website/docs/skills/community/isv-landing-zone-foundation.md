@@ -12,7 +12,7 @@ description: "Builds the Azure ISV landing zone baseline for identity, networkin
 > Builds the Azure ISV landing zone baseline for identity, networking, governance, security, and environment separation.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install isv-landing-zone-foundation` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install isv-landing-zone-foundation` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details

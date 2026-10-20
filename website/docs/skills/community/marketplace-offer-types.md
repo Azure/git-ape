@@ -12,7 +12,7 @@ description: "Provides offer-type decision guidance and implementation pathways 
 > Provides offer-type decision guidance and implementation pathways for Azure Marketplace and related commercial offer models.
 
 :::info[Third-party community skill]
-This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install marketplace-offer-types` for explicit workspace installation. Review is not a guarantee of safety.
+This skill is reviewed through Azure/git-ape PRs and maintained by its listed author. It is not bundled or activated with core. See the [Skill Registry](../registry) and use `/git-ape-skills install marketplace-offer-types` for explicit project or personal installation. Review is not a guarantee of safety.
 :::
 
 ## Details
