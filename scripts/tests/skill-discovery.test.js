@@ -1,6 +1,5 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const test = require('node:test');
@@ -18,7 +17,7 @@ const registry = { skills: [
 ] };
 
 function workspace(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'git-ape-test-'));
+  const root = fs.mkdtempSync(path.join(__dirname, '.git-ape-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

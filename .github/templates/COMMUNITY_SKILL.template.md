@@ -7,6 +7,9 @@ description: "Copy this file to .github/community-skills/<slug>/SKILL.md and rep
 
 <!--
   HOW TO USE THIS TEMPLATE
+  This is the required scaffold for new community skills. The authoring source
+  is `.github/community-skills/<name>/SKILL.md`, not `.github/skills/` or the
+  generated pages under `website/docs/skills/community/`.
   1. Copy this file to `.github/community-skills/<your-slug>/SKILL.md`
      (rename, drop `.template`). Directory name must be kebab-case and
      must match the `name:` field below exactly.
@@ -24,6 +27,9 @@ description: "Copy this file to .github/community-skills/<slug>/SKILL.md and rep
   6. Replace every <!-- TODO --> marker in the body. This skill goes through
      the same PR review and CI checks (structure validation, markdownlint,
      script lint if it has scripts) as a first-party skill.
+  7. Keep the When to Use, Procedure, Outputs, Constraints, and Attribution
+     sections. Make Attribution match the metadata and provide a support route.
+     Keep supporting scripts/references inside this skill's directory.
 
   Required frontmatter for the real SKILL.md (replace the title/description
   block above):
