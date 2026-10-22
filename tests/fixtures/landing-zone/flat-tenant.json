@@ -1,0 +1,84 @@
+{
+  "_comment": "Test fixture: a flat tenant (no hub, no shared services, no policies). Use for skill evals and downstream consumer tests. Sanitized from a real discovery run. Expected detection: confidence=none.",
+  "discoveredAt": "2026-05-11T03:28:33Z",
+  "discoveryMethod": "auto",
+  "landingZoneDetection": {
+    "isLandingZone": false,
+    "confidence": "none",
+    "confidenceScore": 0,
+    "reference": "https://azure.github.io/Azure-Landing-Zones/accelerator/",
+    "matchedSignals": [],
+    "missingSignals": [
+      "alz-top-level-mgs (0/4)",
+      "platform-children (0/3)",
+      "alz-lz-archetypes (Corp/Online MGs)",
+      "platform-subscriptions (0/3+)",
+      "hub-spoke-topology",
+      "hub-in-connectivity-sub",
+      "alz-canonical-policies"
+    ],
+    "checks": {
+      "topLevelMgs": { "platform": false, "landingZones": false, "sandbox": false, "decommissioned": false },
+      "platformChildren": { "connectivity": false, "identity": false, "management": false },
+      "lzChildren": { "corp": false, "online": false },
+      "platformSubscriptionCount": 0,
+      "hubSpoke": false,
+      "hubInConnectivitySubscription": false,
+      "knownAlzPolicies": []
+    }
+  },
+  "managementGroups": {
+    "root": "Tenant Root Group",
+    "hasManagementGroups": true,
+    "hierarchy": [
+      {
+        "id": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000000",
+        "name": "00000000-0000-0000-0000-000000000000",
+        "displayName": "Tenant Root Group",
+        "role": "root",
+        "parentId": null
+      }
+    ]
+  },
+  "subscriptions": {
+    "platform": [],
+    "landingZones": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "example-landing-zone",
+        "role": "landing-zone",
+        "mgPath": "",
+        "environment": "unknown"
+      }
+    ]
+  },
+  "sharedServices": {
+    "logAnalytics": {},
+    "containerRegistry": {},
+    "keyVault": {}
+  },
+  "networking": {
+    "topology": "flat",
+    "hubs": [],
+    "privateDnsZones": [
+      "privatelink.vaultcore.azure.net"
+    ],
+    "peerings": []
+  },
+  "policies": {
+    "denyEffects": [],
+    "auditEffects": [],
+    "allowedLocations": [],
+    "requiredTags": [],
+    "alzCanonicalAssignments": []
+  },
+  "currentIdentity": {
+    "user": "user@example.com",
+    "tenantId": "00000000-0000-0000-0000-000000000000",
+    "currentSubscription": {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "example-landing-zone"
+    },
+    "roles": []
+  }
+}
