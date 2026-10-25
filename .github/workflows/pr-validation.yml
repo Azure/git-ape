@@ -32,6 +32,9 @@ jobs:
       - name: Test skill and pack discovery and opt-in installation
         run: node --test scripts/tests/*.test.js
 
+      - name: Test workshop deck PR fallback
+        run: node --test scripts/tests/deck-build-workflow.test.js
+
   markdownlint:
     name: "Markdown Lint"
     runs-on: ubuntu-latest
