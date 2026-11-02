@@ -32,6 +32,7 @@
 | **@azure-policy-advisor** | Assesses ARM templates against Azure Policy frameworks (CIS, NIST). Recommends policy assignments. |
 | **@azure-iac-exporter** | Exports existing Azure resources to ARM templates. Brings live infrastructure under IaC management. |
 | **@git-ape-onboarding** | Sets up OIDC, RBAC, GitHub environments, and secrets for CI/CD pipeline integration. |
+| **@azure-requirements-gatherer** | Sub-agent (not user-invocable) used by `@git-ape`. Asks guided questions, validates subscription access, and checks naming conflicts and existing resources. Experimental. |
 
 ## Git-Ape Skills
 
@@ -48,3 +49,8 @@
 | `/azure-policy-advisor` | Assesses templates against compliance frameworks and recommends policies. |
 | `/azure-resource-visualizer` | Generates Mermaid architecture diagrams from deployed resource groups. |
 | `/git-ape-onboarding` | Guided setup of OIDC, RBAC, GitHub environments, and secrets. |
+| `/azure-resource-availability` | Queries live Azure APIs for VM SKU restrictions, runtime/Kubernetes version support, API version compatibility, and quota before generation or deployment. |
+| `/azure-rest-api-reference` | Looks up ARM/REST property schemas, required fields, and stable API versions for a resource type before templates are written. No Azure connection required. |
+| `/azure-stack-deploy` | Deploys a prepared deployment as a subscription-scoped Azure Deployment Stack (`az stack sub create --action-on-unmanage deleteAll`) and writes `state.json`, matching the CI deploy workflow. |
+| `/azure-stack-destroy` | Deletes a deployment's Deployment Stack by ID using `state.json`, purges soft-deleted Key Vault / Cognitive Services, and matches the CI destroy workflow. |
+| `/git-ape-skills` | Searches core and community skills and packs; installs community skills only on explicit request, for one project or all projects. |
