@@ -635,7 +635,7 @@
     {
       "name": "saas-accelerator-bootstrap",
       "tier": "community",
-      "description": "Bootstraps and customizes the Azure Commercial Marketplace SaaS Accelerator as a starting point for transactable SaaS offers.",
+      "description": "Builds, updates, extends, or deploys a live Microsoft commercial marketplace SaaS integration, using the Commercial Marketplace SaaS Accelerator (fresh upstream main, three-way reconciliation) or a from-scratch implementation.",
       "path": ".github/community-skills/saas-accelerator-bootstrap",
       "docsUrl": "https://azure.github.io/git-ape/docs/skills/community/saas-accelerator-bootstrap",
       "userInvocable": true,
