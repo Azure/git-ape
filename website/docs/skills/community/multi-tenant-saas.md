@@ -35,7 +35,9 @@ Use this skill as the top-level entrypoint: `/git-ape:multi-tenant-saas`.
 ## What this skill does
 
 1. Collects platform requirements (tenant model, scale profile, compliance, regions).
-2. Maps requirements to ISV landing zone and SaaS Accelerator implementation tracks.
+2. Maps requirements to ISV landing zone and SaaS implementation tracks. For the marketplace
+   integration, asks the user to choose the path explicitly (existing or new; Accelerator or
+   from scratch) and never infers it; routes the work to `saas-accelerator-bootstrap`.
 3. Produces a staged execution plan:
    - Foundation and landing zone
    - SaaS platform build-out
