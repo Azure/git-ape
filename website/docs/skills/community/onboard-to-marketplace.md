@@ -36,7 +36,11 @@ Use this skill to move a ready SaaS platform into a publishable Azure Marketplac
 
 1. Publisher and Partner Center readiness checks.
 2. Offer setup (listing, plans, pricing, legal).
-3. Technical validation inputs (fulfillment, landing page, webhooks).
+3. Technical validation inputs (fulfillment, landing page, webhooks) from a **live** integration
+   only: no demo, sandbox, or simulator paths. Use `saas-accelerator-bootstrap` and
+   `fulfillment-and-metering` for implementation, and the same readiness labels
+   (`Scaffolding only`, `Implementation incomplete`, `Ready for publisher validation`,
+   `Eligible for live release review`).
 4. Private audience testing and certification prep.
 5. Final launch checklist and operational handoff.
 
