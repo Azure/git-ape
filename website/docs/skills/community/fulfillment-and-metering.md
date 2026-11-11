@@ -30,17 +30,31 @@ This skill is reviewed through Azure/git-ape PRs and maintained by its listed au
 
 # Fulfillment and Metering
 
-Builds marketplace transaction flows from subscription to usage reporting.
+Builds **live** marketplace transaction flows from subscription to usage reporting. No demo,
+sandbox, simulator, or runtime fallback; mocks are test-only and unreachable from deployed
+composition. Never ask for or store secrets, credentials, purchase tokens, or customer data.
+Microsoft Learn is authoritative; a contract manifest is evidence only.
 
 ## Workflow
 
-- Resolve marketplace purchase/subscription events.
-- Track entitlement and plan state changes.
-- Emit and reconcile metering events.
-- Handle retries, idempotency, and audit logs.
+- **Landing page (LAND):** do not persist the purchase token; call Resolve server-side; correlate once (one-time use).
+- **Lifecycle (LIFE):** verify before activation; use explicit state transitions; keep entitlement and plan state consistent.
+- **Webhooks (WEB):** authenticated ingress; durable inbox with deduplication; verify with the Subscription API before mutating state; atomic processing; durable acknowledgement.
+- **Data integrity (DATA-01 to 05)** and **security (SEC-01 to 07):** keep publisher identity separate from buyer identity, tokens server-side, timestamps in UTC.
+- **Metering (MTR-01 to 08):** only when configured or requested; emit and reconcile usage events with retries and idempotency. Add a metering UI only when explicitly requested.
+- Handle retries, idempotency, and audit logs; cover with TEST-01 to 08.
 
 ## Deliverables
 
-- Fulfillment API integration checklist.
-- Meter dimensions and event schema.
+- Fulfillment API integration checklist (LAND, LIFE, WEB).
+- Meter dimensions and event schema (when metering applies).
 - Financial reconciliation and exception handling process.
+- Readiness label, exactly one of: `Scaffolding only`, `Implementation incomplete`, `Ready for publisher validation`, `Eligible for live release review`.
+
+## References
+
+- [SaaS fulfillment APIs v2](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-apis)
+- [Subscription lifecycle](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-life-cycle)
+- [Webhook](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-webhook)
+- [Metered billing](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/saas-metered-billing)
+- [Marketplace metering service APIs](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-metering-service-apis)
