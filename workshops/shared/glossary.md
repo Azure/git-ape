@@ -30,6 +30,7 @@
 | **@git-ape** | Main orchestrator. Coordinates the full deployment workflow: gather requirements, generate template, validate security, deploy, test. |
 | **@azure-principal-architect** | Reviews deployments against the WAF five pillars. Provides architecture recommendations and trade-off analysis. |
 | **@azure-policy-advisor** | Assesses ARM templates against Azure Policy frameworks (CIS, NIST). Recommends policy assignments. |
+| **@azure-requirements-gatherer** | Gathers deployment requirements through guided questions, validates subscription access, and checks for resource naming conflicts before template generation. |
 | **@azure-iac-exporter** | Exports existing Azure resources to ARM templates. Brings live infrastructure under IaC management. |
 | **@git-ape-onboarding** | Sets up OIDC, RBAC, GitHub environments, and secrets for CI/CD pipeline integration. |
 
@@ -48,3 +49,8 @@
 | `/azure-policy-advisor` | Assesses templates against compliance frameworks and recommends policies. |
 | `/azure-resource-visualizer` | Generates Mermaid architecture diagrams from deployed resource groups. |
 | `/git-ape-onboarding` | Guided setup of OIDC, RBAC, GitHub environments, and secrets. |
+| `/azure-resource-availability` | Queries live Azure APIs to check SKU restrictions, runtime/Kubernetes version support, API versions, and quota before templates are generated or deployed. |
+| `/azure-rest-api-reference` | Looks up Azure REST API / ARM reference docs (property schemas, required fields, stable API versions) so templates are never written from memory. No Azure connection required. |
+| `/azure-stack-deploy` | Deploys a prepared deployment artifact as a subscription-scoped Azure Deployment Stack and writes `state.json`, matching the CI deploy workflow. |
+| `/azure-stack-destroy` | Tears down a deployment by ID by deleting its Deployment Stack (`deleteAll`), then purges soft-deleted resources. Requires `state.json`. |
+| `/git-ape-skills` | Searches core skills, community skills, and packs; installs community skills or packs only on explicit request. |
