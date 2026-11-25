@@ -252,7 +252,12 @@ function executeInstall(plan, api) {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.mkdirSync(destination);
       created.push({ destination, stat: fs.lstatSync(destination) });
-      fs.cpSync(path.join(staging, skill.name), destination, { recursive: true, errorOnExist: true, force: false });
+      const source = path.join(staging, skill.name);
+      for (const entry of fs.readdirSync(source)) {
+        fs.cpSync(path.join(source, entry), path.join(destination, entry), {
+          recursive: true, errorOnExist: true, force: false,
+        });
+      }
     }
     result = {
       revision: plan.revision, scope: plan.scope, destinationRoot: plan.destinationRoot,

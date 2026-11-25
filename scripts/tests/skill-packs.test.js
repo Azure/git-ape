@@ -262,14 +262,31 @@ test('final-copy failure rolls back only owned member directories', (t) => {
   fs.mkdirSync(unrelated, { recursive: true });
   fs.writeFileSync(path.join(unrelated, 'keep'), 'keep');
   const original = fs.cpSync;
-  let copies = 0;
   t.mock.method(fs, 'cpSync', (...args) => {
-    if (++copies === 2) throw new Error('Final copy failed');
+    if (args[1].includes(`${path.sep}member-two${path.sep}`)) {
+      assert.ok(fs.existsSync(path.join(path.dirname(unrelated), 'member-one', 'SKILL.md')));
+      throw new Error('Final copy failed');
+    }
     return original(...args);
   });
   assert.throws(() => install(root), /Final copy failed/);
   assert.deepEqual(fs.readdirSync(path.dirname(unrelated)), ['unrelated']);
   assert.equal(fs.readFileSync(path.join(unrelated, 'keep'), 'utf8'), 'keep');
+});
+
+test('final copy refuses to overwrite an entry created after destination checks', (t) => {
+  const root = directory(t);
+  const original = fs.cpSync;
+  t.mock.method(fs, 'cpSync', (...args) => {
+    fs.writeFileSync(args[1], 'unexpected content', { flag: 'wx' });
+    try {
+      return original(...args);
+    } finally {
+      assert.equal(fs.readFileSync(args[1], 'utf8'), 'unexpected content');
+    }
+  });
+  assert.throws(() => install(root), { code: 'ERR_FS_CP_EEXIST' });
+  assert.deepEqual(fs.readdirSync(path.join(root, '.github', 'skills')), []);
 });
 
 test('rollback cleanup errors are surfaced instead of hiding partial installation', (t) => {
@@ -404,9 +421,11 @@ test('personal pack final-copy failure rolls back only owned directories and kee
   fs.mkdirSync(unrelated, { recursive: true });
   fs.writeFileSync(path.join(unrelated, 'keep'), 'keep');
   const copy = fs.cpSync;
-  let count = 0;
   t.mock.method(fs, 'cpSync', (...args) => {
-    if (++count === 2) throw new Error('Final copy failed');
+    if (args[1].includes(`${path.sep}member-two${path.sep}`)) {
+      assert.ok(fs.existsSync(path.join(root, 'member-one', 'SKILL.md')));
+      throw new Error('Final copy failed');
+    }
     return copy(...args);
   });
   assert.throws(() => installPack(pack.name, undefined, {
