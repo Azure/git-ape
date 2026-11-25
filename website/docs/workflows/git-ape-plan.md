@@ -35,7 +35,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Detect changed deployments |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Steps** | 2 |
 
 ### `plan-local`
@@ -43,7 +43,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Plan Local: ${{ matrix.deployment_id }} |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Depends On** | `detect-deployments` |
 | **Steps** | 12 |
 
@@ -52,7 +52,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Plan Azure: ${{ matrix.deployment_id }} |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Depends On** | `detect-deployments` |
 | **Steps** | 8 |
 
@@ -61,7 +61,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Plan Comment: ${{ matrix.deployment_id }} |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Depends On** | `detect-deployments`, `plan-local`, `plan-azure` |
 | **Steps** | 3 |
 
@@ -103,7 +103,7 @@ concurrency:
 jobs:
   detect-deployments:
     name: Detect changed deployments
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       deployment_ids: ${{ steps.find.outputs.deployment_ids }}
       has_deployments: ${{ steps.find.outputs.has_deployments }}
@@ -152,7 +152,7 @@ jobs:
     name: "Plan Local: ${{ matrix.deployment_id }}"
     needs: detect-deployments
     if: needs.detect-deployments.outputs.has_deployments == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     strategy:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
@@ -440,7 +440,7 @@ jobs:
     name: "Plan Azure: ${{ matrix.deployment_id }}"
     needs: detect-deployments
     if: needs.detect-deployments.outputs.has_deployments == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     strategy:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}
@@ -624,7 +624,7 @@ jobs:
     name: "Plan Comment: ${{ matrix.deployment_id }}"
     needs: [detect-deployments, plan-local, plan-azure]
     if: always() && needs.detect-deployments.outputs.has_deployments == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     strategy:
       matrix:
         deployment_id: ${{ fromJson(needs.detect-deployments.outputs.deployment_ids) }}

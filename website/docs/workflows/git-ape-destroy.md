@@ -35,7 +35,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Detect destroy requests |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Steps** | 2 |
 
 ### `destroy`
@@ -43,7 +43,7 @@ This workflow is **shipped as a template** under `.github/skills/git-ape-onboard
 | Property | Value |
 |----------|-------|
 | **Display Name** | Destroy: ${{ matrix.deployment_id }} |
-| **Runs On** | `ubuntu-latest` |
+| **Runs On** | `${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}` |
 | **Environment** | `azure-destroy` |
 | **Depends On** | `detect-destroys` |
 | **Steps** | 9 |
@@ -98,7 +98,7 @@ concurrency:
 jobs:
   detect-destroys:
     name: Detect destroy requests
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       deployment_ids: ${{ steps.find.outputs.deployment_ids }}
       has_destroys: ${{ steps.find.outputs.has_destroys }}
@@ -188,7 +188,7 @@ jobs:
     name: "Destroy: ${{ matrix.deployment_id }}"
     needs: detect-destroys
     if: needs.detect-destroys.outputs.has_destroys == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GIT_APE_RUNNER_LABEL || 'ubuntu-latest' }}
     environment: azure-destroy
     strategy:
       matrix:
