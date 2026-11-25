@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.0] - 2026-11-25
+
+Changes since [v0.4.1](https://github.com/Azure/git-ape/releases/tag/v0.4.1):
+
+### Features
+
+- **skills:** add community skill and pack support, including AWS and Azure SaaS packs, skill discovery, and personal-scope installation (`0792719`, `0897442`, `c3dbf14`, `5a74c15`).
+- **skills:** add workspace-pinned installation for community skill packs (`3911299`).
+- **community skills:** add SaaS and CSD assessment reports, WIQD, and expanded marketplace onboarding, fulfillment-and-metering, multi-tenant SaaS, and SaaS Accelerator guidance (`b0a371b`, `3715104`, `79c2241`, `6c8a4c5`, `2677a30`, `e3b00e1`, `d936041`).
+
+### Improvements
+
+- **skills:** standardize community skill authoring, attribution, registry validation, and generated documentation (`ddcd684`, `f0ee2a4`, `303de79`, `41ca5cd`, `94a3efe`, `acf8f74`).
+
+### Bug Fixes
+
+- **skills:** copy staged files into existing owned directories during community skill installation (`1113bea`).
+
+### Dependencies
+
+- **website:** update React, Docusaurus dependencies, and security-related packages, including DOMPurify, fast-uri, postcss-selector-parser, follow-redirects, Joi, KaTeX, and Mermaid.
+
 ## [0.4.1] - 2026-10-14
 
 ### Bug Fixes
