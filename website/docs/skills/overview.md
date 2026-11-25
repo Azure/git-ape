@@ -91,6 +91,7 @@ Skills reviewed through PRs under `.github/community-skills/`. Not bundled with 
 | [Security And Compliance](./community/security-and-compliance) | Defines security architecture and compliance controls for multi-tenant SaaS, including identity, secrets, data protection, and auditability. | dawright22 | experimental | ✅ |
 | [Tenant Isolation Models](./community/tenant-isolation-models) | Designs and validates tenancy models (shared, pooled, siloed, hybrid) with security, cost, and scale trade-offs. | dawright22 | experimental | ✅ |
 | [Tenant Lifecycle Automation](./community/tenant-lifecycle-automation) | Implements automated tenant onboarding, provisioning, upgrade, suspension, and offboarding workflows. | dawright22 | experimental | ✅ |
+| [Wiqd](./community/wiqd) | Guide Microsoft 365 Copilot plugin development using the upstream Work IQ Dev Tools CLI. USE FOR: creating plugins, adding skills and connectors, source and package validation, provisioning, offline preview packaging, sharing, tenant publishing, and approved deletion. DO NOT USE FOR: querying Microsoft 365 work data, deploying Azure infrastructure, or public-store certification. INVOKES: wiqd CLI and official WIQD documentation. | dawright22 | experimental | ✅ |
 
 ## Skill Invocation in Deployment Flow
 
