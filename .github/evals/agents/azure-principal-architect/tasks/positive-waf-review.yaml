@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: positive-waf-review
+name: Positive — Production WAF architecture review
+description: Azure Principal Architect should review a concrete production design across all five WAF pillars.
+tags: [trigger, positive, mutable-by-agent]
+inputs:
+  prompt: |
+    Review this proposed production architecture before we deploy it: an
+    Azure App Service API in one region, Azure SQL Database with zone
+    redundancy disabled, a Storage Account using LRS, Key Vault reached over
+    its public endpoint, and Application Insights. We need 99.95% availability,
+    RTO of 60 minutes, RPO of 15 minutes, and we handle customer PII. Give us
+    the highest-priority changes, trade-offs, evidence gaps, and next steps.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-principal-architect/azure-principal-architect.agent.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the assistant's previous architecture review.
+
+        PASS only if the response satisfies ALL of:
+          1. Assesses Security, Reliability, Performance Efficiency, Cost
+             Optimization, and Operational Excellence.
+          2. Uses the stated SLA, RTO, RPO, and PII constraints and clearly
+             separates observed facts from assumptions or evidence gaps.
+          3. Gives prioritized, actionable Azure configuration changes and
+             explains at least two cross-pillar trade-offs.
+          4. Cites or explicitly points to current Microsoft documentation
+             that should be verified before production decisions.
+
+        If all criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list missing criteria.

@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: positive-function-plan-tradeoff
+name: Positive — Function App plan trade-off
+description: Azure Principal Architect should compare two plans against explicit workload constraints.
+tags: [trigger, positive, mutable-by-agent]
+inputs:
+  prompt: |
+    Perform an Azure architecture review, trade-off analysis, and design
+    validation using Microsoft best practices across Security, Reliability,
+    Performance, Cost, and Operational Excellence. Help us choose between
+    Azure Functions Consumption and Premium
+    for a customer-facing API. Traffic is bursty,
+    p95 latency must stay under 800 ms,
+    the app needs VNet access to a private database, deployments must avoid
+    downtime, and the monthly budget is tight. State any missing information,
+    compare the plans across the five WAF pillars, recommend one, and give
+    concrete validation steps.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-principal-architect/azure-principal-architect.agent.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        Grade the assistant's previous plan comparison.
+
+        PASS only if the response satisfies ALL of:
+          1. Compares Consumption and Premium across all five WAF pillars.
+          2. Uses latency, VNet, deployment, traffic, and budget constraints
+             rather than giving a generic feature list.
+          3. Makes a clear recommendation with explicit trade-offs and flags
+             missing workload facts that could change it.
+          4. Provides concrete next steps or tests and grounds claims in
+             current Microsoft documentation.
+
+        If all criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list missing criteria.
