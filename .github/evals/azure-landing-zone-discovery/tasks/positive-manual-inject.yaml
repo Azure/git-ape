@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+
+id: positive-manual-inject
+name: Positive — Manual landing-zone context injection
+description: User in a cross-tenant / air-gapped scenario knows the hub VNet, allowed regions, and shared services but cannot run discovery.
+tags: [trigger, positive]
+inputs:
+  prompt: "I can't query management groups from this workspace (cross-tenant). Can you populate landing-zone-context.json manually? Our hub VNet is /subscriptions/aaaa.../resourceGroups/rg-connectivity/providers/Microsoft.Network/virtualNetworks/vnet-hub-eastus, allowed regions are eastus and westus2, and we require tags `costcenter` and `owner` on every resource."
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/skills/azure-landing-zone-discovery/SKILL.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked to manually inject landing-zone context (hub VNet,
+        allowed locations, required tags) because they cannot run discovery.
+
+        PASS criteria — the response must contain ALL of:
+          1. References the `inject-lz.sh` script (or the manual-injection
+             procedure in the `azure-landing-zone-discovery` skill).
+          2. Maps the user's inputs to the correct flags / fields:
+             hub VNet ID → `--hub-vnet-id` (or `networking.hubVnetId`),
+             allowed regions → `--allowed-locations` (or `policies.allowedLocations`),
+             required tags → `--required-tags` (or `policies.requiredTags`).
+          3. Mentions writing `.azure/landing-zone-context.json` as output.
+          4. Does NOT silently try to run discovery (e.g., `az account
+             management-group list`) instead of the manual injection path —
+             the user explicitly said they can't.
+
+        If ALL four PASS criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

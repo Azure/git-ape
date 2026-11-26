@@ -55,6 +55,27 @@ Read compliance preferences from the `## Compliance & Azure Policy` section in `
 - **Enforcement mode** (Audit or Deny)
 - **Policy categories** (identity, networking, storage, compute, monitoring, tagging)
 
+**Also load landing zone context** if `.azure/landing-zone-context.json` exists (produced by `/azure-landing-zone-discovery`):
+
+```bash
+LZ_CONTEXT_FILE=".azure/landing-zone-context.json"
+if [[ -f "$LZ_CONTEXT_FILE" ]]; then
+  LZ_CONFIDENCE=$(jq -r '.landingZoneDetection.confidence // "unknown"' "$LZ_CONTEXT_FILE")
+  LZ_DENY_EFFECTS=$(jq -r '.policies.denyEffects[]? | .displayName // .name' "$LZ_CONTEXT_FILE")
+  LZ_AUDIT_EFFECTS=$(jq -r '.policies.auditEffects[]? | .displayName // .name' "$LZ_CONTEXT_FILE")
+  LZ_CANONICAL=$(jq -r '.policies.alzCanonicalAssignments[]?' "$LZ_CONTEXT_FILE")
+  LZ_ALLOWED_LOCATIONS=$(jq -r '.policies.allowedLocations[]?' "$LZ_CONTEXT_FILE")
+  LZ_REQUIRED_TAGS=$(jq -r '.policies.requiredTags[]?' "$LZ_CONTEXT_FILE")
+fi
+```
+
+Use this data in two ways:
+
+1. **Dedupe**: Any recommendation that matches a name in `denyEffects[]`, `auditEffects[]`, or `alzCanonicalAssignments[]` should be marked `✓ inherited` in Part 2 — do not re-recommend it.
+2. **Align defaults**: Use `allowedLocations[]` and `requiredTags[]` to seed Part 1 recommendations (region/tag policies) instead of guessing.
+
+**Confidence gating:** If `LZ_CONFIDENCE` is `low` or `none`, treat the LZ policy lists as informational. Do not rely on them as the source of truth — the tenant may not actually be ALZ-managed.
+
 If no compliance section exists in copilot-instructions.md, ask the user:
 
 ```

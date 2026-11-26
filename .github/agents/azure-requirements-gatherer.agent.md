@@ -117,6 +117,119 @@ User intent: Deploy Azure Function App
 - Ensure globally unique names for resources that require it
 - Follow organizational naming conventions
 
+### 0.7. Detect Landing Zone Context
+
+Check whether a landing zone context has been discovered for this workspace. The file is produced by the **azure-landing-zone-discovery** skill and lets this agent route workloads to the right subscription, warn on policy conflicts, and surface shared services.
+
+**Step 1 — read the context:**
+
+```bash
+LZ_CONTEXT_FILE=".azure/landing-zone-context.json"
+
+if [[ -f "$LZ_CONTEXT_FILE" ]]; then
+  DISCOVERED_AT=$(jq -r '.discoveredAt' "$LZ_CONTEXT_FILE")
+  # Stale-check (warn if > 7 days old)
+  AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "$DISCOVERED_AT" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$DISCOVERED_AT" +%s) ) / 86400 ))
+  [[ $AGE_DAYS -gt 7 ]] && echo "⚠️ Landing zone context is $AGE_DAYS days old — consider refreshing"
+
+  # Detection confidence (see azure-landing-zone-discovery skill, "Landing Zone Detection Confidence")
+  LZ_CONFIDENCE=$(jq -r '.landingZoneDetection.confidence // "unknown"' "$LZ_CONTEXT_FILE")
+  LZ_SCORE=$(jq -r '.landingZoneDetection.confidenceScore // 0' "$LZ_CONTEXT_FILE")
+  LZ_IS_LZ=$(jq -r '.landingZoneDetection.isLandingZone // false' "$LZ_CONTEXT_FILE")
+else
+  echo "ℹ️ No landing zone context found at $LZ_CONTEXT_FILE"
+  echo "   Run /azure-landing-zone-discovery to enable landing-zone-aware deployments,"
+  echo "   or proceed with subscription-only context."
+  # Continue without LZ context — do not block the user
+fi
+```
+
+**How to treat `landingZoneDetection.confidence`:**
+
+| Confidence | Treatment |
+|---|---|
+| `high` (score ≥ 70) | Trust auto-classified subscription roles, hub-spoke topology, and shared services without prompting. |
+| `medium` (40–69) | Surface matched + missing signals to the user (`.landingZoneDetection.matchedSignals[]`, `.landingZoneDetection.missingSignals[]`) and confirm before assuming ALZ-managed behavior. |
+| `low` (10–39) | Note partial ALZ signals but default to standalone-tenant treatment. Do not auto-attach to hub or shared services. |
+| `none` (< 10) | Treat as a flat/standalone tenant. If the user *knows* the tenant is ALZ-managed, suggest manual injection via the `inject-lz.sh` script. |
+
+
+**Step 2 — classify the current subscription:**
+
+If the context exists, look up the active subscription in `subscriptions.platform[]` and `subscriptions.landingZones[]`:
+
+```bash
+CURRENT_SUB_ID=$(az account show --query id -o tsv)
+SUB_ROLE=$(jq -r --arg id "$CURRENT_SUB_ID" '
+  (.subscriptions.platform[]   | select(.id == $id) | .role) //
+  (.subscriptions.landingZones[] | select(.id == $id) | .role) //
+  "unclassified"
+' "$LZ_CONTEXT_FILE")
+```
+
+**Warn if the user is targeting a platform subscription:**
+
+| Detected `role` | Action |
+|------------------|--------|
+| `connectivity`, `identity`, `management` | ⚠️ **Block by default.** Display "This is a platform subscription. Workloads should land in an application landing zone." Offer to switch. |
+| `landing-zone`, `landing-zone-dev`, `landing-zone-staging`, `landing-zone-prod` | ✅ Proceed. |
+| `unclassified` (sub not in context) | Note that the subscription isn't part of the discovered topology. Ask user to confirm intent. |
+
+**Step 3 — surface the policy gates that may block this deployment:**
+
+```bash
+DENY_COUNT=$(jq '.policies.denyEffects | length' "$LZ_CONTEXT_FILE")
+ALLOWED_LOCATIONS=$(jq -r '.policies.allowedLocations | join(", ")' "$LZ_CONTEXT_FILE")
+REQUIRED_TAGS=$(jq -r '.policies.requiredTags | join(", ")' "$LZ_CONTEXT_FILE")
+
+if [[ "$DENY_COUNT" -gt 0 ]]; then
+  echo "🛑 $DENY_COUNT Deny-effect policies apply to this scope:"
+  jq -r '.policies.denyEffects[] | "  • \(.name) — \(.impact)"' "$LZ_CONTEXT_FILE"
+fi
+[[ -n "$ALLOWED_LOCATIONS" && "$ALLOWED_LOCATIONS" != "" ]] && echo "📍 Allowed locations: $ALLOWED_LOCATIONS"
+[[ -n "$REQUIRED_TAGS" && "$REQUIRED_TAGS" != "" ]] && echo "🏷️  Required tags: $REQUIRED_TAGS"
+```
+
+Treat `denyEffects` as gating: a user-requested region outside `allowedLocations`, a missing required tag, or a configuration that matches a deny impact MUST be raised before template generation.
+
+**Do NOT** surface entries from `auditEffects` as blockers — those are informational only.
+
+**Step 4 — note available shared services:**
+
+If `sharedServices.logAnalytics.id` / `containerRegistry.id` / `keyVault.id` are present, record them so Stage 2 (template generation) wires diagnostics, container images, and secrets to the shared platform resources instead of creating new ones.
+
+If `networking.topology == "hub-spoke"` and `networking.hubs[]` is non-empty, record the hub VNet ID(s) for VNet peering in Stage 2.
+
+Skip this step gracefully when:
+- `discoveryMethod == "manual"` and fields are absent (user has not provided them)
+- `topology == "flat"` (no hub-spoke to integrate with)
+- `topology == "unknown"` (treat conservatively — do not assume any shared infra)
+
+**Display the landing zone summary to the user:**
+
+```markdown
+## Landing Zone Context
+
+| Property | Value |
+|----------|-------|
+| **Discovered** | {discoveredAt} ({age} ago) |
+| **Method** | {auto / manual} |
+| **Detection** | {confidence} ({confidenceScore}/100) — isLandingZone: {true/false} |
+| **Current subscription role** | {connectivity / landing-zone-prod / unclassified ...} |
+| **Network topology** | {hub-spoke / flat / unknown} |
+| **Deny policies** | {N} ({list if N ≤ 5}) |
+| **Allowed locations** | {list or "any"} |
+| **Required tags** | {list or "none"} |
+| **Shared Log Analytics** | {name / "none"} |
+| **Shared ACR** | {name / "none"} |
+| **Hub VNet** | {name / "none"} |
+
+{If confidence is "medium" or "low":} Detected ALZ signals: {matchedSignals[].signal}. Missing: {missingSignals[]}.
+{If platform subscription:} ⚠️ Target subscription is a platform subscription — workloads should typically deploy elsewhere.
+```
+
+**Pass landing zone context to downstream stages** by including a `landingZone` block in the requirements output (see Section 4).
+
 ### 1. Identify Resource Type(s)
 
 **Support Multi-Resource Deployments** - Ask if user wants single or multiple resources:
@@ -385,6 +498,29 @@ Resource 3 (App Insights) → Resource 2 (Function App)
     "id": "{tenantId}",
     "displayName": "{tenantDisplayName}",
     "domain": "{tenantDomain}"
+  },
+  "landingZone": {
+    "contextFile": ".azure/landing-zone-context.json",
+    "discoveredAt": "{ISO 8601 or null if no context}",
+    "discoveryMethod": "auto|manual|none",
+    "detection": {
+      "isLandingZone": false,
+      "confidence": "high|medium|low|none",
+      "confidenceScore": 0
+    },
+    "currentSubscriptionRole": "landing-zone|connectivity|identity|management|unclassified",
+    "topology": "hub-spoke|flat|unknown",
+    "policyGates": {
+      "denyEffectCount": 0,
+      "allowedLocations": [],
+      "requiredTags": []
+    },
+    "sharedServices": {
+      "logAnalyticsId": "{id or null}",
+      "containerRegistryId": "{id or null}",
+      "keyVaultId": "{id or null}",
+      "hubVnetIds": []
+    }
   },
   "resources": [
     {

@@ -72,5 +72,6 @@ Git-Ape supports assessment against:
 
 - [Skills: Azure Policy Advisor](/docs/skills/azure-policy-advisor)
 - [Agents: Azure Policy Advisor](/docs/agents/azure-policy-advisor)
+- [Landing Zone-Aware Deployment](/docs/use-cases/landing-zone-aware-deployment) — context that dedupes recommendations against tenant-enforced policies
 - [Security Analysis](/docs/use-cases/security-analysis)
 - [For Platform Engineering](/docs/personas/for-platform-engineering)
