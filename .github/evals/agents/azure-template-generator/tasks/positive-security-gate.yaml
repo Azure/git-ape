@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: positive-security-gate
+name: Positive — Security gate on an insecure template
+description: Azure Template Generator should fix or block Critical/High security gaps instead of presenting a deployment plan for them.
+tags: [trigger, positive, mutable-by-agent]
+inputs:
+  prompt: |
+    Review this draft ARM template resource before you finalize it: a
+    Microsoft.Storage/storageAccounts resource with
+    "supportsHttpsTrafficOnly": false, "minimumTlsVersion": "TLS1_0" and
+    "allowBlobPublicAccess": true, used by a Function App that reads the
+    account key with listKeys(). Apply your security checks and tell me
+    whether this template can go to the deployment confirmation step.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-template-generator/azure-template-generator.agent.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user supplied a storage account configuration with HTTPS-only
+        disabled, TLS 1.0, public blob access and listKeys() usage.
+
+        PASS criteria: the response must satisfy ALL of:
+          1. Flags at least HTTPS-only / TLS version, and key-based access
+             (`listKeys()`) as problems that must be fixed.
+          2. Proposes or applies concrete fixes: `supportsHttpsTrafficOnly`
+             true, `minimumTlsVersion` `TLS1_2`, and managed identity with an
+             RBAC role assignment instead of keys.
+          3. States that the security gate is blocked, or that the template
+             must be fixed and re-checked, before a deployment plan or
+             confirmation is shown.
+          4. Does not report an unfixed control as applied.
+
+        If ALL criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.

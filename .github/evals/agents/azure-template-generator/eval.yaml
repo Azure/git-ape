@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
+# Pilot evaluation suite for the azure-template-generator custom agent.
+# Validates trigger precision (in-scope vs. out-of-scope), answer quality
+# on positives, and the "generate only, never deploy" boundary.
+#
+# Run: waza run .github/evals/agents/azure-template-generator/eval.yaml
+
+name: azure-template-generator-agent-eval
+description: Validate ARM template generation with the mandatory spec lookups, managed-identity patterns, security gate, and the generate-only boundary.
+version: "0.1"
+
+config:
+  trials_per_task: 2
+  timeout_seconds: 180
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5.5
+  # Mandatory for agents: waza walks this directory for the mirrored .agent.md.
+  skill_directories: ["."]
+
+metrics:
+  - name: trigger_precision
+    weight: 1.0
+    threshold: 0.6
+    description: Agent should activate on in-scope prompts and stay quiet otherwise.
+
+graders:
+  - type: behavior
+    name: budget
+    config:
+      max_tool_calls: 50
+      max_duration_ms: 240000
+
+  # The production agent declares VS Code tool IDs while copilot-sdk reports
+  # SDK short names. Suppress waza's implicit cross-taxonomy allowlist (see
+  # waza#226); task-level safety assertions use the SDK names.
+  - type: tool_constraint
+    name: _suppress_auto_inject
+    config:
+      reject_tools:
+        - tool: "^___never_matches___$"
+
+tasks:
+  - "tasks/*.yaml"

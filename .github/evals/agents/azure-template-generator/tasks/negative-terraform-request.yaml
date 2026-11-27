@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: negative-terraform-request
+name: Negative — Terraform module request
+description: Azure Template Generator only produces ARM JSON templates; a Terraform request is out of scope.
+tags: [trigger, negative, mutable-by-agent]
+inputs:
+  prompt: "Write me a Terraform module with the azurerm provider that creates an AKS cluster and a container registry."
+graders:
+  - name: trigger_relevance_negative
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-template-generator/azure-template-generator.agent.md
+      mode: negative
+      threshold: 0.5
