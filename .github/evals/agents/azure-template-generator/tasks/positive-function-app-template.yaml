@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/task.schema.json
+id: positive-function-app-template
+name: Positive — Function App plus Storage ARM template
+description: Azure Template Generator should activate on a concrete template-generation request and follow its identity-first rules.
+tags: [trigger, positive, mutable-by-agent]
+inputs:
+  prompt: |
+    Requirements are gathered: a dev environment in eastus for project
+    "orders" with one Azure Function App (Node 22, Flex Consumption plan), one
+    Storage Account for its runtime, and Application Insights. Use sensible
+    defaults for anything not listed, do not ask questions, generate the ARM
+    template for it and show me what will be deployed before anything runs.
+graders:
+  - name: trigger_relevance_positive
+    type: trigger
+    config:
+      skill_path: .github/evals/agents/azure-template-generator/azure-template-generator.agent.md
+      mode: positive
+      threshold: 0.5
+
+  - type: prompt
+    name: answer_quality
+    config:
+      continue_session: true
+      prompt: |
+        You are grading the assistant's previous response in this session.
+        The user asked for an ARM template for a Function App, a Storage
+        Account and Application Insights, and wants to see what will be
+        deployed before anything runs.
+
+        PASS criteria: the response must satisfy ALL of:
+          1. Produces (or clearly outlines) a subscription-level ARM template
+             in JSON that creates the resource group as a resource and puts
+             the other resources in a nested deployment.
+          2. Uses managed identity for the Function App to Storage access
+             (for example `AzureWebJobsStorage__accountName` and an RBAC role
+             assignment) and does NOT use `listKeys()` or a storage
+             connection string.
+          3. Mentions looking up resource schemas / API versions and CAF
+             naming before writing resources, or uses CAF-style names such as
+             `func-`, `st`, `appi-`.
+          4. Does not deploy anything itself, and either shows a deployment
+             preview or plan or says it will show one and ask for
+             confirmation before any deployment.
+
+        If ALL criteria are met, call `set_waza_grade_pass`.
+        Otherwise, call `set_waza_grade_fail` and list which criteria are missing.
