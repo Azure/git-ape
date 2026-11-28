@@ -99,6 +99,7 @@ You may want to make a hand-tuned PDF/PPTX (for example, a customer-specific var
 | Render exit code 3 | Job log under "Render decks" | Usually a Marp CLI / Chromium issue; re-run the workflow |
 | Verify exit code 3 | Job log under "Verify decks" | Tooling issue (ImageMagick / LibreOffice missing); re-run |
 | No PR opened despite changes | "Detect rendered file changes" step | Expected if `deck.md` change didn't alter rendered output (e.g., a comment edit) |
+| Warning: GitHub Actions is not permitted to create or approve pull requests | Workflow job summary | The build succeeded and pushed `auto/deck-rebuild`. Use the summary's manual PR link and copy the supplied PR body, or ask an administrator to review **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** (subject to organization policy). Other PR errors still fail the job. |
 | Screenshots don't render in PR | View the auto-PR branch on github.com | Branch must be pushed before the PR body is built; if you see broken images, the workflow likely failed between push and PR-create — re-run |
 | PR opened but with wrong tracks | "Detect affected tracks" step in the log | Path-filter mismatch; check that your deck.md follows the `<N>_<name>_deck.md` naming convention |
 

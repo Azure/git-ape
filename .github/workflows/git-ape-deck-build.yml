@@ -377,10 +377,31 @@ jobs:
             gh pr edit "$EXISTING_PR" --body-file "$BODY_FILE"
           else
             echo "Opening new PR"
-            gh pr create \
+            if PR_RESULT=$(gh pr create \
               --head "$AUTO_BRANCH" \
               --base main \
               --title "auto: rebuild workshop decks (${ONLY:-all})" \
               --body-file "$BODY_FILE" \
-              --label "auto-deck-rebuild"
+              --label "auto-deck-rebuild" 2>&1); then
+              echo "$PR_RESULT"
+            else
+              PR_STATUS=$?
+              echo "$PR_RESULT" >&2
+              if [[ "$PR_RESULT" == *"GitHub Actions is not permitted to create or approve pull requests"* ]]; then
+                COMPARE_URL="https://github.com/${REPO}/compare/main...${AUTO_BRANCH}?expand=1"
+                echo "::warning::Repository policy blocks automatic PR creation. Rendered decks were pushed to ${AUTO_BRANCH}. Open a PR manually: ${COMPARE_URL}"
+                {
+                  echo "## Workshop decks built — manual PR required"
+                  echo ""
+                  echo "Repository policy prevents GitHub Actions from creating pull requests."
+                  echo "Rendered decks and screenshots are available on \`${AUTO_BRANCH}\`."
+                  echo ""
+                  echo "[Open a pull request](${COMPARE_URL}), or ask a repository administrator to review **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** (subject to organization policy)."
+                  echo ""
+                  cat "$BODY_FILE"
+                } >> "$GITHUB_STEP_SUMMARY"
+              else
+                exit "$PR_STATUS"
+              fi
+            fi
           fi
