@@ -13,7 +13,7 @@ These are the failure modes that bite attendees BEFORE the workshop content even
 | Onboarding fails at `az ad app create` with `Authorization_RequestDenied` | Tenant policy blocks "Users can register applications" | Ask tenant admin to enable it OR pre-create the app registration and grant you Owner. |
 | Subscription RBAC writes silently fail | Subscription state is not `Enabled` | `az account show --query "{name:name,state:state}" -o table`. If state is `Disabled`/`PastDue`/`Warned`, switch subscription or contact billing admin. |
 | First deploy fails with `MissingSubscriptionRegistration` | Resource provider not pre-registered for the subscription | `az provider register --namespace Microsoft.<X> --wait`. The prereqs file lists the providers each track needs. |
-| GitHub Actions workflow fails: `GitHub Actions is not permitted to create or approve pull requests` | Repo setting "Allow GH Actions to create and approve PRs" is OFF (default for org repos) | Repo Settings → Actions → General → Workflow permissions → enable. |
+| GitHub Actions workflow fails: `GitHub Actions is not permitted to create or approve pull requests` | The default `GITHUB_TOKEN` cannot create PRs unless the repository setting allows it | Enable Repo Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and approve pull requests", or configure a `GH_AW_CI_TRIGGER_TOKEN` secret with contents, issues, and pull-request write access. |
 
 ## Authentication
 
